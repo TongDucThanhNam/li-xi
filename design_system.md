@@ -7,7 +7,8 @@
 ## Typography
 - Display: "Cinzel Decorative" 700/900 (headline, CTA, win amount).
 - Body: "Playfair Display" 400/700 (nội dung, mô tả).
-- Uppercase + letter spacing lớn cho nhãn và subtitle.
+- Vietnamese fallback: "Noto Serif" cho dấu tiếng Việt khi cần.
+- Uppercase dùng hạn chế; với tiếng Việt ưu tiên giữ nguyên chữ thường/hoa.
 - Không thay đổi font stack trừ khi có yêu cầu mới.
 
 ## Color Tokens
@@ -35,6 +36,14 @@
 - Primary CTA (mag button):
   - Rounded pill, gold border, blur, subtle glow.
   - Hover tăng glow và sáng.
+- Framed Panels (host/admin screens):
+  - Single border with one subtle inner stroke.
+  - Soft gold highlight + deep red gradient fill.
+  - Optional thin header divider line.
+  - Avoid multiple decorative borders on the same panel.
+- Stat Pills (budget bar):
+  - Rounded capsules with gold outline.
+  - Dark fill + light gold text.
 - Envelope Card:
   - Layered 3D: lining, pocket, ticket, flap, seal.
   - Foil layer phải phản chiếu theo pointer move.

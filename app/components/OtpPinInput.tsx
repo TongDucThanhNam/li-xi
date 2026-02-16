@@ -1,7 +1,6 @@
 "use client";
 
 import { type CSSProperties, useEffect, useId, useMemo, useRef, useState } from "react";
-import styles from "./OtpPinInput.module.css";
 
 type OtpPinInputProps = {
   value: string;
@@ -60,7 +59,12 @@ export default function OtpPinInput({
 
   return (
     <div
-      className={[styles.root, disabled ? styles.disabled : ""].filter(Boolean).join(" ")}
+      className={[
+        "relative grid w-full max-w-[420px] grid-cols-[repeat(var(--otp-length),minmax(0,1fr))] gap-3",
+        disabled ? "opacity-55 pointer-events-none" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       style={{ "--otp-length": length } as CSSProperties}
       onClick={focusInput}
       role="group"
@@ -69,7 +73,7 @@ export default function OtpPinInput({
       <input
         id={`otp-${uniqueId}`}
         ref={inputRef}
-        className={styles.hiddenInput}
+        className="absolute inset-0 h-full w-full cursor-text opacity-0 caret-transparent"
         type="tel"
         inputMode="numeric"
         autoComplete="one-time-code"
@@ -88,14 +92,28 @@ export default function OtpPinInput({
         <div
           key={`${uniqueId}-${index}`}
           className={[
-            styles.slot,
-            digit ? styles.slotFilled : "",
-            isFocused && index === activeIndex ? styles.slotActive : "",
+            "relative flex h-[58px] items-center justify-center rounded-[16px] border border-[rgba(212,175,55,0.5)]",
+            "bg-[radial-gradient(circle_at_20%_20%,_rgba(255,223,160,0.18),_transparent_55%),_rgba(35,7,7,0.86)]",
+            "shadow-[inset_0_0_0_1px_rgba(0,0,0,0.35),_0_10px_18px_rgba(0,0,0,0.35)]",
+            "transition-all duration-200",
+            "before:content-[''] before:absolute before:inset-[6px] before:rounded-[12px] before:border before:border-[rgba(255,224,150,0.08)] before:pointer-events-none",
+            digit ? "border-[rgba(255,219,150,0.75)]" : "",
+            isFocused && index === activeIndex
+              ? "border-[rgba(255,224,130,0.95)] shadow-[0_0_0_3px_rgba(255,224,130,0.18),_0_12px_20px_rgba(0,0,0,0.35)] -translate-y-[2px]"
+              : "",
           ]
             .filter(Boolean)
             .join(" ")}
         >
-          <span className={[styles.dot, digit ? styles.dotVisible : ""].filter(Boolean).join(" ")} aria-hidden="true" />
+          <span
+            className={[
+              "h-3 w-3 rounded-full bg-[#ffe7ae] shadow-[0_0_12px_rgba(212,175,55,0.6)] opacity-0 transition-opacity",
+              digit ? "opacity-100" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            aria-hidden="true"
+          />
         </div>
       ))}
     </div>

@@ -3,8 +3,9 @@
 :root {
   --page-bg: #130303;
   --text-primary: #ffecc1;
-  --font-cinzel: "Cinzel Decorative", "Times New Roman", serif;
-  --font-playfair: "Playfair Display", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+  --font-cinzel: "Cinzel Decorative", "Noto Serif", "Times New Roman", serif;
+  --font-playfair: "Playfair Display", "Noto Serif", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+  --font-vn: "Noto Serif", "Times New Roman", serif;
 }
 
 * {
