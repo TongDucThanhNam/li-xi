@@ -1,11 +1,26 @@
 @import "tailwindcss";
 
-:root {
-  --page-bg: #130303;
-  --text-primary: #ffecc1;
+@theme {
   --font-cinzel: "Cinzel Decorative", "Noto Serif", "Times New Roman", serif;
   --font-playfair: "Playfair Display", "Noto Serif", "Palatino Linotype", "Book Antiqua", Palatino, serif;
   --font-vn: "Noto Serif", "Times New Roman", serif;
+  
+  --color-red-deep: #5e0a0a;
+  --color-red-vivid: #b31414;
+  --color-gold-shine: #fff8dc;
+  --color-gold-base: #d4af37;
+  --color-black-ink: #050000;
+  --color-liner-dark: #3e0000;
+  --color-text-primary: #ffecc1;
+
+  --ease-elastic: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+:root {
+  --spacing: 0.25rem;
+  --page-bg: var(--color-black-ink);
 }
 
 * {
@@ -23,7 +38,7 @@ body {
 
 body {
   background: var(--page-bg);
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   font-family: var(--font-playfair);
   line-height: 1.45;
 }

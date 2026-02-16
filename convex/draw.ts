@@ -40,7 +40,13 @@ async function getAvailableBudgetItems(
     .withIndex("by_owner_active", (q) => q.eq("ownerId", ownerId).eq("isActive", true))
     .collect();
 
-  return items.filter((item) => item.remainingQuantity > 0);
+  return items.filter(
+    (item) =>
+      Number.isSafeInteger(item.amount) &&
+      item.amount > 0 &&
+      Number.isSafeInteger(item.remainingQuantity) &&
+      item.remainingQuantity > 0
+  );
 }
 
 function pickBudgetItemByQuantity(items: Doc<"budgetItems">[]) {
@@ -88,7 +94,7 @@ export const getStationState = query({
       .order("desc")
       .take(10);
 
-    const availableUnits = budgetItems.reduce((sum, item) => sum + item.remainingQuantity, 0);
+    const availableUnits = budgetItems.reduce((sum, item) => sum + Math.max(0, item.remainingQuantity), 0);
 
     return {
       hasSetup: Boolean(budget?.isSetupCompleted),
@@ -104,7 +110,7 @@ export const getStationState = query({
         amount: item.amount,
         rarity: item.rarity,
         remainingQuantity: item.remainingQuantity,
-        initialQuantity: item.initialQuantity,
+        totalQuantity: item.initialQuantity,
         isActive: item.isActive,
       })),
       pendingSession: pendingSession
@@ -119,7 +125,7 @@ export const getStationState = query({
         guestNameDisplay: record.guestNameDisplay,
         amount: record.amount,
         rarity: record.rarity,
-        createdAt: record.createdAt,
+        redeemedAt: record.createdAt,
       })),
     };
   },
@@ -141,7 +147,12 @@ export const createSession = mutation({
     const guestNameNormalized = normalizeGuestName(guestNameDisplay);
     const ownerPin = validatePin(args.ownerPin);
 
-    if (!owner.pinHash || !owner.pinSalt) {
+    if (
+      typeof owner.pinHash !== "string" ||
+      owner.pinHash.length === 0 ||
+      typeof owner.pinSalt !== "string" ||
+      owner.pinSalt.length === 0
+    ) {
       throw new Error("Chủ ví chưa thiết lập PIN");
     }
 
@@ -242,6 +253,9 @@ export const redeem = mutation({
     const selectedItem = pickBudgetItemByQuantity(availableItems);
     if (!selectedItem) {
       throw new Error("Không còn mệnh giá khả dụng");
+    }
+    if (selectedItem.remainingQuantity <= 0) {
+      throw new Error("Tồn kho mệnh giá không hợp lệ, vui lòng thử lại");
     }
     if (budget.remainingBudget < selectedItem.amount) {
       throw new Error("Ngân sách hiện tại không đủ cho mệnh giá còn lại");

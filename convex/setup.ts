@@ -18,10 +18,14 @@ type BudgetInput = {
 
 type ConvexCtx = QueryCtx | MutationCtx;
 type NormalizedBudgetItem = { amount: number; quantity: number; rarity: Rarity };
+const MAX_BUDGET_ITEM_COUNT = 200;
 
 function validateBudgetInputs(items: BudgetInput[]) {
   if (items.length === 0) {
     throw new Error("Cần ít nhất 1 mệnh giá để cấu hình ngân sách");
+  }
+  if (items.length > MAX_BUDGET_ITEM_COUNT) {
+    throw new Error(`Tối đa ${MAX_BUDGET_ITEM_COUNT} mệnh giá trong một lần cấu hình`);
   }
 
   const amountSet = new Set<number>();
@@ -38,7 +42,16 @@ function validateBudgetInputs(items: BudgetInput[]) {
     }
     amountSet.add(amount);
 
-    totalBudget += amount * quantity;
+    const lineBudget = amount * quantity;
+    if (!Number.isSafeInteger(lineBudget)) {
+      throw new Error("Giá trị mệnh giá hoặc số lượng quá lớn");
+    }
+
+    const nextTotalBudget = totalBudget + lineBudget;
+    if (!Number.isSafeInteger(nextTotalBudget)) {
+      throw new Error("Tổng ngân sách vượt quá giới hạn cho phép");
+    }
+    totalBudget = nextTotalBudget;
     normalized.push({ amount, quantity, rarity });
   }
 
@@ -56,6 +69,14 @@ async function hasAnyRedemptionForOwner(ctx: ConvexCtx, ownerId: Id<"users">) {
     .withIndex("by_owner_createdAt", (q) => q.eq("ownerId", ownerId))
     .take(1);
   return oneRedemption.length > 0;
+}
+
+async function hasPendingSessionForOwner(ctx: ConvexCtx, ownerId: Id<"users">) {
+  const onePendingSession = await ctx.db
+    .query("drawSessions")
+    .withIndex("by_owner_status", (q) => q.eq("ownerId", ownerId).eq("status", "pending"))
+    .take(1);
+  return onePendingSession.length > 0;
 }
 
 async function listBudgetItems(ctx: ConvexCtx, ownerId: Id<"users">) {
@@ -78,10 +99,11 @@ export const getSetupState = query({
     const items = await listBudgetItems(ctx, args.ownerId);
 
     const hasRedemptions = await hasAnyRedemptionForOwner(ctx, args.ownerId);
+    const hasPendingSession = await hasPendingSessionForOwner(ctx, args.ownerId);
 
     return {
       hasSetup: Boolean(budget?.isSetupCompleted && items.length > 0),
-      canConfigure: !hasRedemptions,
+      canConfigure: !hasRedemptions && !hasPendingSession,
       budget: budget
         ? {
             totalBudget: budget.totalBudget,
@@ -122,6 +144,10 @@ export const configureBudget = mutation({
     const redemptionsExist = await hasAnyRedemptionForOwner(ctx, args.ownerId);
     if (redemptionsExist) {
       throw new Error("Đã có lượt rút, không thể cấu hình lại ngân sách");
+    }
+    const pendingSessionExists = await hasPendingSessionForOwner(ctx, args.ownerId);
+    if (pendingSessionExists) {
+      throw new Error("Đang có lượt rút chờ xử lý, không thể cấu hình ngân sách");
     }
 
     const { normalized, totalBudget } = validateBudgetInputs(args.items);

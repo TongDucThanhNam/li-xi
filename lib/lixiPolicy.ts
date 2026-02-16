@@ -80,7 +80,7 @@ export function validateRarity(rarity: string): Rarity {
 }
 
 export function validateWholePositiveNumber(value: number, fieldName: string) {
-  if (!Number.isInteger(value) || value <= 0) {
+  if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${fieldName} phải là số nguyên dương`);
   }
   return value;
