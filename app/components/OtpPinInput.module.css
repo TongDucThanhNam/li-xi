@@ -1,0 +1,68 @@
+.root {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--otp-length, 6), minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.hiddenInput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  border: none;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  cursor: text;
+}
+
+.slot {
+  height: 56px;
+  border-radius: 14px;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  background: rgba(35, 7, 7, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25), 0 8px 16px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.slotActive {
+  border-color: rgba(255, 224, 130, 0.95);
+  box-shadow: 0 0 0 3px rgba(255, 224, 130, 0.18), 0 8px 16px rgba(0, 0, 0, 0.3);
+  transform: translateY(-2px);
+}
+
+.slotFilled {
+  border-color: rgba(255, 219, 150, 0.75);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #ffe7ae;
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.dotVisible {
+  opacity: 1;
+}
+
+.disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .slot {
+    height: 50px;
+  }
+}

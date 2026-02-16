@@ -1,0 +1,97 @@
+.page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(185, 39, 39, 0.35), transparent 42%),
+    radial-gradient(circle at 80% 8%, rgba(224, 167, 56, 0.2), transparent 36%),
+    linear-gradient(145deg, #160404 0%, #290808 58%, #1a0606 100%);
+}
+
+.card {
+  width: min(540px, 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(242, 194, 86, 0.4);
+  background: linear-gradient(160deg, rgba(39, 11, 11, 0.92), rgba(22, 4, 4, 0.88));
+  box-shadow: 0 20px 64px rgba(0, 0, 0, 0.45);
+  padding: 28px 24px;
+}
+
+.title {
+  color: #ffe8b0;
+  font-size: 32px;
+  line-height: 1.15;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  color: rgba(255, 240, 194, 0.8);
+  font-size: 15px;
+  margin-bottom: 24px;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+}
+
+.label {
+  color: #ffe1a2;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.input {
+  width: 100%;
+  height: 48px;
+  border-radius: 12px;
+  border: 2px solid rgba(212, 175, 55, 0.35);
+  background: rgba(16, 3, 3, 0.82);
+  color: #f9e3af;
+  padding: 0 14px;
+  font-size: 16px;
+  outline: none;
+}
+
+.input:focus {
+  border-color: rgba(255, 224, 130, 0.95);
+  box-shadow: 0 0 0 3px rgba(255, 224, 130, 0.2);
+}
+
+.error {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 118, 118, 0.55);
+  background: rgba(88, 12, 12, 0.65);
+  color: #ffbaba;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.primaryButton {
+  height: 50px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f0b54a 0%, #cd8f2b 100%);
+  color: #2a1201;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  width: 100%;
+  margin-top: 14px;
+  border: 1px solid rgba(244, 199, 94, 0.45);
+  border-radius: 12px;
+  background: transparent;
+  color: #ffd88b;
+  font-size: 14px;
+  padding: 12px;
+  cursor: pointer;
+}
