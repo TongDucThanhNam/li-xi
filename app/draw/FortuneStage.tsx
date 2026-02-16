@@ -150,11 +150,11 @@ function EnvelopeCard({
 }) {
 	return (
 		<div
-			className={`group relative w-full max-w-[10rem] sm:max-w-[11rem] md:max-w-[12rem] lg:max-w-[13rem] aspect-[0.72] mx-auto preserve-3d cursor-pointer transition-[opacity,transform] duration-600 ease-elastic ${
+			className={`group relative w-36 sm:w-40 md:w-44 lg:w-48 aspect-[0.72] preserve-3d cursor-pointer transition-[opacity,transform] duration-600 ease-elastic ${
 				card.isIn
 					? "opacity-100 translate-y-0"
 					: "opacity-0 translate-y-[100px]"
-			} ${card.isOpened ? "[&_.layerFlapWrapper]:translate-z-0 [&_.layerFlapWrapper]:rotate-x-180 [&_.layerFlapWrapper]:z-5 [&_.layerTicket]:-translate-y-[88%] [&_.layerTicket]:translate-z-px [&_.layerTicket]:scale-[1.08] [&_.layerTicket]:opacity-100 [&_.layerTicket]:blur-0 [&_.layerTicket]:shadow-[0_10px_30px_rgba(0,0,0,0.3)] [&_.layerTicket]:z-30" : ""} ${
+			} ${
 				card.isMissed
 					? "grayscale brightness-[0.3] pointer-events-none scale-[0.96] transition-all duration-700"
 					: ""
@@ -175,16 +175,30 @@ function EnvelopeCard({
 					onClick();
 				}
 			}}
+			style={{ transformStyle: "preserve-3d" }}
 		>
-			<div className="w-full h-full relative preserve-3d transition-transform duration-400 ease-smooth card-inner">
+			<div
+				className="w-full h-full relative preserve-3d transition-transform duration-400 ease-smooth card-inner"
+				style={{ transformStyle: "preserve-3d" }}
+			>
 				{/* Lining */}
 				<div className="absolute inset-0 rounded-md -translate-z-px bg-liner-dark shadow-[0_10px_30px_rgba(0,0,0,0.5)] bg-[repeating-linear-gradient(45deg,rgba(0,0,0,0.2)_0,rgba(0,0,0,0.2)_1px,transparent_1px,transparent_4px)]" />
 
 				{/* Ticket inside */}
 				<div
-					className={`layerTicket absolute w-[80%] h-[75%] left-[10%] bottom-2 rounded-[4px_4px_2px_2px] translate-z-0 translate-y-[56%] flex flex-col items-center justify-center overflow-hidden shadow-[0_2px_5px_rgba(0,0,0,0.2)] transition-[transform,opacity,filter,box-shadow] duration-1200 ease-elastic z-0 opacity-0 blur-[1px] bg-white text-[#333] ${ticketRarityClass(
+					className={`layerTicket absolute w-[80%] h-[75%] left-[10%] bottom-2 rounded-[4px_4px_2px_2px] flex flex-col items-center justify-center overflow-hidden shadow-[0_2px_5px_rgba(0,0,0,0.2)] transition-[transform,filter,box-shadow] duration-1200 ease-elastic bg-white text-[#333] ${
+						card.isOpened
+							? "shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
+							: ""
+					} ${ticketRarityClass(
 						card.prize?.rarity ?? null,
 					)}`}
+					style={{
+						transform: card.isOpened
+							? "translate3d(0,-112%,1px) scale(1.08)"
+							: "translate3d(0,0,0)",
+						zIndex: card.isOpened ? 30 : 0,
+					}}
 				>
 					<div className="absolute inset-0 opacity-10 bg-[repeating-linear-gradient(45deg,#000_0,#000_1px,transparent_0,transparent_10px)]" />
 					<span className="text-[0.55rem] sm:text-[0.65rem] tracking-[1.6px] uppercase mb-1 z-2 opacity-60">
@@ -216,7 +230,16 @@ function EnvelopeCard({
 				</div>
 
 				{/* Flap */}
-				<div className="layerFlapWrapper absolute top-0 left-0 w-full h-[45%] origin-top translate-z-[2px] preserve-3d transition-[transform,opacity] duration-1000 ease-elastic z-20">
+				<div
+					className="layerFlapWrapper absolute top-0 left-0 w-full h-[45%] origin-top preserve-3d transition-[transform,opacity] duration-1000 ease-elastic"
+					style={{
+						transformStyle: "preserve-3d",
+						transform: card.isOpened
+							? "translate3d(0,0,0) rotateX(180deg)"
+							: "translate3d(0,0,2px)",
+						zIndex: card.isOpened ? 5 : 20,
+					}}
+				>
 					<div className="absolute inset-0 [clip-path:polygon(0_0,100%_0,50%_85%)] rounded-[4px_4px_0_0] backface-hidden bg-linear-to-b from-[#d32f2f] to-red-vivid filter-[url(#paperRoughness)]">
 						<div className="foilLayer absolute inset-0 pointer-events-none z-50 opacity-70 bg-linear-to-br from-transparent via-white/30 to-white/20 bg-size-[200%_200%] bg-position-[100%_100%] mix-blend-overlay transition-[background-position] duration-100" />
 					</div>
@@ -506,7 +529,7 @@ export default function FortuneStage({
 						className={`text-center relative z-30 transition-[opacity,transform] duration-800 ease-smooth flex flex-col items-center ${
 							showHero
 								? "animate-fade-in-up"
-								: "opacity-0 -translate-y-5 pointer-events-none absolute"
+								: "opacity-0 -translate-y-5 pointer-events-none absolute inset-0"
 						}`}
 					>
 						{/* Decorative top ornament */}
@@ -556,7 +579,7 @@ export default function FortuneStage({
 
 					{/* ── Grid Section ── */}
 					<div
-						className={`w-full h-full flex flex-col items-center justify-center transition-[opacity,visibility] duration-800 ease-smooth ${
+						className={`relative w-full h-full flex items-center justify-center transition-[opacity,visibility] duration-800 ease-smooth ${
 							showGrid
 								? "opacity-100 visible pointer-events-auto"
 								: "opacity-0 invisible pointer-events-none absolute"
@@ -564,10 +587,10 @@ export default function FortuneStage({
 					>
 						{/* Instruction banner */}
 						<div
-							className={`text-center mb-4 sm:mb-6 transition-[opacity,transform] duration-500 ease-smooth ${
+							className={`absolute left-1/2 top-[clamp(0.5rem,5vh,3rem)] -translate-x-1/2 text-center overflow-hidden transition-[max-height,opacity,transform,margin] duration-500 ease-smooth ${
 								showInstruction
-									? "opacity-100 translate-y-0"
-									: "opacity-0 -translate-y-3 pointer-events-none"
+									? "max-h-28 sm:max-h-32 opacity-100 translate-y-0"
+									: "max-h-0 opacity-0 -translate-y-3 pointer-events-none"
 							}`}
 						>
 							{guestName ? (
@@ -585,7 +608,7 @@ export default function FortuneStage({
 						</div>
 
 						{/* Card grid */}
-						<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-x-3 gap-y-4 sm:gap-x-4 sm:gap-y-5 md:gap-x-6 md:gap-y-7 lg:gap-x-8 lg:gap-y-8 w-full max-w-[1320px] mx-auto px-1 sm:px-2 pb-6 pt-1 justify-items-center content-center perspective-distant">
+						<div className="grid [grid-template-columns:repeat(2,minmax(0,max-content))] md:[grid-template-columns:repeat(5,minmax(0,max-content))] gap-x-3 gap-y-4 sm:gap-x-4 sm:gap-y-5 md:gap-x-8 md:gap-y-7 lg:gap-x-10 lg:gap-y-8 w-full max-w-[1600px] mx-auto px-1 sm:px-2 md:px-5 pb-6 pt-1 justify-center justify-items-center content-center perspective-distant">
 							{cardsList}
 						</div>
 					</div>
