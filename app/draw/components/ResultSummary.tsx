@@ -1,5 +1,5 @@
-import { formatCurrency } from "../hostUtils";
 import type { Rarity } from "@/lib/lixiPolicy";
+import { formatCurrency } from "../hostUtils";
 
 type ResultSummaryProps = {
 	guestNameDisplay: string;
@@ -13,7 +13,7 @@ export default function ResultSummary({
 	rarity,
 }: ResultSummaryProps) {
 	return (
-		<div className="relative overflow-hidden rounded-[20px] border border-[rgba(212,175,55,0.48)] bg-linear-to-br from-[rgba(24,3,3,0.95)] to-[rgba(64,0,0,0.9)] p-[32px] text-center shadow-[inset_0_0_0_1px_rgba(255,248,220,0.08),0_14px_30px_rgba(5,0,0,0.48)]">
+		<div className="flex overflow-hidden rounded-[20px] border border-[rgba(212,175,55,0.48)] bg-linear-to-br from-[rgba(24,3,3,0.95)] to-[rgba(64,0,0,0.9)] p-8 text-center shadow-[inset_0_0_0_1px_rgba(255,248,220,0.08),0_14px_30px_rgba(5,0,0,0.48)]">
 			<div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(179,20,20,0.4),transparent_70%)] opacity-30" />
 			<div className="relative z-10 grid gap-[12px]">
 				<p className="m-0 font-vn text-[15px] font-medium tracking-[0.03em] text-[rgba(255,241,203,0.72)]">

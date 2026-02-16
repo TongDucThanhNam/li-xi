@@ -44,9 +44,6 @@ export default function CreateSessionPanel({
 				<h2 className="font-playfair text-[clamp(32px,3.5vw,48px)] leading-[1.12] tracking-[0.01em] text-transparent bg-[linear-gradient(180deg,#fff8dc,#d4af37)] bg-clip-text drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)] mb-2 text-center">
 					Tạo lượt rút mới
 				</h2>
-				<p className="font-vn text-[15px] text-[rgba(255,248,220,0.6)] text-center mb-10 tracking-wide">
-					Nhập thông tin người chơi may mắn tiếp theo
-				</p>
 
 				<div className="grid gap-8">
 					<div className="grid gap-3">

@@ -34,13 +34,8 @@ export default function GachaLayout({
 				/>
 			</head>
 			<body>
-				<ConvexClientProvider>
-					{children}
-					<CssDebugger />
-				</ConvexClientProvider>
+				<ConvexClientProvider>{children}</ConvexClientProvider>
 			</body>
 		</html>
 	);
 }
-
-import CssDebugger from "./components/CssDebugger";

@@ -12,7 +12,7 @@ export default function HostHeader({
 	onLogout,
 }: HostHeaderProps) {
 	return (
-		<header className="relative flex flex-wrap items-center justify-between gap-6 rounded-full border border-[rgba(212,175,55,0.25)] bg-[rgba(20,5,5,0.85)] px-8 py-5 shadow-[0_4px_30px_rgba(0,0,0,0.5)] backdrop-blur-md transition-all hover:border-[rgba(212,175,55,0.4)] hover:bg-[rgba(30,10,10,0.9)] hover:shadow-[0_8px_40px_rgba(94,10,10,0.3)]">
+		<header className="relative flex flex-wrap items-center justify-between gap-6 rounded-full border border-[rgba(212,175,55,0.25)] bg-[rgba(20,5,5,0.85)] shadow-[0_4px_30px_rgba(0,0,0,0.5)] backdrop-blur-md transition-all px-2 py-2">
 			<div className="flex items-center gap-4">
 				<div className="h-12 w-12 rounded-full border border-[rgba(212,175,55,0.6)] bg-linear-to-br from-[rgba(212,175,55,0.2)] to-[rgba(94,10,10,0.4)] shadow-[inset_0_0_12px_rgba(212,175,55,0.3)] flex items-center justify-center">
 					<span className="font-cinzel text-2xl text-gold-shine">H</span>

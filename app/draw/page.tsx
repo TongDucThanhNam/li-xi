@@ -3,7 +3,6 @@
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import FortuneStage from "@/app/draw/FortuneStage";
 import BudgetBar from "@/app/draw/components/BudgetBar";
 import CreateSessionPanel from "@/app/draw/components/CreateSessionPanel";
 import HostHeader from "@/app/draw/components/HostHeader";
@@ -11,6 +10,7 @@ import HostShell from "@/app/draw/components/HostShell";
 import InventoryList from "@/app/draw/components/InventoryList";
 import RecentRedemptions from "@/app/draw/components/RecentRedemptions";
 import ResultSummary from "@/app/draw/components/ResultSummary";
+import FortuneStage from "@/app/draw/FortuneStage";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { PIN_LENGTH, type Rarity } from "@/lib/lixiPolicy";
@@ -201,7 +201,7 @@ export default function DrawPage() {
 
 	if (guestMode) {
 		return (
-			<main className="min-h-screen bg-black-ink p-0">
+			<main className="w-screen h-dvh overflow-hidden bg-black-ink">
 				<FortuneStage
 					sessionId={activeSession?.id ?? null}
 					canStart={Boolean(activeSession)}
@@ -248,20 +248,13 @@ export default function DrawPage() {
 					</p>
 				) : null}
 				{notice ? (
-					<p className="rounded-[12px] border border-[rgba(212,175,55,0.5)] bg-[rgba(44,24,0,0.6)] px-[16px] py-[12px] text-[rgba(255,241,203,0.95)] backdrop-blur-md shadow-lg animate-fade-in">
+					<p className="rounded-xl border border-[rgba(212,175,55,0.5)] bg-[rgba(44,24,0,0.6)] px-[16px] py-[12px] text-[rgba(255,241,203,0.95)] backdrop-blur-md shadow-lg animate-fade-in">
 						{notice}
 					</p>
 				) : null}
-				{result ? (
-					<ResultSummary
-						guestNameDisplay={result.guestNameDisplay}
-						amount={result.amount}
-						rarity={result.rarity}
-					/>
-				) : null}
 
-				<div className="grid flex-1 gap-[24px] lg:grid-cols-12 items-start">
-					<section className="grid gap-[20px] lg:col-span-7">
+				<div className="grid flex-1 gap-6 lg:grid-cols-12 items-start">
+					<section className="grid gap-5 lg:col-span-7">
 						<CreateSessionPanel
 							guestName={guestName}
 							hostPin={hostPin}
