@@ -1,6 +1,6 @@
 "use client";
 
-import { type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ENVELOPE_COUNT, RARITY_LABELS, type Rarity } from "@/lib/lixiPolicy";
 import { formatCurrency } from "./hostUtils";
 
@@ -40,8 +40,8 @@ type FortuneStageProps = {
 const ENTRY_STAGGER_MS = 80;
 const HERO_HIDE_MS = 500;
 const READY_DELAY_MS = 1000;
-const NORMAL_REVEAL_MS = 1500;
-const LEGEND_REVEAL_MS = 1800;
+const NORMAL_REVEAL_MS = 450;
+const LEGEND_REVEAL_MS = 700;
 const RESULT_DELAY_MS = 2000;
 
 function createInitialCards() {
@@ -58,7 +58,7 @@ function ticketRarityClass(rarity: Rarity | null) {
 		return "";
 	}
 	if (rarity === "legend") {
-		return "text-[#8a6e1e] border-2 border-gold-base bg-linear-to-br from-[#fffde7] to-[#fff8e1] animate-legend-glow";
+		return "text-[#8a6e1e] border-2 border-gold-base bg-linear-to-br from-[#fffde7] to-[#fff8e1]";
 	}
 	if (rarity === "rare") {
 		return "text-red-vivid border border-[#ef9a9a] bg-linear-to-b from-white to-[#ffebee]";
@@ -76,10 +76,40 @@ function rarityModalGlow(rarity: Rarity) {
 	return "bg-[radial-gradient(circle_at_50%_50%,rgba(179,20,20,0.1),transparent_70%)]";
 }
 
-function rollFromPool(pool: RewardPoolItem[]): Prize {
+function clonePool(pool: RewardPoolItem[]) {
+	return pool
+		.filter((item) => item.remainingQuantity > 0)
+		.map((item) => ({ ...item }));
+}
+
+function consumePrize(
+	pool: RewardPoolItem[],
+	prize: Prize,
+): RewardPoolItem[] {
+	const index = pool.findIndex(
+		(item) =>
+			item.amount === prize.amount &&
+			item.rarity === prize.rarity &&
+			item.remainingQuantity > 0,
+	);
+	if (index < 0) {
+		return pool;
+	}
+
+	const next = [...pool];
+	next[index] = {
+		...next[index],
+		remainingQuantity: next[index].remainingQuantity - 1,
+	};
+	return next;
+}
+
+function drawPrizeWithoutReplacement(
+	pool: RewardPoolItem[],
+): { prize: Prize | null; nextPool: RewardPoolItem[] } {
 	const available = pool.filter((item) => item.remainingQuantity > 0);
 	if (available.length === 0) {
-		return { amount: 100000, rarity: "common" };
+		return { prize: null, nextPool: pool };
 	}
 
 	const totalWeight = available.reduce(
@@ -90,32 +120,68 @@ function rollFromPool(pool: RewardPoolItem[]): Prize {
 	for (const item of available) {
 		threshold -= item.remainingQuantity;
 		if (threshold < 0) {
-			return { amount: item.amount, rarity: item.rarity };
+			const prize: Prize = { amount: item.amount, rarity: item.rarity };
+			return {
+				prize,
+				nextPool: consumePrize(pool, prize),
+			};
 		}
 	}
 
 	const fallback = available[available.length - 1];
-	return { amount: fallback.amount, rarity: fallback.rarity };
+	const fallbackPrize: Prize = {
+		amount: fallback.amount,
+		rarity: fallback.rarity,
+	};
+	return {
+		prize: fallbackPrize,
+		nextPool: consumePrize(pool, fallbackPrize),
+	};
 }
 
-function revealTilt(wrapper: HTMLElement, clientX: number, clientY: number) {
-	const card = wrapper.querySelector<HTMLElement>(".card-inner");
-	if (!card) {
-		return;
+function buildMissedPrizes(
+	pool: RewardPoolItem[],
+	chosenPrize: Prize,
+	count: number,
+) {
+	let workingPool = consumePrize(clonePool(pool), chosenPrize);
+	const prizes: Array<Prize | null> = [];
+
+	// Collect all prize kinds for recycling when the real pool is exhausted.
+	// Missed-card values are purely visual, so recycling is fine.
+	const prizeKinds = pool
+		.filter((item) => item.amount > 0)
+		.map((item) => ({ amount: item.amount, rarity: item.rarity }));
+
+	for (let i = 0; i < count; i += 1) {
+		const draw = drawPrizeWithoutReplacement(workingPool);
+		if (draw.prize) {
+			prizes.push(draw.prize);
+			workingPool = draw.nextPool;
+		} else if (prizeKinds.length > 0) {
+			// Pool exhausted – pick randomly from known prize kinds
+			const kind =
+				prizeKinds[Math.floor(Math.random() * prizeKinds.length)];
+			prizes.push({ amount: kind.amount, rarity: kind.rarity });
+		} else {
+			prizes.push(null);
+		}
 	}
+	return prizes;
+}
 
-	const rect = wrapper.getBoundingClientRect();
-	const x = clientX - rect.left;
-	const y = clientY - rect.top;
-	const rotateX = (y / rect.height - 0.5) * -20;
-	const rotateY = (x / rect.width - 0.5) * 20;
-	card.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.05)`;
-
-	const px = (1 - x / rect.width) * 100;
-	const py = (1 - y / rect.height) * 100;
-	wrapper.querySelectorAll<HTMLElement>(".foilLayer").forEach((node) => {
-		node.style.backgroundPosition = `${px}% ${py}%`;
-	});
+function getAvailablePrizeKinds(pool: RewardPoolItem[]) {
+	const unique = new Map<string, Prize>();
+	for (const item of pool) {
+		if (item.remainingQuantity <= 0) {
+			continue;
+		}
+		const key = `${item.amount}-${item.rarity}`;
+		if (!unique.has(key)) {
+			unique.set(key, { amount: item.amount, rarity: item.rarity });
+		}
+	}
+	return Array.from(unique.values());
 }
 
 /* ── Ornamental Divider ── */
@@ -138,19 +204,15 @@ function EnvelopeCard({
 	index,
 	isReady,
 	onClick,
-	onPointerMove,
-	onPointerLeave,
 }: {
 	card: CardState;
 	index: number;
 	isReady: boolean;
 	onClick: () => void;
-	onPointerMove: (event: PointerEvent<HTMLDivElement>) => void;
-	onPointerLeave: (event: PointerEvent<HTMLDivElement>) => void;
 }) {
 	return (
 		<div
-			className={`group relative w-36 sm:w-40 md:w-44 lg:w-48 aspect-[0.72] preserve-3d cursor-pointer transition-[opacity,transform] duration-600 ease-elastic ${
+			className={`group relative w-32 sm:w-36 md:w-40 lg:w-44 aspect-[0.72] preserve-3d cursor-pointer transition-[opacity,transform] duration-600 ease-elastic ${
 				card.isIn
 					? "opacity-100 translate-y-0"
 					: "opacity-0 translate-y-[100px]"
@@ -158,14 +220,8 @@ function EnvelopeCard({
 				card.isMissed
 					? "grayscale brightness-[0.3] pointer-events-none scale-[0.96] transition-all duration-700"
 					: ""
-			} ${
-				isReady && !card.isOpened && !card.isMissed
-					? "animate-card-breathe hover:scale-[1.06] hover:-translate-y-1 active:scale-[0.97]"
-					: ""
 			}`}
 			onClick={onClick}
-			onPointerMove={onPointerMove}
-			onPointerLeave={onPointerLeave}
 			role="button"
 			tabIndex={isReady && !card.isOpened && !card.isMissed ? 0 : -1}
 			aria-label={`Phong bao số ${index + 1}`}
@@ -226,7 +282,7 @@ function EnvelopeCard({
 
 				{/* Body / pocket */}
 				<div className="absolute inset-0 z-10 filter-[url(#paperRoughness)] bg-linear-to-br from-red-vivid to-red-deep [clip-path:polygon(0_0,50%_12%,100%_0,100%_100%,0%_100%)] translate-z-px rounded-md shadow-[inset_0_10px_20px_rgba(0,0,0,0.3)] transition-opacity duration-500 after:content-[''] after:absolute after:inset-0 after:bg-[radial-gradient(circle_at_50%_120%,rgba(0,0,0,0.3)_0%,transparent_70%)] after:mix-blend-multiply">
-					<div className="foilLayer absolute inset-0 pointer-events-none z-50 opacity-70 bg-linear-to-br from-transparent via-white/30 to-white/20 bg-size-[200%_200%] bg-position-[100%_100%] mix-blend-overlay transition-[background-position] duration-100" />
+					<div className="absolute inset-0 pointer-events-none z-50 opacity-40 bg-linear-to-br from-transparent via-white/20 to-white/10 mix-blend-overlay" />
 				</div>
 
 				{/* Flap */}
@@ -241,7 +297,7 @@ function EnvelopeCard({
 					}}
 				>
 					<div className="absolute inset-0 [clip-path:polygon(0_0,100%_0,50%_85%)] rounded-[4px_4px_0_0] backface-hidden bg-linear-to-b from-[#d32f2f] to-red-vivid filter-[url(#paperRoughness)]">
-						<div className="foilLayer absolute inset-0 pointer-events-none z-50 opacity-70 bg-linear-to-br from-transparent via-white/30 to-white/20 bg-size-[200%_200%] bg-position-[100%_100%] mix-blend-overlay transition-[background-position] duration-100" />
+						<div className="absolute inset-0 pointer-events-none z-50 opacity-40 bg-linear-to-br from-transparent via-white/20 to-white/10 mix-blend-overlay" />
 					</div>
 					<div className="absolute inset-0 [clip-path:polygon(0_0,100%_0,50%_85%)] rounded-[4px_4px_0_0] backface-hidden bg-[#4a0505] rotate-y-180 bg-[repeating-linear-gradient(45deg,rgba(255,255,255,0.05)_0,transparent_2px)]" />
 					<div className="absolute bottom-[15%] left-1/2 w-9 h-9 sm:w-11 sm:h-11 -translate-x-1/2 translate-y-1/2 translate-z-px rounded-full bg-[radial-gradient(circle_at_30%_30%,var(--color-gold-shine),var(--color-gold-shine),#8a6e1e)] text-red-deep font-cinzel text-[1.1rem] sm:text-[1.4rem] flex items-center justify-center shadow-[0_4px_10px_rgba(0,0,0,0.5),inset_0_0_0_2px_rgba(255,215,0,0.8)]">
@@ -251,14 +307,10 @@ function EnvelopeCard({
 			</div>
 
 			{/* Card number */}
-			<span className="absolute -bottom-6 sm:-bottom-7 left-1/2 -translate-x-1/2 text-[0.7rem] sm:text-[0.8rem] tracking-[2px] text-gold-base/40 font-cinzel tabular-nums select-none">
+			<span className="absolute -bottom-5 sm:-bottom-6 left-1/2 -translate-x-1/2 text-[0.7rem] sm:text-[0.8rem] tracking-[2px] text-gold-base/40 font-cinzel tabular-nums select-none">
 				{String(index + 1).padStart(2, "0")}
 			</span>
 
-			{/* Hover glow ring (only when ready) */}
-			{isReady && !card.isOpened && !card.isMissed ? (
-				<div className="absolute -inset-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none bg-[radial-gradient(circle,rgba(212,175,55,0.08)_0%,transparent_70%)]" />
-			) : null}
 		</div>
 	);
 }
@@ -281,8 +333,13 @@ export default function FortuneStage({
 	const [showGrid, setShowGrid] = useState(false);
 	const [showInstruction, setShowInstruction] = useState(false);
 	const [modalPrize, setModalPrize] = useState<Prize | null>(null);
-	const [isLegendary, setIsLegendary] = useState(false);
 	const timeoutRef = useRef<number[]>([]);
+	const availablePrizeKinds = useMemo(
+		() => getAvailablePrizeKinds(rewardPool),
+		[rewardPool],
+	);
+	const onlyAvailablePrize =
+		availablePrizeKinds.length === 1 ? availablePrizeKinds[0] : null;
 
 	const canBegin = canStart && !disabled && phase === "IDLE";
 
@@ -304,7 +361,6 @@ export default function FortuneStage({
 		setShowGrid(false);
 		setShowInstruction(false);
 		setModalPrize(null);
-		setIsLegendary(false);
 		onRevealStateChange(false);
 	};
 
@@ -350,15 +406,17 @@ export default function FortuneStage({
 	};
 
 	const revealOtherCards = (chosenIndex: number, chosenPrize: Prize) => {
-		const remaining = Array.from({ length: ENVELOPE_COUNT - 1 }, () =>
-			rollFromPool(rewardPool),
+		const remaining = buildMissedPrizes(
+			rewardPool,
+			chosenPrize,
+			ENVELOPE_COUNT - 1,
 		);
 		setCards((previous) =>
 			previous.map((card, index) => {
 				if (index === chosenIndex) {
 					return card;
 				}
-				const prize = remaining.pop() ?? chosenPrize;
+				const prize = remaining.pop() ?? null;
 				return {
 					...card,
 					isOpened: true,
@@ -394,7 +452,6 @@ export default function FortuneStage({
 
 			const revealDelay =
 				selectedPrize.rarity === "legend" ? LEGEND_REVEAL_MS : NORMAL_REVEAL_MS;
-			setIsLegendary(selectedPrize.rarity === "legend");
 
 			schedule(() => revealOtherCards(cardIndex, selectedPrize), revealDelay);
 			schedule(
@@ -416,19 +473,6 @@ export default function FortuneStage({
 				index={index}
 				isReady={phase === "READY"}
 				onClick={() => handleCardClick(index)}
-				onPointerMove={(event) => {
-					if (phase !== "READY") {
-						return;
-					}
-					revealTilt(event.currentTarget, event.clientX, event.clientY);
-				}}
-				onPointerLeave={(event) => {
-					const cardNode =
-						event.currentTarget.querySelector<HTMLElement>(".card-inner");
-					if (cardNode) {
-						cardNode.style.transform = "none";
-					}
-				}}
 			/>
 		));
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -436,9 +480,7 @@ export default function FortuneStage({
 
 	return (
 		<section
-			className={`relative w-full h-dvh flex flex-col overflow-hidden perspective-2000 font-vn transition-shadow duration-1000 bg-[radial-gradient(circle_at_50%_30%,rgba(116,14,14,0.4),var(--color-black-ink))] ${
-				isLegendary ? "animate-legend-glow" : ""
-			}`}
+			className="relative w-full h-dvh flex flex-col overflow-hidden perspective-2000 font-vn bg-[radial-gradient(circle_at_50%_30%,rgba(116,14,14,0.4),var(--color-black-ink))]"
 			aria-live="polite"
 		>
 			{/* ── SVG Filter ── */}
@@ -464,21 +506,6 @@ export default function FortuneStage({
 			{/* ── Noise Overlay ── */}
 			<div className="fixed inset-0 pointer-events-none opacity-5 z-10 noise-overlay" />
 
-			{/* ── Ambient Lights ── */}
-			<div
-				className={`fixed rounded-full pointer-events-none z-1 w-[800px] h-[800px] top-[-20%] left-[-10%] transition-all duration-1500 ${
-					isLegendary
-						? "animate-glow-pulse opacity-50 bg-[radial-gradient(circle,var(--color-gold-base)_0%,var(--color-red-vivid)_40%,transparent_70%)]"
-						: "opacity-30 blur-[100px] bg-[radial-gradient(circle,var(--color-red-vivid)_0%,transparent_70%)]"
-				}`}
-			/>
-			<div className="fixed rounded-full blur-[100px] opacity-[0.15] pointer-events-none z-1 w-[600px] h-[600px] bottom-[-20%] right-[-10%] animate-float-slow bg-[radial-gradient(circle,#ff4500_0%,transparent_70%)]" />
-			<div
-				className={`fixed rounded-full blur-[100px] pointer-events-none z-1 w-[400px] h-[400px] top-[40%] left-[40%] mix-blend-overlay animate-float-medium transition-opacity duration-1500 bg-[radial-gradient(circle,var(--color-gold-base)_0%,transparent_70%)] ${
-					isLegendary ? "opacity-30" : "opacity-10"
-				}`}
-			/>
-
 			{/* ── Header ── */}
 			<header className="relative z-20 shrink-0 flex justify-between items-center gap-3 px-4 sm:px-6 pt-4 sm:pt-6">
 				<div className="flex items-center gap-3">
@@ -499,11 +526,11 @@ export default function FortuneStage({
 				{onExit ? (
 					<button
 						type="button"
-						className="group/btn border border-gold-base/30 bg-[rgba(25,4,4,0.7)] text-gold-shine/80 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[0.8rem] sm:text-[0.9rem] cursor-pointer backdrop-blur-sm hover:-translate-y-px hover:border-gold-shine/60 hover:bg-[rgba(64,10,10,0.85)] hover:text-gold-shine transition-all duration-200 font-vn flex items-center gap-1.5"
+						className="border border-gold-base/30 bg-[rgba(25,4,4,0.7)] text-gold-shine/80 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[0.8rem] sm:text-[0.9rem] cursor-pointer font-vn flex items-center gap-1.5"
 						onClick={onExit}
 					>
 						<svg
-							className="w-3.5 h-3.5 opacity-60 group-hover/btn:opacity-100 transition-opacity"
+							className="w-3.5 h-3.5 opacity-80"
 							fill="none"
 							stroke="currentColor"
 							viewBox="0 0 24 24"
@@ -561,12 +588,10 @@ export default function FortuneStage({
 
 						<button
 							type="button"
-							className="group/cta mt-8 sm:mt-10 px-8 sm:px-10 py-3.5 sm:py-4 rounded-full border border-gold-base/40 bg-[rgba(40,0,0,0.65)] text-gold-base font-cinzel text-sm sm:text-base tracking-[2px] uppercase cursor-pointer backdrop-blur-sm shadow-[0_0_20px_rgba(0,0,0,0.45)] hover:bg-[rgba(80,0,0,0.82)] hover:border-gold-shine/70 hover:text-gold-shine hover:shadow-[0_0_40px_rgba(212,175,55,0.22)] hover:scale-[1.03] active:scale-[0.98] transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-[0_0_20px_rgba(0,0,0,0.45)] relative overflow-hidden"
+							className="mt-8 sm:mt-10 px-8 sm:px-10 py-3.5 sm:py-4 rounded-full border border-gold-base/40 bg-[rgba(40,0,0,0.65)] text-gold-base font-cinzel text-sm sm:text-base tracking-[2px] uppercase cursor-pointer shadow-[0_0_20px_rgba(0,0,0,0.45)] transition-opacity duration-200 disabled:opacity-40 disabled:cursor-not-allowed relative"
 							disabled={!canBegin}
 							onClick={handleStart}
 						>
-							{/* Shimmer sweep on hover */}
-							<span className="absolute inset-0 bg-linear-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover/cta:translate-x-full transition-transform duration-700 pointer-events-none" />
 							<span className="relative z-10">Summon Luck</span>
 						</button>
 
@@ -579,7 +604,7 @@ export default function FortuneStage({
 
 					{/* ── Grid Section ── */}
 					<div
-						className={`relative w-full h-full flex items-center justify-center transition-[opacity,visibility] duration-800 ease-smooth ${
+						className={`relative w-full h-full flex items-center justify-center -translate-y-8 sm:-translate-y-10 md:-translate-y-12 transition-[opacity,visibility,transform] duration-800 ease-smooth ${
 							showGrid
 								? "opacity-100 visible pointer-events-auto"
 								: "opacity-0 invisible pointer-events-none absolute"
@@ -587,7 +612,7 @@ export default function FortuneStage({
 					>
 						{/* Instruction banner */}
 						<div
-							className={`absolute left-1/2 top-[clamp(0.5rem,5vh,3rem)] -translate-x-1/2 text-center overflow-hidden transition-[max-height,opacity,transform,margin] duration-500 ease-smooth ${
+							className={`absolute z-20 left-1/2 top-2 sm:top-3 md:top-4 -translate-x-1/2 text-center overflow-hidden transition-[max-height,opacity,transform,margin] duration-500 ease-smooth ${
 								showInstruction
 									? "max-h-28 sm:max-h-32 opacity-100 translate-y-0"
 									: "max-h-0 opacity-0 -translate-y-3 pointer-events-none"
@@ -601,14 +626,20 @@ export default function FortuneStage({
 									</span>
 								</p>
 							) : null}
-							<p className="text-gold-base/70 text-sm sm:text-base tracking-[2px] uppercase font-cinzel animate-pulse-slow">
+							<p className="text-gold-base/70 text-sm sm:text-base tracking-[2px] uppercase font-cinzel">
 								Chọn một phong bao
 							</p>
+							{onlyAvailablePrize ? (
+								<p className="mt-1 text-[0.7rem] sm:text-xs text-gold-shine/55 font-playfair">
+									Kho hiện tại chỉ còn {formatCurrency(onlyAvailablePrize.amount)} (
+									{RARITY_LABELS[onlyAvailablePrize.rarity]})
+								</p>
+							) : null}
 							<OrnamentDivider className="mt-2" />
 						</div>
 
 						{/* Card grid */}
-						<div className="grid [grid-template-columns:repeat(2,minmax(0,max-content))] md:[grid-template-columns:repeat(5,minmax(0,max-content))] gap-x-3 gap-y-4 sm:gap-x-4 sm:gap-y-5 md:gap-x-8 md:gap-y-7 lg:gap-x-10 lg:gap-y-8 w-full max-w-[1600px] mx-auto px-1 sm:px-2 md:px-5 pb-6 pt-1 justify-center justify-items-center content-center perspective-distant">
+						<div className="grid [grid-template-columns:repeat(2,minmax(0,max-content))] md:[grid-template-columns:repeat(5,minmax(0,max-content))] gap-x-3 gap-y-3 sm:gap-x-4 sm:gap-y-4 md:gap-x-6 md:gap-y-5 lg:gap-x-8 lg:gap-y-6 w-full max-w-[1600px] mx-auto px-1 sm:px-2 md:px-5 pb-1 pt-1 justify-center justify-items-center content-center perspective-distant">
 							{cardsList}
 						</div>
 					</div>
@@ -633,31 +664,14 @@ export default function FortuneStage({
 					}`}
 				/>
 
-				{/* Decorative sparkles for legendary */}
-				{modalPrize?.rarity === "legend" ? (
-					<div
-						className="absolute inset-0 overflow-hidden pointer-events-none -z-5"
-						aria-hidden="true"
-					>
-						<span className="absolute top-[20%] left-[15%] w-1 h-1 rounded-full bg-gold-base animate-sparkle opacity-0" />
-						<span className="absolute top-[45%] left-[75%] w-1 h-1 rounded-full bg-gold-base animate-sparkle opacity-0 [animation-delay:0.3s]" />
-						<span className="absolute top-[70%] left-[30%] w-1 h-1 rounded-full bg-gold-base animate-sparkle opacity-0 [animation-delay:0.6s]" />
-						<span className="absolute top-[35%] left-[55%] w-1 h-1 rounded-full bg-gold-base animate-sparkle opacity-0 [animation-delay:0.9s]" />
-						<span className="absolute top-[60%] left-[85%] w-1 h-1 rounded-full bg-gold-base animate-sparkle opacity-0 [animation-delay:1.2s]" />
-						<span className="absolute top-[80%] left-[45%] w-1 h-1 rounded-full bg-gold-base animate-sparkle opacity-0 [animation-delay:1.5s]" />
-					</div>
-				) : null}
-
-				<div
-					className={`flex flex-col items-center ${modalPrize ? "animate-modal-enter" : ""}`}
-				>
+				<div className="flex flex-col items-center">
 					<p className="m-0 text-xs sm:text-sm tracking-[3px] sm:tracking-[4px] uppercase text-white/50 font-playfair">
 						Bạn nhận được
 					</p>
 
 					<OrnamentDivider className="my-3 sm:my-4" />
 
-					<h2 className="mt-1 mb-2 font-cinzel text-[clamp(38px,5vw,72px)] leading-tight bg-linear-to-b from-gold-shine to-gold-base bg-clip-text text-transparent drop-shadow-[0_0_30px_rgba(212,175,55,0.3)] animate-count-up">
+					<h2 className="mt-1 mb-2 font-cinzel text-[clamp(38px,5vw,72px)] leading-tight bg-linear-to-b from-gold-shine to-gold-base bg-clip-text text-transparent drop-shadow-[0_0_30px_rgba(212,175,55,0.3)]">
 						{modalPrize ? formatCurrency(modalPrize.amount) : "0đ"}
 					</h2>
 
@@ -669,13 +683,12 @@ export default function FortuneStage({
 
 					<button
 						type="button"
-						className="group/collect mt-8 sm:mt-10 px-8 sm:px-10 py-3.5 sm:py-4 rounded-full border border-gold-base/40 bg-[rgba(40,0,0,0.65)] text-gold-base font-cinzel text-sm sm:text-base tracking-[2px] uppercase cursor-pointer backdrop-blur-sm shadow-[0_0_20px_rgba(0,0,0,0.45)] hover:bg-[rgba(80,0,0,0.82)] hover:border-gold-shine/70 hover:text-gold-shine hover:shadow-[0_0_40px_rgba(212,175,55,0.22)] hover:scale-[1.03] active:scale-[0.98] transition-all duration-300 relative overflow-hidden"
+						className="mt-8 sm:mt-10 px-8 sm:px-10 py-3.5 sm:py-4 rounded-full border border-gold-base/40 bg-[rgba(40,0,0,0.65)] text-gold-base font-cinzel text-sm sm:text-base tracking-[2px] uppercase cursor-pointer shadow-[0_0_20px_rgba(0,0,0,0.45)] transition-opacity duration-200 relative"
 						onClick={() => {
 							resetStage();
 							onCollect();
 						}}
 					>
-						<span className="absolute inset-0 bg-linear-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover/collect:translate-x-full transition-transform duration-700 pointer-events-none" />
 						<span className="relative z-10">Nhận lì xì</span>
 					</button>
 				</div>
