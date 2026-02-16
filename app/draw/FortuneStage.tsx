@@ -66,16 +66,6 @@ function ticketRarityClass(rarity: Rarity | null) {
 	return "text-[#555] border border-[#ddd] bg-white";
 }
 
-function rarityBadgeClass(rarity: Rarity) {
-	if (rarity === "legend") {
-		return "bg-linear-to-r from-[#d4af37] via-[#fff8dc] to-[#d4af37] text-[#5e0a0a] shadow-[0_0_20px_rgba(212,175,55,0.4)]";
-	}
-	if (rarity === "rare") {
-		return "bg-linear-to-r from-red-vivid to-[#e53935] text-white shadow-[0_0_15px_rgba(179,20,20,0.3)]";
-	}
-	return "bg-[rgba(255,255,255,0.12)] text-[rgba(255,237,199,0.7)] border border-[rgba(255,237,199,0.2)]";
-}
-
 function rarityModalGlow(rarity: Rarity) {
 	if (rarity === "legend") {
 		return "bg-[radial-gradient(circle_at_50%_40%,rgba(212,175,55,0.2)_0%,rgba(179,20,20,0.08)_40%,transparent_70%)]";
@@ -160,11 +150,11 @@ function EnvelopeCard({
 }) {
 	return (
 		<div
-			className={`group relative w-full aspect-[0.72] preserve-3d cursor-pointer transition-[opacity,transform] duration-600 ease-elastic ${
+			className={`group relative w-full max-w-[10rem] sm:max-w-[11rem] md:max-w-[12rem] lg:max-w-[13rem] aspect-[0.72] mx-auto preserve-3d cursor-pointer transition-[opacity,transform] duration-600 ease-elastic ${
 				card.isIn
 					? "opacity-100 translate-y-0"
 					: "opacity-0 translate-y-[100px]"
-			} ${card.isOpened ? "[&_.layerFlapWrapper]:translate-z-0 [&_.layerFlapWrapper]:rotate-x-180 [&_.layerFlapWrapper]:z-1 [&_.layerTicket]:-translate-y-[90%] [&_.layerTicket]:translate-z-px [&_.layerTicket]:scale-[1.1] [&_.layerTicket]:shadow-[0_10px_30px_rgba(0,0,0,0.3)] [&_.layerTicket]:z-20" : ""} ${
+			} ${card.isOpened ? "[&_.layerFlapWrapper]:translate-z-0 [&_.layerFlapWrapper]:rotate-x-180 [&_.layerFlapWrapper]:z-5 [&_.layerTicket]:-translate-y-[88%] [&_.layerTicket]:translate-z-px [&_.layerTicket]:scale-[1.08] [&_.layerTicket]:opacity-100 [&_.layerTicket]:blur-0 [&_.layerTicket]:shadow-[0_10px_30px_rgba(0,0,0,0.3)] [&_.layerTicket]:z-30" : ""} ${
 				card.isMissed
 					? "grayscale brightness-[0.3] pointer-events-none scale-[0.96] transition-all duration-700"
 					: ""
@@ -192,7 +182,7 @@ function EnvelopeCard({
 
 				{/* Ticket inside */}
 				<div
-					className={`layerTicket absolute w-[80%] h-[75%] left-[10%] bottom-2 rounded-[4px_4px_2px_2px] translate-z-0 flex flex-col items-center justify-center overflow-hidden shadow-[0_2px_5px_rgba(0,0,0,0.2)] transition-transform duration-1200 ease-elastic z-5 bg-white text-[#333] ${ticketRarityClass(
+					className={`layerTicket absolute w-[80%] h-[75%] left-[10%] bottom-2 rounded-[4px_4px_2px_2px] translate-z-0 translate-y-[56%] flex flex-col items-center justify-center overflow-hidden shadow-[0_2px_5px_rgba(0,0,0,0.2)] transition-[transform,opacity,filter,box-shadow] duration-1200 ease-elastic z-0 opacity-0 blur-[1px] bg-white text-[#333] ${ticketRarityClass(
 						card.prize?.rarity ?? null,
 					)}`}
 				>
@@ -221,12 +211,12 @@ function EnvelopeCard({
 				</div>
 
 				{/* Body / pocket */}
-				<div className="absolute inset-0 filter-[url(#paperRoughness)] bg-linear-to-br from-red-vivid to-red-deep [clip-path:polygon(0_0,50%_12%,100%_0,100%_100%,0%_100%)] translate-z-px rounded-md shadow-[inset_0_10px_20px_rgba(0,0,0,0.3)] transition-opacity duration-500 after:content-[''] after:absolute after:inset-0 after:bg-[radial-gradient(circle_at_50%_120%,rgba(0,0,0,0.3)_0%,transparent_70%)] after:mix-blend-multiply">
+				<div className="absolute inset-0 z-10 filter-[url(#paperRoughness)] bg-linear-to-br from-red-vivid to-red-deep [clip-path:polygon(0_0,50%_12%,100%_0,100%_100%,0%_100%)] translate-z-px rounded-md shadow-[inset_0_10px_20px_rgba(0,0,0,0.3)] transition-opacity duration-500 after:content-[''] after:absolute after:inset-0 after:bg-[radial-gradient(circle_at_50%_120%,rgba(0,0,0,0.3)_0%,transparent_70%)] after:mix-blend-multiply">
 					<div className="foilLayer absolute inset-0 pointer-events-none z-50 opacity-70 bg-linear-to-br from-transparent via-white/30 to-white/20 bg-size-[200%_200%] bg-position-[100%_100%] mix-blend-overlay transition-[background-position] duration-100" />
 				</div>
 
 				{/* Flap */}
-				<div className="layerFlapWrapper absolute top-0 left-0 w-full h-[45%] origin-top translate-z-[2px] preserve-3d transition-[transform,opacity] duration-1000 ease-elastic z-10">
+				<div className="layerFlapWrapper absolute top-0 left-0 w-full h-[45%] origin-top translate-z-[2px] preserve-3d transition-[transform,opacity] duration-1000 ease-elastic z-20">
 					<div className="absolute inset-0 [clip-path:polygon(0_0,100%_0,50%_85%)] rounded-[4px_4px_0_0] backface-hidden bg-linear-to-b from-[#d32f2f] to-red-vivid filter-[url(#paperRoughness)]">
 						<div className="foilLayer absolute inset-0 pointer-events-none z-50 opacity-70 bg-linear-to-br from-transparent via-white/30 to-white/20 bg-size-[200%_200%] bg-position-[100%_100%] mix-blend-overlay transition-[background-position] duration-100" />
 					</div>
@@ -423,7 +413,7 @@ export default function FortuneStage({
 
 	return (
 		<section
-			className={`relative w-screen h-dvh flex flex-col overflow-hidden perspective-2000 font-vn transition-shadow duration-1000 bg-[radial-gradient(circle_at_50%_30%,rgba(116,14,14,0.4),var(--color-black-ink))] ${
+			className={`relative w-full h-dvh flex flex-col overflow-hidden perspective-2000 font-vn transition-shadow duration-1000 bg-[radial-gradient(circle_at_50%_30%,rgba(116,14,14,0.4),var(--color-black-ink))] ${
 				isLegendary ? "animate-legend-glow" : ""
 			}`}
 			aria-live="polite"
@@ -566,7 +556,7 @@ export default function FortuneStage({
 
 					{/* ── Grid Section ── */}
 					<div
-						className={`w-full h-full flex flex-col justify-center transition-[opacity,visibility] duration-800 ease-smooth ${
+						className={`w-full h-full flex flex-col items-center justify-center transition-[opacity,visibility] duration-800 ease-smooth ${
 							showGrid
 								? "opacity-100 visible pointer-events-auto"
 								: "opacity-0 invisible pointer-events-none absolute"
@@ -595,7 +585,7 @@ export default function FortuneStage({
 						</div>
 
 						{/* Card grid */}
-						<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4 md:gap-6 lg:gap-8 max-w-7xl mx-auto w-full pb-6 pt-1 justify-center content-center perspective-distant">
+						<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-x-3 gap-y-4 sm:gap-x-4 sm:gap-y-5 md:gap-x-6 md:gap-y-7 lg:gap-x-8 lg:gap-y-8 w-full max-w-[1320px] mx-auto px-1 sm:px-2 pb-6 pt-1 justify-items-center content-center perspective-distant">
 							{cardsList}
 						</div>
 					</div>
