@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
 import { useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { api } from "@/convex/_generated/api";
-import { Rarity } from "@/lib/lixiPolicy";
+import type { Rarity } from "@/lib/lixiPolicy";
 import { clearOwnerSession } from "@/lib/ownerSession";
-import { useOwnerSession } from "@/lib/useOwnerSession";
 import { useOwnerSession } from "@/lib/useOwnerSession";
 
 function formatCurrency(amount: number) {
@@ -126,43 +125,6 @@ export default function LeaderboardPage() {
 											<strong>
 												#{item.rank} {item.guestNameDisplay}
 											</strong>
-											<span
-												className={`text-[11px] uppercase rounded-full border px-2 py-0.5 ${getRarityClasses(item.rarity)}`}
-											>
-												{item.rarity}
-											</span>
-										</div>
-										<div className="flex items-center gap-2 flex-wrap justify-end">
-											<span className="font-playfair text-[#ffe1a8]">
-												{formatCurrency(item.amount)}
-											</span>
-											<span className="text-xs text-[rgba(255,225,168,0.6)]">
-												{formatTime(item.createdAt)}
-											</span>
-										</div>
-									</article>
-								))}
-							</div>
-						)}
-					</section>
-
-					<section className="rounded-2xl border border-[rgba(243, 192, 86, 0.3)] bg-[rgba(32, 8, 8, 0.86)] p-4">
-						<h2 className="text-[#ffe5b1] text-xl font-cinzel mb-3">
-							Lịch sử gần đây
-						</h2>
-						{history.length === 0 ? (
-							<p className="text-[rgba(255, 218, 149, 0.75)]">
-								Chưa có dữ liệu.
-							</p>
-						) : (
-							<div className="grid gap-2">
-								{history.map((item) => (
-									<article
-										key={item.id}
-										className="rounded-xl border border-[rgba(243, 189, 80, 0.22)] bg-[rgba(18, 5, 5, 0.9)] flex justify-between gap-2.5 p-2.5 color-[#ffe1a8]"
-									>
-										<div className="flex items-center gap-2 flex-wrap">
-											<strong>{item.guestNameDisplay}</strong>
 											<span
 												className={`text-[11px] uppercase rounded-full border px-2 py-0.5 ${getRarityClasses(item.rarity)}`}
 											>
