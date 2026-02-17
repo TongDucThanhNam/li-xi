@@ -16,18 +16,27 @@ function ticketRarityClass(rarity: Rarity | null) {
 	return "text-[#555] border border-[#ddd] bg-white";
 }
 
+/** Classes for root wrapper – NO filter here so overlays stay vivid. */
 function missedCardClass(rarity: Rarity | null) {
 	if (rarity === "legend" || rarity === "rare") {
-		return "grayscale-[0.36] brightness-[0.46] saturate-[0.9] pointer-events-none scale-[0.97] transition-all duration-700";
+		return "pointer-events-none scale-[0.97] transition-all duration-700";
 	}
 	return "grayscale brightness-[0.3] pointer-events-none scale-[0.96] transition-all duration-700";
 }
 
-function regretAuraClass(rarity: Rarity) {
-	if (rarity === "legend") {
-		return "border-gold-base/45 shadow-[0_0_16px_rgba(212,175,55,0.38)]";
-	}
-	return "border-red-vivid/45 shadow-[0_0_16px_rgba(179,20,20,0.36)]";
+/** Filter lives on .card-inner – targets envelope layers via CSS, ticket stays vivid. */
+function missedInnerClass(rarity: Rarity | null) {
+	if (rarity === "legend") return "regret-ghost-legend";
+	if (rarity === "rare") return "regret-ghost-rare";
+	return "";
+}
+
+/** Vivid glow class for missed legend/rare ticket */
+function missedTicketClass(isMissed: boolean, rarity: Rarity | null) {
+	if (!isMissed || !rarity) return "";
+	if (rarity === "legend") return "regret-ticket-legend";
+	if (rarity === "rare") return "regret-ticket-rare";
+	return "";
 }
 
 function regretBadgeText(rarity: Rarity) {
@@ -81,7 +90,7 @@ export const EnvelopeCard = forwardRef<HTMLDivElement, EnvelopeCardProps>(
 				style={{ transformStyle: "preserve-3d" }}
 			>
 				<div
-					className="w-full h-full relative preserve-3d transition-transform duration-400 ease-smooth card-inner"
+					className={`w-full h-full relative preserve-3d transition-transform duration-400 ease-smooth card-inner ${card.isMissed ? missedInnerClass(missedRarity) : ""}`}
 					style={{ transformStyle: "preserve-3d" }}
 				>
 					{/* Lining */}
@@ -95,7 +104,7 @@ export const EnvelopeCard = forwardRef<HTMLDivElement, EnvelopeCardProps>(
 								: ""
 						} ${ticketRarityClass(
 							card.prize?.rarity ?? null,
-						)}`}
+						)} ${missedTicketClass(card.isMissed, card.prize?.rarity ?? null)}`}
 						style={{
 							transform: card.isOpened
 								? "translate3d(0,-112%,1px) scale(1.08)"
@@ -164,9 +173,48 @@ export const EnvelopeCard = forwardRef<HTMLDivElement, EnvelopeCardProps>(
 				</div>
 
 				{isRegretMiss && missedRarity ? (
-					<div
-						className={`pointer-events-none absolute -inset-2 rounded-xl border opacity-65 regret-aura ${regretAuraClass(missedRarity)}`}
-					/>
+					<>
+						{/* Colored underglow */}
+						<div
+							className={`pointer-events-none absolute -inset-1 rounded-lg regret-underglow ${
+								missedRarity === "legend"
+									? "bg-[radial-gradient(ellipse_at_50%_80%,rgba(212,175,55,0.35)_0%,transparent_70%)]"
+									: "bg-[radial-gradient(ellipse_at_50%_80%,rgba(179,20,20,0.3)_0%,transparent_70%)]"
+							}`}
+						/>
+						{/* Inner pulsing aura */}
+						<div
+							className={`pointer-events-none absolute -inset-2 rounded-xl border regret-aura ${
+								missedRarity === "legend"
+									? "border-gold-base/60 shadow-[0_0_24px_6px_rgba(212,175,55,0.35)]"
+									: "border-red-vivid/55 shadow-[0_0_24px_6px_rgba(179,20,20,0.3)]"
+							}`}
+						/>
+						{/* Outer aura ring – slower, bigger */}
+						<div
+							className={`pointer-events-none absolute -inset-4 rounded-2xl border regret-aura-outer ${
+								missedRarity === "legend"
+									? "border-gold-base/25 shadow-[0_0_40px_8px_rgba(212,175,55,0.18)]"
+									: "border-red-vivid/25 shadow-[0_0_40px_8px_rgba(179,20,20,0.15)]"
+							}`}
+						/>
+						{/* Holographic shimmer sweep */}
+						<div
+							className={`pointer-events-none absolute inset-0 rounded-md overflow-hidden z-40 ${
+								missedRarity === "legend"
+									? "regret-shimmer-gold"
+									: "regret-shimmer-red"
+							}`}
+						/>
+						{/* Floating sparkle particles */}
+						<div
+							className={`pointer-events-none absolute -inset-2 ${
+								missedRarity === "legend"
+									? "regret-particles-gold"
+									: "regret-particles-red"
+							}`}
+						/>
+					</>
 				) : null}
 			</div>
 		);

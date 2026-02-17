@@ -302,8 +302,8 @@
 }
 
 @keyframes regret-aura {
-  0%, 100% { opacity: 0.3; transform: scale(0.98); }
-  50% { opacity: 0.72; transform: scale(1.02); }
+  0%, 100% { opacity: 0.35; transform: scale(0.98); }
+  50% { opacity: 0.85; transform: scale(1.03); }
 }
 
 @keyframes regret-label {
@@ -312,16 +312,228 @@
 }
 
 .regret-aura {
-  animation: regret-aura 1800ms var(--ease-smooth) infinite;
+  animation: regret-aura 2000ms var(--ease-smooth) infinite;
 }
 
 .regret-label {
   animation: regret-label 1500ms var(--ease-out-quart) infinite;
 }
 
+/* ── Ghost breathe – ONLY envelope layers (lining/pocket/flap), ticket stays vivid ── */
+
+@keyframes regret-ghost-legend {
+  0%, 70%, 100% { filter: grayscale(0.5) brightness(0.38) saturate(0.6); }
+  80% { filter: grayscale(0) brightness(0.7) saturate(1.5); }
+  88% { filter: grayscale(0) brightness(0.65) saturate(1.3); }
+}
+
+@keyframes regret-ghost-rare {
+  0%, 72%, 100% { filter: grayscale(0.5) brightness(0.38) saturate(0.6); }
+  82% { filter: grayscale(0) brightness(0.65) saturate(1.4); }
+  90% { filter: grayscale(0) brightness(0.6) saturate(1.2); }
+}
+
+/* Apply filter to envelope parts only – NOT ticket */
+.regret-ghost-legend .layerLining,
+.regret-ghost-legend .layerPocket,
+.regret-ghost-legend .layerFlapWrapper {
+  filter: grayscale(0.5) brightness(0.38) saturate(0.6);
+  animation: regret-ghost-legend 4s ease-in-out infinite;
+}
+
+.regret-ghost-rare .layerLining,
+.regret-ghost-rare .layerPocket,
+.regret-ghost-rare .layerFlapWrapper {
+  filter: grayscale(0.5) brightness(0.38) saturate(0.6);
+  animation: regret-ghost-rare 4.5s ease-in-out infinite;
+}
+
+/* ── Missed ticket – stays vivid with pulsing glow ── */
+
+@keyframes regret-ticket-legend-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(212, 175, 55, 0.3), 0 0 20px rgba(212, 175, 55, 0.12), inset 0 0 12px rgba(212, 175, 55, 0.08);
+    filter: brightness(0.92) saturate(1.1);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(212, 175, 55, 0.55), 0 0 40px rgba(212, 175, 55, 0.2), inset 0 0 20px rgba(212, 175, 55, 0.12);
+    filter: brightness(1.05) saturate(1.3);
+  }
+}
+
+@keyframes regret-ticket-rare-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(179, 20, 20, 0.25), 0 0 20px rgba(179, 20, 20, 0.1), inset 0 0 12px rgba(179, 20, 20, 0.06);
+    filter: brightness(0.9) saturate(1.05);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(179, 20, 20, 0.45), 0 0 35px rgba(179, 20, 20, 0.18), inset 0 0 18px rgba(179, 20, 20, 0.1);
+    filter: brightness(1.02) saturate(1.2);
+  }
+}
+
+.regret-ticket-legend {
+  animation: regret-ticket-legend-glow 2.5s ease-in-out infinite !important;
+  border-color: rgba(212, 175, 55, 0.7) !important;
+}
+
+.regret-ticket-rare {
+  animation: regret-ticket-rare-glow 2.8s ease-in-out infinite !important;
+  border-color: rgba(179, 20, 20, 0.6) !important;
+}
+
+/* ── Holographic shimmer sweep ── */
+
+@keyframes regret-shimmer-sweep {
+  0%, 60% { transform: translateX(-160%) rotate(-25deg); opacity: 0; }
+  65% { opacity: 1; }
+  85% { opacity: 1; }
+  92%, 100% { transform: translateX(160%) rotate(-25deg); opacity: 0; }
+}
+
+.regret-shimmer-gold::after,
+.regret-shimmer-red::after {
+  content: '';
+  position: absolute;
+  top: -100%;
+  left: -50%;
+  width: 200%;
+  height: 300%;
+  pointer-events: none;
+}
+
+.regret-shimmer-gold::after {
+  background: linear-gradient(
+    105deg,
+    transparent 32%,
+    rgba(212, 175, 55, 0.12) 40%,
+    rgba(255, 248, 220, 0.45) 50%,
+    rgba(212, 175, 55, 0.12) 60%,
+    transparent 68%
+  );
+  animation: regret-shimmer-sweep 4s ease-in-out infinite;
+}
+
+.regret-shimmer-red::after {
+  background: linear-gradient(
+    105deg,
+    transparent 32%,
+    rgba(179, 20, 20, 0.12) 40%,
+    rgba(255, 190, 190, 0.35) 50%,
+    rgba(179, 20, 20, 0.12) 60%,
+    transparent 68%
+  );
+  animation: regret-shimmer-sweep 4.5s ease-in-out infinite 0.3s;
+}
+
+/* ── Outer aura ring ── */
+
+@keyframes regret-aura-outer {
+  0%, 100% { opacity: 0.15; transform: scale(0.97); }
+  50% { opacity: 0.6; transform: scale(1.05); }
+}
+
+.regret-aura-outer {
+  animation: regret-aura-outer 2600ms var(--ease-smooth) infinite;
+}
+
+/* ── Underglow (colored light pool beneath card) ── */
+
+@keyframes regret-underglow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.85; }
+}
+
+.regret-underglow {
+  animation: regret-underglow 3s ease-in-out infinite;
+}
+
+/* ── Floating sparkle particles ── */
+
+@keyframes regret-sparkle-rise {
+  0% { transform: translateY(12px) scale(0.6); opacity: 0; }
+  15% { opacity: 1; }
+  65% { opacity: 0.7; }
+  100% { transform: translateY(-30px) scale(0.15); opacity: 0; }
+}
+
+.regret-particles-gold::before,
+.regret-particles-gold::after,
+.regret-particles-red::before,
+.regret-particles-red::after {
+  content: '';
+  position: absolute;
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.regret-particles-gold::before {
+  top: 20%;
+  left: -5px;
+  background: #d4af37;
+  box-shadow:
+    6px -22px 4px rgba(255, 248, 220, 0.8),
+    12px 50px 3px rgba(212, 175, 55, 0.6),
+    -4px 80px 3px rgba(255, 248, 220, 0.5);
+  animation: regret-sparkle-rise 2.8s ease-out infinite;
+}
+
+.regret-particles-gold::after {
+  top: 50%;
+  right: -5px;
+  left: auto;
+  background: #fff8dc;
+  box-shadow:
+    -8px -30px 4px rgba(212, 175, 55, 0.7),
+    -5px 25px 3px rgba(255, 248, 220, 0.6),
+    4px -60px 3px rgba(212, 175, 55, 0.5);
+  animation: regret-sparkle-rise 3.2s ease-out infinite 1s;
+}
+
+.regret-particles-red::before {
+  top: 20%;
+  left: -5px;
+  background: #ef5350;
+  box-shadow:
+    6px -22px 4px rgba(255, 160, 160, 0.7),
+    12px 50px 3px rgba(179, 20, 20, 0.55),
+    -4px 80px 3px rgba(255, 160, 160, 0.45);
+  animation: regret-sparkle-rise 3s ease-out infinite;
+}
+
+.regret-particles-red::after {
+  top: 50%;
+  right: -5px;
+  left: auto;
+  background: #ef9a9a;
+  box-shadow:
+    -8px -30px 4px rgba(179, 20, 20, 0.6),
+    -5px 25px 3px rgba(255, 160, 160, 0.5),
+    4px -60px 3px rgba(179, 20, 20, 0.45);
+  animation: regret-sparkle-rise 3.4s ease-out infinite 0.8s;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .regret-aura,
-  .regret-label {
+  .regret-label,
+  .regret-ghost-legend .layerLining,
+  .regret-ghost-legend .layerPocket,
+  .regret-ghost-legend .layerFlapWrapper,
+  .regret-ghost-rare .layerLining,
+  .regret-ghost-rare .layerPocket,
+  .regret-ghost-rare .layerFlapWrapper,
+  .regret-ticket-legend,
+  .regret-ticket-rare,
+  .regret-aura-outer,
+  .regret-underglow,
+  .regret-shimmer-gold::after,
+  .regret-shimmer-red::after,
+  .regret-particles-gold::before,
+  .regret-particles-gold::after,
+  .regret-particles-red::before,
+  .regret-particles-red::after {
     animation: none !important;
   }
 }

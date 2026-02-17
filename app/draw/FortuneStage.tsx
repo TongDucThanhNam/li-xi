@@ -39,7 +39,7 @@ const NORMAL_REVEAL_MS = 1500;
 const LEGENDARY_FALLBACK_REVEAL_MS = 700;
 const LEGENDARY_MOVE_TO_CENTER_MS = 50;
 const LEGENDARY_REVEAL_MS = 3500;
-const RESULT_DELAY_MS = 2000;
+const RESULT_DELAY_MS = 6000;
 
 function usePrefersReducedMotion() {
 	const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
