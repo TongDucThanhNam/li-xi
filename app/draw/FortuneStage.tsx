@@ -202,7 +202,8 @@ export default function FortuneStage({
 		const sourceCard = cardRefs.current[cardIndex];
 		const cloneHost = cloneHostRef.current;
 
-		if (prefersReducedMotion || !sourceCard || !cloneHost) {
+		if (!sourceCard || !cloneHost) {
+			// Fallback: no DOM refs available — simple in-place reveal
 			schedule(() => {
 				revealOtherCards(cardIndex);
 				setCards((previous) =>
@@ -222,6 +223,11 @@ export default function FortuneStage({
 			}, LEGENDARY_FALLBACK_REVEAL_MS);
 			return;
 		}
+
+		// Reduced-motion: skip shake, but still do center + open + burst
+		const skipShake = prefersReducedMotion;
+		const moveMs = skipShake ? 50 : LEGENDARY_MOVE_TO_CENTER_MS;
+		const revealMs = skipShake ? 1200 : LEGENDARY_REVEAL_MS;
 
 		const sourceRect = sourceCard.getBoundingClientRect();
 		const clone = sourceCard.cloneNode(true) as HTMLDivElement;
@@ -248,28 +254,33 @@ export default function FortuneStage({
 			const centerX = window.innerWidth / 2 - sourceRect.width / 2;
 			const centerY = window.innerHeight / 2 - sourceRect.height / 2;
 			clone.style.transform = `translate(${centerX - sourceRect.left}px, ${centerY - sourceRect.top}px) scale(1.2)`;
-			const cloneCard = clone.querySelector<HTMLElement>(".card-inner");
-			if (cloneCard) {
-				cloneCard.style.animation = "shake-violent 0.5s infinite";
-			}
 
-			// Shards fly out from center during shake
-			schedule(() => {
-				if (cloneHost) {
-					const cx = window.innerWidth / 2;
-					const cy = window.innerHeight / 2;
-					createShards(cloneHost, { x: cx, y: cy });
+			if (!skipShake) {
+				const cloneCard = clone.querySelector<HTMLElement>(".card-inner");
+				if (cloneCard) {
+					cloneCard.style.animation = "shake-violent 0.5s infinite";
 				}
-			}, 800);
-		}, LEGENDARY_MOVE_TO_CENTER_MS);
+
+				// Shards fly out from center during shake
+				schedule(() => {
+					if (cloneHost) {
+						const cx = window.innerWidth / 2;
+						const cy = window.innerHeight / 2;
+						createShards(cloneHost, { x: cx, y: cy });
+					}
+				}, 800);
+			}
+		}, moveMs);
 
 		schedule(() => {
 			revealOtherCards(cardIndex);
 
 			if (legendCloneRef.current === clone) {
-				const cloneCard = clone.querySelector<HTMLElement>(".card-inner");
-				if (cloneCard) {
-					cloneCard.style.animation = "none";
+				if (!skipShake) {
+					const cloneCard = clone.querySelector<HTMLElement>(".card-inner");
+					if (cloneCard) {
+						cloneCard.style.animation = "none";
+					}
 				}
 
 				// Burst FX at card open moment
@@ -313,7 +324,7 @@ export default function FortuneStage({
 				clearLegendaryArtifacts(false);
 				setModalPrize(selectedPrize);
 			}, RESULT_DELAY_MS);
-		}, LEGENDARY_REVEAL_MS);
+		}, revealMs);
 	};
 
 	const handleCardClick = async (cardIndex: number) => {
@@ -349,6 +360,7 @@ export default function FortuneStage({
 	};
 
 	return (
+		<>
 		<section
 			className={`relative w-full h-dvh overflow-hidden perspective-2000 font-vn transition-colors duration-700 ${
 				legendaryFx.isActive
@@ -420,17 +432,19 @@ export default function FortuneStage({
 					</div>
 				</div>
 			</div>
-
-			<div ref={cloneHostRef} className="fixed inset-0 z-[9000] pointer-events-none" />
-
-			<ResultModal
-				prize={modalPrize}
-				guestName={guestName}
-				onCollect={() => {
-					resetStage();
-					onCollect();
-				}}
-			/>
 		</section>
+
+		{/* Clone host + modal OUTSIDE section to avoid perspective containing block + overflow clip */}
+		<div ref={cloneHostRef} className="fixed inset-0 z-[9000] pointer-events-none overflow-visible" />
+
+		<ResultModal
+			prize={modalPrize}
+			guestName={guestName}
+			onCollect={() => {
+				resetStage();
+				onCollect();
+			}}
+		/>
+		</>
 	);
 }

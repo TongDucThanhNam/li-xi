@@ -18,6 +18,13 @@ type BudgetInput = {
 
 type ConvexCtx = QueryCtx | MutationCtx;
 type NormalizedBudgetItem = { amount: number; quantity: number; rarity: Rarity };
+type BudgetItemSnapshot = {
+  _id: Id<"budgetItems">;
+  amount: number;
+  rarity: Rarity;
+  initialQuantity: number;
+  remainingQuantity: number;
+};
 const MAX_BUDGET_ITEM_COUNT = 200;
 
 function validateBudgetInputs(items: BudgetInput[]) {
@@ -63,6 +70,66 @@ function validateBudgetInputs(items: BudgetInput[]) {
   return { normalized, totalBudget };
 }
 
+function validateBudgetItemsSnapshot(items: Doc<"budgetItems">[]) {
+  if (items.length === 0) {
+    throw new Error("Không có mệnh giá nào để đồng bộ");
+  }
+  if (items.length > MAX_BUDGET_ITEM_COUNT) {
+    throw new Error(`Tối đa ${MAX_BUDGET_ITEM_COUNT} mệnh giá trong một lần cấu hình`);
+  }
+
+  const amountSet = new Set<number>();
+  const normalized: BudgetItemSnapshot[] = [];
+  let totalBudget = 0;
+  let remainingBudget = 0;
+
+  for (const item of items) {
+    const amount = validateWholePositiveNumber(item.amount, "Mệnh giá");
+    const initialQuantity = validateWholePositiveNumber(item.initialQuantity, "Số lượng ban đầu");
+    const rarity = validateRarity(item.rarity);
+
+    if (!Number.isSafeInteger(item.remainingQuantity) || item.remainingQuantity < 0) {
+      throw new Error("Số lượng còn lại phải là số nguyên không âm");
+    }
+    if (item.remainingQuantity > initialQuantity) {
+      throw new Error(`Mệnh giá ${amount.toLocaleString()}đ có số lượng còn lại lớn hơn số lượng ban đầu`);
+    }
+    if (amountSet.has(amount)) {
+      throw new Error(`Mệnh giá ${amount.toLocaleString()}đ bị trùng`);
+    }
+    amountSet.add(amount);
+
+    const lineTotal = amount * initialQuantity;
+    const lineRemaining = amount * item.remainingQuantity;
+    if (!Number.isSafeInteger(lineTotal) || !Number.isSafeInteger(lineRemaining)) {
+      throw new Error("Giá trị mệnh giá hoặc số lượng quá lớn");
+    }
+
+    const nextTotalBudget = totalBudget + lineTotal;
+    const nextRemainingBudget = remainingBudget + lineRemaining;
+    if (!Number.isSafeInteger(nextTotalBudget) || !Number.isSafeInteger(nextRemainingBudget)) {
+      throw new Error("Tổng ngân sách vượt quá giới hạn cho phép");
+    }
+
+    totalBudget = nextTotalBudget;
+    remainingBudget = nextRemainingBudget;
+    normalized.push({
+      _id: item._id,
+      amount,
+      rarity,
+      initialQuantity,
+      remainingQuantity: item.remainingQuantity,
+    });
+  }
+
+  if (totalBudget <= 0) {
+    throw new Error("Tổng ngân sách phải lớn hơn 0");
+  }
+
+  normalized.sort((left, right) => left.amount - right.amount);
+  return { normalized, totalBudget, remainingBudget };
+}
+
 async function hasAnyRedemptionForOwner(ctx: ConvexCtx, ownerId: Id<"users">) {
   const oneRedemption = await ctx.db
     .query("redemptions")
@@ -79,7 +146,10 @@ async function hasPendingSessionForOwner(ctx: ConvexCtx, ownerId: Id<"users">) {
   return onePendingSession.length > 0;
 }
 
-async function listBudgetItems(ctx: ConvexCtx, ownerId: Id<"users">) {
+async function listBudgetItems(
+  ctx: ConvexCtx,
+  ownerId: Id<"users">
+): Promise<Doc<"budgetItems">[]> {
   return ctx.db.query("budgetItems").withIndex("by_owner_amount", (q) => q.eq("ownerId", ownerId)).collect();
 }
 
@@ -160,7 +230,7 @@ export const configureBudget = mutation({
 
     const existingItems = await listBudgetItems(ctx, args.ownerId);
 
-    for (const item of existingItems as Doc<"budgetItems">[]) {
+    for (const item of existingItems) {
       await ctx.db.delete(item._id);
     }
 
@@ -199,6 +269,64 @@ export const configureBudget = mutation({
     return {
       success: true,
       totalBudget,
+      itemCount: normalized.length,
+    };
+  },
+});
+
+export const syncBudgetFromItems = mutation({
+  args: {
+    ownerId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const owner = await ctx.db.get(args.ownerId);
+    if (!owner) {
+      throw new Error("Không tìm thấy tài khoản chủ ví");
+    }
+
+    const existingItems = await listBudgetItems(ctx, args.ownerId);
+    const { normalized, totalBudget, remainingBudget } = validateBudgetItemsSnapshot(existingItems);
+    const now = Date.now();
+
+    for (const [displayOrder, item] of normalized.entries()) {
+      await ctx.db.patch(item._id, {
+        amount: item.amount,
+        rarity: item.rarity,
+        initialQuantity: item.initialQuantity,
+        remainingQuantity: item.remainingQuantity,
+        displayOrder,
+        isActive: item.remainingQuantity > 0,
+        updatedAt: now,
+      });
+    }
+
+    const existingBudget = await ctx.db
+      .query("ownerBudgets")
+      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
+      .first();
+
+    if (existingBudget) {
+      await ctx.db.patch(existingBudget._id, {
+        totalBudget,
+        remainingBudget,
+        isSetupCompleted: true,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("ownerBudgets", {
+        ownerId: args.ownerId,
+        totalBudget,
+        remainingBudget,
+        isSetupCompleted: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    return {
+      success: true,
+      totalBudget,
+      remainingBudget,
       itemCount: normalized.length,
     };
   },
