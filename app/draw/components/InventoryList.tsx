@@ -19,7 +19,7 @@ export default function InventoryList({ items }: InventoryListProps) {
 			<div className="absolute inset-[4px] rounded-[20px] border border-[rgba(212,175,55,0.15)] pointer-events-none" />
 
 			<h2 className="font-playfair text-[clamp(24px,2.7vw,34px)] leading-[1.12] tracking-[0.01em] text-transparent bg-[linear-gradient(180deg,#fff8dc,#d4af37)] bg-clip-text drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)] mb-5">
-				Ngân sách hiện tại
+				Giải thưởng còn lại.
 			</h2>
 			<div className="grid gap-3 relative z-10">
 				{items.map((item) => (

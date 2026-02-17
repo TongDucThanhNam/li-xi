@@ -153,8 +153,10 @@ function buildPreAssignedPrizes(
 	const prizes: Array<Prize | null> = [];
 
 	// Fallback kinds for recycling when the working pool is exhausted.
+	// IMPORTANT: only include items that are still available (remainingQuantity > 0)
+	// so we never show a depleted prize (e.g. 200k Legend already gone).
 	const prizeKinds = pool
-		.filter((item) => item.amount > 0)
+		.filter((item) => item.amount > 0 && item.remainingQuantity > 0)
 		.map((item) => ({ amount: item.amount, rarity: item.rarity }));
 
 	for (let i = 0; i < count; i += 1) {
