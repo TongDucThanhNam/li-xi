@@ -139,16 +139,20 @@ function drawPrizeWithoutReplacement(
 	};
 }
 
-function buildMissedPrizes(
+/**
+ * Pre-assign cosmetic prizes to all cards at stage start.
+ * Values are purely visual (the real prize is determined by the backend on click).
+ * By assigning here — while rewardPool is guaranteed fresh — we avoid
+ * any stale-closure issues during the later reveal timeout.
+ */
+function buildPreAssignedPrizes(
 	pool: RewardPoolItem[],
-	chosenPrize: Prize,
 	count: number,
-) {
-	let workingPool = consumePrize(clonePool(pool), chosenPrize);
+): Array<Prize | null> {
+	let workingPool = clonePool(pool);
 	const prizes: Array<Prize | null> = [];
 
-	// Collect all prize kinds for recycling when the real pool is exhausted.
-	// Missed-card values are purely visual, so recycling is fine.
+	// Fallback kinds for recycling when the working pool is exhausted.
 	const prizeKinds = pool
 		.filter((item) => item.amount > 0)
 		.map((item) => ({ amount: item.amount, rarity: item.rarity }));
@@ -159,7 +163,6 @@ function buildMissedPrizes(
 			prizes.push(draw.prize);
 			workingPool = draw.nextPool;
 		} else if (prizeKinds.length > 0) {
-			// Pool exhausted – pick randomly from known prize kinds
 			const kind =
 				prizeKinds[Math.floor(Math.random() * prizeKinds.length)];
 			prizes.push({ amount: kind.amount, rarity: kind.rarity });
@@ -380,7 +383,17 @@ export default function FortuneStage({
 
 		setPhase("INTRO");
 		setShowHero(false);
-		setCards(createInitialCards());
+
+		// Pre-assign cosmetic prizes while rewardPool is guaranteed current
+		const preAssigned = buildPreAssignedPrizes(rewardPool, ENVELOPE_COUNT);
+		setCards(
+			Array.from({ length: ENVELOPE_COUNT }, (_, i) => ({
+				isIn: false,
+				isOpened: false,
+				isMissed: false,
+				prize: preAssigned[i] ?? null,
+			})),
+		);
 
 		schedule(() => {
 			setShowGrid(true);
@@ -405,23 +418,17 @@ export default function FortuneStage({
 		}, HERO_HIDE_MS);
 	};
 
-	const revealOtherCards = (chosenIndex: number, chosenPrize: Prize) => {
-		const remaining = buildMissedPrizes(
-			rewardPool,
-			chosenPrize,
-			ENVELOPE_COUNT - 1,
-		);
+	// Prizes were already pre-assigned in handleStart – just mark as missed.
+	const revealOtherCards = (chosenIndex: number) => {
 		setCards((previous) =>
 			previous.map((card, index) => {
 				if (index === chosenIndex) {
 					return card;
 				}
-				const prize = remaining.pop() ?? null;
 				return {
 					...card,
 					isOpened: true,
 					isMissed: true,
-					prize,
 				};
 			}),
 		);
@@ -453,7 +460,7 @@ export default function FortuneStage({
 			const revealDelay =
 				selectedPrize.rarity === "legend" ? LEGEND_REVEAL_MS : NORMAL_REVEAL_MS;
 
-			schedule(() => revealOtherCards(cardIndex, selectedPrize), revealDelay);
+			schedule(() => revealOtherCards(cardIndex), revealDelay);
 			schedule(
 				() => setModalPrize(selectedPrize),
 				revealDelay + RESULT_DELAY_MS,
