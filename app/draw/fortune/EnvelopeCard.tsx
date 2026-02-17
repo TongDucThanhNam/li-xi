@@ -74,7 +74,7 @@ export function EnvelopeCard({
 				>
 					<div className="absolute inset-0 opacity-10 bg-[repeating-linear-gradient(45deg,#000_0,#000_1px,transparent_0,transparent_10px)]" />
 					<span className="text-[0.55rem] sm:text-[0.65rem] tracking-[1.6px] uppercase mb-1 z-2 opacity-60">
-						LUCKY MONEY
+						Lì xì
 					</span>
 					<span className="font-cinzel text-[0.95rem] sm:text-[1.15rem] font-black z-2">
 						{card.isOpened && card.prize

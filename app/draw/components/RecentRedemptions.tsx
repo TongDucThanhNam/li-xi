@@ -22,7 +22,7 @@ export default function RecentRedemptions({ items }: RecentRedemptionsProps) {
 			<h2 className="font-playfair text-[clamp(24px,2.7vw,34px)] leading-[1.12] tracking-[0.01em] text-transparent bg-[linear-gradient(180deg,#fff8dc,#d4af37)] bg-clip-text drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)] mb-5 shrink-0">
 				Lịch sử rút mới nhất
 			</h2>
-			<div className="grid gap-3 relative z-10 overflow-y-auto flex-1 content-start pr-1 custom-scrollbar">
+			<div className="grid gap-3 relative z-10 overflow-y-auto flex-1 content-start pr-1 custom-scrollbar max-h-[400px]">
 				{items.length === 0 ? (
 					<div className="flex flex-col items-center justify-center py-12 border border-dashed border-[rgba(212,175,55,0.2)] rounded-xl bg-[rgba(0,0,0,0.2)]">
 						<p className="font-vn text-[15px] italic text-[rgba(255,241,203,0.5)]">
