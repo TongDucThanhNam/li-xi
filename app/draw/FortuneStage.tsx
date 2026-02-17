@@ -8,6 +8,7 @@ import { formatCurrency } from "./hostUtils";
 import { EnvelopeCard } from "./fortune/EnvelopeCard";
 import { ResultModal } from "./fortune/ResultModal";
 import { HeroSection } from "./fortune/HeroSection";
+import { createLegendaryBurst, createShards } from "./fortune/legendaryFx";
 
 type FortuneStageProps = {
 	sessionId: string | null;
@@ -251,6 +252,15 @@ export default function FortuneStage({
 			if (cloneCard) {
 				cloneCard.style.animation = "shake-violent 0.5s infinite";
 			}
+
+			// Shards fly out from center during shake
+			schedule(() => {
+				if (cloneHost) {
+					const cx = window.innerWidth / 2;
+					const cy = window.innerHeight / 2;
+					createShards(cloneHost, { x: cx, y: cy });
+				}
+			}, 800);
 		}, LEGENDARY_MOVE_TO_CENTER_MS);
 
 		schedule(() => {
@@ -261,6 +271,14 @@ export default function FortuneStage({
 				if (cloneCard) {
 					cloneCard.style.animation = "none";
 				}
+
+				// Burst FX at card open moment
+				if (cloneHost) {
+					const cx = window.innerWidth / 2;
+					const cy = window.innerHeight / 2;
+					createLegendaryBurst(cloneHost, { x: cx, y: cy });
+				}
+
 				const cloneFlap = clone.querySelector<HTMLElement>(".layerFlapWrapper");
 				if (cloneFlap) {
 					cloneFlap.style.transform = "translate3d(0,0,0) rotateX(180deg)";
