@@ -293,6 +293,39 @@
   to { opacity: 1; transform: scale(1); }
 }
 
+@keyframes shake-violent {
+  0% { transform: translate(0, 0) rotate(0deg) scale(1.2); }
+  25% { transform: translate(-8px, 8px) rotate(-3deg) scale(1.2); }
+  50% { transform: translate(8px, -8px) rotate(3deg) scale(1.2); }
+  75% { transform: translate(-8px, -8px) rotate(-3deg) scale(1.2); }
+  100% { transform: translate(0, 0) rotate(0deg) scale(1.2); }
+}
+
+@keyframes regret-aura {
+  0%, 100% { opacity: 0.3; transform: scale(0.98); }
+  50% { opacity: 0.72; transform: scale(1.02); }
+}
+
+@keyframes regret-label {
+  0%, 100% { opacity: 0.75; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-1px); }
+}
+
+.regret-aura {
+  animation: regret-aura 1800ms var(--ease-smooth) infinite;
+}
+
+.regret-label {
+  animation: regret-label 1500ms var(--ease-out-quart) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .regret-aura,
+  .regret-label {
+    animation: none !important;
+  }
+}
+
 /* ── Custom Scrollbar ── */
 .custom-scrollbar::-webkit-scrollbar {
   width: 8px;

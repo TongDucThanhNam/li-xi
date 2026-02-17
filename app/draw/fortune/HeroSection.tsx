@@ -37,7 +37,7 @@ export function HeroSection({
 				disabled={!canBegin}
 				onClick={onStart}
 			>
-				<span className="relative z-10">Summon Luck</span>
+				<span className="relative z-10">Thử vận may</span>
 			</button>
 
 			{statusMessage ? (
