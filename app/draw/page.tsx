@@ -9,7 +9,6 @@ import HostHeader from "@/app/draw/components/HostHeader";
 import HostShell from "@/app/draw/components/HostShell";
 import InventoryList from "@/app/draw/components/InventoryList";
 import RecentRedemptions from "@/app/draw/components/RecentRedemptions";
-import ResultSummary from "@/app/draw/components/ResultSummary";
 import FortuneStage from "@/app/draw/FortuneStage";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -45,7 +44,7 @@ export default function DrawPage() {
 		skipAutoGuestUntilPendingCleared,
 		setSkipAutoGuestUntilPendingCleared,
 	] = useState(false);
-	const [result, setResult] = useState<{
+	const [, setResult] = useState<{
 		guestNameDisplay: string;
 		amount: number;
 		rarity: Rarity;
@@ -71,10 +70,8 @@ export default function DrawPage() {
 	const pendingSession = stationState?.pendingSession ?? null;
 
 	useEffect(() => {
-		if (!stationState?.hasSetup) {
-			if (stationState) {
-				router.replace("/setup");
-			}
+		if (stationState && !stationState.hasSetup) {
+			router.replace("/setup");
 			return;
 		}
 
@@ -114,9 +111,7 @@ export default function DrawPage() {
 	};
 
 	const handleCreateSession = async () => {
-		if (!owner) {
-			return;
-		}
+		if (!owner) return;
 
 		setLoading(true);
 		setError("");
@@ -192,8 +187,13 @@ export default function DrawPage() {
 	if (!owner || stationState === undefined) {
 		return (
 			<HostShell>
-				<div className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-8">
-					Đang tải trạm rút...
+				<div className="relative z-10 flex flex-1 items-center justify-center">
+					<div className="flex flex-col items-center gap-6">
+						<div className="h-16 w-16 animate-spin rounded-full border-4 border-gold-base/20 border-t-gold-base shadow-[0_0_20px_rgba(212,175,55,0.2)]" />
+						<span className="font-playfair text-xl font-bold tracking-[0.2em] text-gold-shine/60 animate-pulse">
+							ĐANG TẢI TRẠM RÚT...
+						</span>
+					</div>
 				</div>
 			</HostShell>
 		);
@@ -226,7 +226,7 @@ export default function DrawPage() {
 
 	return (
 		<HostShell>
-			<section className="relative z-10 flex w-full flex-1 flex-col gap-8 animate-fade-in-up">
+			<section className="relative z-10 flex h-full w-full flex-col gap-4 animate-fade-in-up overflow-hidden">
 				<HostHeader
 					ownerUsername={owner.username}
 					onSetup={() => router.push("/setup")}
@@ -242,19 +242,33 @@ export default function DrawPage() {
 					/>
 				) : null}
 
-				{error ? (
-					<p className="rounded-[12px] border border-[rgba(255,160,160,0.54)] bg-[rgba(94,10,10,0.7)] px-[16px] py-[12px] text-[rgba(255,220,220,0.95)] backdrop-blur-md shadow-lg animate-shake">
-						{error}
-					</p>
-				) : null}
-				{notice ? (
-					<p className="rounded-xl border border-[rgba(212,175,55,0.5)] bg-[rgba(44,24,0,0.6)] px-[16px] py-[12px] text-[rgba(255,241,203,0.95)] backdrop-blur-md shadow-lg animate-fade-in">
-						{notice}
-					</p>
-				) : null}
+				<div className="flex flex-col gap-2 shrink-0">
+					{error ? (
+						<div className="group relative overflow-hidden rounded-xl border border-red-vivid/40 bg-linear-to-r from-red-deep/40 to-black-ink/60 px-4 py-2 shadow-xl backdrop-blur-md animate-shake">
+							<div className="absolute inset-0 noise-overlay opacity-[0.05]" />
+							<div className="relative z-10 flex items-center gap-3">
+								<div className="h-1.5 w-1.5 rounded-full bg-red-vivid shadow-[0_0_10px_rgba(179,20,20,0.8)]" />
+								<p className="font-vn text-[13px] font-bold text-red-vivid/90">
+									{error}
+								</p>
+							</div>
+						</div>
+					) : null}
+					{notice ? (
+						<div className="group relative overflow-hidden rounded-xl border border-gold-base/30 bg-linear-to-r from-gold-base/10 to-black-ink/60 px-4 py-2 shadow-xl backdrop-blur-md animate-fade-in">
+							<div className="absolute inset-0 noise-overlay opacity-[0.05]" />
+							<div className="relative z-10 flex items-center gap-3">
+								<div className="h-1.5 w-1.5 rounded-full bg-gold-base shadow-[0_0_10px_rgba(212,175,55,0.8)] animate-pulse" />
+								<p className="font-vn text-[13px] font-bold text-gold-shine/80">
+									{notice}
+								</p>
+							</div>
+						</div>
+					) : null}
+				</div>
 
-				<div className="grid flex-1 gap-6 lg:grid-cols-12 items-start">
-					<section className="grid gap-5 lg:col-span-7">
+				<div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-12 overflow-hidden">
+					<section className="lg:col-span-7 h-full overflow-hidden">
 						<CreateSessionPanel
 							guestName={guestName}
 							hostPin={hostPin}
@@ -266,9 +280,13 @@ export default function DrawPage() {
 						/>
 					</section>
 
-					<aside className="grid gap-[24px] lg:col-span-5 h-full">
-						<InventoryList items={stationState.budgetItems} />
-						<RecentRedemptions items={stationState.recentRedemptions} />
+					<aside className="flex flex-col gap-4 lg:col-span-5 h-full overflow-hidden">
+						<div className="flex-1 min-h-0">
+							<InventoryList items={stationState.budgetItems} />
+						</div>
+						<div className="flex-1 min-h-0">
+							<RecentRedemptions items={stationState.recentRedemptions} />
+						</div>
 					</aside>
 				</div>
 			</section>

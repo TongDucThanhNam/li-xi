@@ -15,17 +15,21 @@ type RecentRedemptionsProps = {
 
 export default function RecentRedemptions({ items }: RecentRedemptionsProps) {
 	return (
-		<div className="relative rounded-3xl border border-[rgba(212,175,55,0.46)] bg-linear-to-br from-[rgba(18,2,2,0.95)] to-[rgba(56,1,1,0.9)] p-8! shadow-[0_20px_50px_rgba(0,0,0,0.6)] backdrop-blur-sm h-full flex flex-col">
-			{/* Inner Border */}
-			<div className="absolute inset-[4px] rounded-[20px] border border-[rgba(212,175,55,0.15)] pointer-events-none" />
+		<div className="group relative overflow-hidden rounded-2xl border border-gold-base/30 bg-linear-to-br from-[#120101] to-[#3e0000] p-5 shadow-[0_15px_40px_rgba(0,0,0,0.5)] backdrop-blur-md transition-all duration-500 hover:border-gold-base/50 flex flex-col h-full">
+			{/* Texture Overlay */}
+			<div className="noise-overlay pointer-events-none absolute inset-0 opacity-[0.03]" />
+			
+			{/* Inner Border Requirement */}
+			<div className="pointer-events-none absolute inset-[3px] rounded-[13px] border border-gold-base/10" />
 
-			<h2 className="font-playfair text-[clamp(24px,2.7vw,34px)] leading-[1.12] tracking-[0.01em] text-transparent bg-[linear-gradient(180deg,#fff8dc,#d4af37)] bg-clip-text drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)] mb-5 shrink-0">
-				Lịch sử rút mới nhất
+			<h2 className="relative z-10 font-playfair text-[20px] leading-tight tracking-[0.01em] text-transparent bg-linear-to-b from-gold-shine via-gold-shine to-gold-base bg-clip-text drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] mb-4 shrink-0">
+				Lịch sử mới nhất
 			</h2>
-			<div className="grid gap-3 relative z-10 overflow-y-auto flex-1 content-start pr-1 custom-scrollbar max-h-[400px]">
+
+			<div className="grid gap-2 relative z-10 overflow-y-auto flex-1 content-start pr-1 custom-scrollbar">
 				{items.length === 0 ? (
-					<div className="flex flex-col items-center justify-center py-12 border border-dashed border-[rgba(212,175,55,0.2)] rounded-xl bg-[rgba(0,0,0,0.2)]">
-						<p className="font-vn text-[15px] italic text-[rgba(255,241,203,0.5)]">
+					<div className="flex flex-col items-center justify-center py-8 border border-dashed border-gold-base/15 rounded-xl bg-black-ink/20">
+						<p className="font-vn text-[12px] italic text-gold-shine/30">
 							Chưa có lượt rút nào
 						</p>
 					</div>
@@ -33,27 +37,19 @@ export default function RecentRedemptions({ items }: RecentRedemptionsProps) {
 					items.map((item) => (
 						<div
 							key={item.id}
-							className="flex items-center justify-between gap-4 rounded-xl border border-[rgba(212,175,55,0.2)] bg-[rgba(0,0,0,0.4)] px-5 py-3.5 transition-all hover:bg-[rgba(212,175,55,0.08)] hover:border-[rgba(212,175,55,0.4)] hover:-translate-x-1 group"
+							className="flex items-center justify-between gap-3 rounded-lg border border-gold-base/10 bg-black-ink/40 px-4 py-2.5 transition-all hover:bg-gold-base/5 hover:border-gold-base/30 group/item"
 						>
-							<div className="flex flex-col gap-1.5">
-								<span className="font-playfair text-[16px] font-bold text-gold-shine group-hover:text-gold-shine transition-colors">
+							<div className="flex flex-col gap-1">
+								<span className="font-playfair text-[15px] font-bold text-gold-shine/80 group-hover/item:text-white transition-colors">
 									{item.guestNameDisplay}
 								</span>
-								<span
-									className={`w-fit rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-										item.rarity === "legend"
-											? "border-[rgba(255,215,0,0.6)] bg-[rgba(255,215,0,0.1)] text-[#ffd700]"
-											: "border-[rgba(255,255,255,0.2)] bg-[rgba(255,255,255,0.05)] text-[rgba(255,255,255,0.7)]"
-									}`}
-								>
-									{item.rarity}
-								</span>
+								<RarityBadge rarity={item.rarity} />
 							</div>
-							<div className="text-right flex flex-col items-end gap-1">
-								<span className="block text-[18px] font-cinzel font-bold text-gold-shine drop-shadow-sm">
+							<div className="text-right flex flex-col items-end gap-0.5">
+								<span className="block text-base font-cinzel font-bold text-gold-shine">
 									{formatCurrency(item.amount)}
 								</span>
-								<span className="text-[10px] uppercase tracking-wider text-[rgba(255,241,203,0.4)] font-mono">
+								<span className="text-[9px] font-bold uppercase tracking-widest text-gold-shine/20 font-mono">
 									{new Date(item.redeemedAt).toLocaleTimeString("vi-VN", {
 										hour: "2-digit",
 										minute: "2-digit",
@@ -65,5 +61,20 @@ export default function RecentRedemptions({ items }: RecentRedemptionsProps) {
 				)}
 			</div>
 		</div>
+	);
+}
+
+function RarityBadge({ rarity }: { rarity: Rarity }) {
+	const isLegend = rarity === "legend";
+	return (
+		<span
+			className={`w-fit rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-widest shadow-sm ${
+				isLegend
+					? "border-gold-base/60 bg-gold-base/10 text-gold-base shadow-gold-base/20"
+					: "border-white/20 bg-white/5 text-white/60"
+			}`}
+		>
+			{rarity}
+		</span>
 	);
 }

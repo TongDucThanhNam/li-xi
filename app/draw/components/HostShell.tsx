@@ -31,7 +31,7 @@ export default function HostShell({ children }: { children: ReactNode }) {
 
 	return (
 		<main
-			className="relative isolate flex min-h-screen min-w-screen flex-col overflow-hidden bg-black-ink p-5 sm:p-8 lg:p-10 text-text-primary"
+			className="relative isolate flex h-screen w-screen flex-col overflow-hidden bg-black-ink p-4 sm:p-5 text-text-primary"
 			style={pageBackground}
 		>
 			<div

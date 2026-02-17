@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { formatCurrency } from "../hostUtils";
 
 type BudgetBarProps = {
@@ -17,95 +18,117 @@ export default function BudgetBar({
 	);
 
 	return (
-		<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-			{/* Stat Card 1: Total Budget */}
-			<div className="relative overflow-hidden rounded-2xl border border-[rgba(212,175,55,0.3)] bg-[rgba(0,0,0,0.6)] p-6! shadow-xl backdrop-blur-sm group hover:border-[rgba(212,175,55,0.5)] transition-all">
-				<div className="absolute top-0 right-0 p-4 opacity-10">
-					<svg
-						width="60"
-						height="60"
-						viewBox="0 0 24 24"
-						fill="currentColor"
-						className="text-gold-shine"
-						aria-hidden="true"
-					>
-						<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.15-1.46-3.27-3.4h1.96c.1 1.05 1.18 1.91 2.53 1.91 1.33 0 2.26-.87 2.26-1.94 0-1.51-1.58-2.05-3.03-2.55-1.76-.61-3.21-1.74-3.21-3.77 0-1.73 1.31-3.04 2.97-3.4V3h2.67v1.93c1.38.3 2.48 1.12 2.67 2.68h-1.96c-.25-1-.96-1.63-2.06-1.63-1.15 0-2.07.82-2.07 1.93 0 1.25 1.53 1.83 2.92 2.3 1.99.69 3.32 1.77 3.32 3.82.01 1.93-1.4 3.33-3.15 3.66z" />
-					</svg>
-				</div>
-				<div className="relative z-10 flex flex-col gap-2">
-					<span className="font-vn text-[12px] font-bold uppercase tracking-[0.2em] text-[rgba(255,241,203,0.6)]">
-						Tổng ngân sách
-					</span>
-					<span className="font-cinzel text-[24px] font-bold leading-none text-gold-shine drop-shadow-md">
-						{formatCurrency(totalBudget)}
-					</span>
-				</div>
-				<div className="mt-4 h-1 w-full bg-[rgba(255,255,255,0.1)] rounded-full overflow-hidden">
-					<div className="h-full bg-linear-to-r from-[rgba(179,20,20,0.8)] to-gold-shine w-full opacity-50" />
-				</div>
+		<div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+			<StatCard
+				label="Tổng ngân sách"
+				value={formatCurrency(totalBudget)}
+				icon={<WalletIcon />}
+				progress={100}
+				color="gold"
+			/>
+
+			<StatCard
+				label="Còn lại"
+				value={formatCurrency(remainingBudget)}
+				icon={<CoinsIcon />}
+				progress={percent}
+				color="red"
+			/>
+
+			<StatCard
+				label="Khả dụng"
+				value={availableUnits.toString()}
+				unit="phong bao"
+				icon={<PackageIcon />}
+				progress={100}
+				color="gold"
+			/>
+		</div>
+	);
+}
+
+function StatCard({
+	label,
+	value,
+	unit,
+	icon,
+	progress,
+	color,
+}: {
+	label: string;
+	value: string;
+	unit?: string;
+	icon: ReactNode;
+	progress: number;
+	color: "gold" | "red";
+}) {
+	return (
+		<div className="group relative overflow-hidden rounded-2xl border border-gold-base/30 bg-linear-to-br from-[#120101] to-[#3e0000] p-4 shadow-[0_10px_30px_rgba(0,0,0,0.4)] transition-all duration-500 hover:border-gold-base/60">
+			{/* Texture Overlay */}
+			<div className="noise-overlay pointer-events-none absolute inset-0 opacity-[0.03]" />
+			
+			{/* Inner Border */}
+			<div className="pointer-events-none absolute inset-[3px] rounded-[13px] border border-gold-base/10" />
+
+			{/* Background Decorative Icon */}
+			<div className="absolute -right-4 -bottom-4 text-gold-base opacity-[0.02] transition-all duration-700 group-hover:scale-125 group-hover:opacity-[0.05]">
+				{icon}
 			</div>
 
-			{/* Stat Card 2: Remaining */}
-			<div className="relative overflow-hidden rounded-2xl border border-[rgba(212,175,55,0.3)] bg-[rgba(0,0,0,0.6)] p-6! shadow-xl backdrop-blur-sm group hover:border-[rgba(212,175,55,0.5)] transition-all">
-				<div className="absolute top-0 right-0 p-4 opacity-10">
-					<svg
-						width="60"
-						height="60"
-						viewBox="0 0 24 24"
-						fill="currentColor"
-						className="text-gold-shine"
-						aria-hidden="true"
-					>
-						<path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" />
-					</svg>
-				</div>
-				<div className="relative z-10 flex flex-col gap-2">
-					<span className="font-vn text-[12px] font-bold uppercase tracking-[0.2em] text-[rgba(255,241,203,0.6)]">
-						Còn lại
-					</span>
-					<span className="font-cinzel text-[24px] font-bold leading-none text-gold-shine drop-shadow-md">
-						{formatCurrency(remainingBudget)}
-					</span>
-				</div>
-				<div className="mt-4 h-1 w-full bg-[rgba(255,255,255,0.1)] rounded-full overflow-hidden">
-					<div
-						className="h-full bg-linear-to-r from-[rgba(179,20,20,0.8)] via-gold-shine to-gold-base transition-all duration-1000 ease-out"
-						style={{ width: `${percent}%` }}
-					/>
-				</div>
-			</div>
-
-			{/* Stat Card 3: Available Units */}
-			<div className="relative overflow-hidden rounded-2xl border border-[rgba(212,175,55,0.3)] bg-[rgba(0,0,0,0.6)] p-6! shadow-xl backdrop-blur-sm group hover:border-[rgba(212,175,55,0.5)] transition-all">
-				<div className="absolute top-0 right-0 p-4 opacity-10">
-					<svg
-						width="56"
-						height="56"
-						viewBox="0 0 24 24"
-						fill="currentColor"
-						className="text-gold-shine"
-						aria-hidden="true"
-					>
-						<path d="M20 6h-2.18c.11-.31.18-.65.18-1 0-1.66-1.34-3-3-3-1.05 0-1.96.54-2.5 1.35l-.5.67-.5-.68C10.96 2.54 10.05 2 9 2 7.34 2 6 3.34 6 5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-5-2c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM9 4c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm11 15H4v-2h16v2zm0-5H4V8h5.08L7 10.83 8.62 12 11 8.76l1.2-1.65L12 6.74l-1.2.39 2.4 3.3 2.4-3.3-1.2-1.65 1.2 1.65 2.38 3.28L17 10.83 14.92 8H20v6z" />
-					</svg>
-				</div>
-				<div className="relative z-10 flex flex-col gap-2">
-					<span className="font-vn text-[12px] font-bold uppercase tracking-[0.2em] text-[rgba(255,241,203,0.6)]">
-						Khả dụng
-					</span>
-					<div className="flex items-baseline gap-2">
-						<span className="font-cinzel text-[24px] font-bold leading-none text-gold-shine drop-shadow-md">
-							{availableUnits}
-						</span>
-						<span className="text-[11px] uppercase text-[rgba(255,241,203,0.4)] tracking-widest">
-							phong bao
+			<div className="relative z-10 flex flex-col gap-3">
+				<div className="flex items-center justify-between">
+					<div className="flex items-center gap-2">
+						<div className="text-gold-base/60">
+							{icon}
+						</div>
+						<span className="font-vn text-[9px] font-black uppercase tracking-[0.2em] text-gold-shine/40">
+							{label}
 						</span>
 					</div>
 				</div>
-				<div className="mt-4 h-1 w-full bg-[rgba(255,255,255,0.1)] rounded-full overflow-hidden">
-					<div className="h-full bg-linear-to-r from-gold-base to-gold-shine w-full opacity-80" />
+
+				<div className="flex items-baseline gap-1.5">
+					<span className="font-cinzel text-xl font-bold tracking-tight text-transparent bg-linear-to-b from-gold-shine via-gold-shine to-gold-base bg-clip-text drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] lg:text-2xl">
+						{value}
+					</span>
+					{unit && (
+						<span className="font-playfair text-[10px] font-bold italic text-gold-shine/20">
+							{unit}
+						</span>
+					)}
+				</div>
+
+				{/* Liquid Progress Bar */}
+				<div className="relative h-1 w-full rounded-full bg-black-ink/80 shadow-inner">
+					<div
+						className={[
+							"relative h-full rounded-full transition-all duration-1000 ease-smooth",
+							color === "gold"
+								? "bg-linear-to-r from-gold-base via-gold-shine to-gold-base shadow-[0_0_10px_rgba(212,175,55,0.2)]"
+								: "bg-linear-to-r from-red-vivid via-[#ff4d4d] to-gold-base shadow-[0_0_10px_rgba(179,20,20,0.2)]",
+						].join(" ")}
+						style={{ width: `${progress}%` }}
+					/>
 				</div>
 			</div>
 		</div>
+	);
+}
+
+function WalletIcon() {
+	return (
+		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+	);
+}
+
+function CoinsIcon() {
+	return (
+		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/><path d="M15 18h3.5"/></svg>
+	);
+}
+
+function PackageIcon() {
+	return (
+		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
 	);
 }
