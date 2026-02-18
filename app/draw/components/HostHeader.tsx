@@ -14,12 +14,12 @@ export default function HostHeader({
 	onLogout,
 }: HostHeaderProps) {
 	return (
-		<header className="relative flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-gold-base/30 bg-black-ink/80 px-4 py-2 shadow-2xl backdrop-blur-xl sm:flex-nowrap">
+		<header className="relative flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-gold-base/40 bg-[rgba(20,0,0,0.75)] px-4 py-2 shadow-2xl backdrop-blur-xl sm:flex-nowrap hover:border-gold-base/60 hover:shadow-[0_20px_40px_rgba(212,175,55,0.15)] transition-all duration-300">
 			{/* Inner Stroke - Design System Requirement */}
 			<div className="pointer-events-none absolute inset-[3px] rounded-[21px] border border-gold-base/10" />
 
 			<div className="relative flex items-center gap-4">
-				<div className="relative h-14 w-14 overflow-hidden rounded-full border border-gold-base/60 bg-linear-to-br from-gold-base/20 to-red-deep/40 shadow-inner flex items-center justify-center group">
+				<div className="relative h-14 w-14 overflow-hidden rounded-full border border-gold-base/70 bg-linear-to-br from-gold-base/25 to-red-deep/45 shadow-[0_4px_20px_rgba(0,0,0,0.3),inset_0_0_20px_rgba(212,175,55,0.1)] flex items-center justify-center group">
 					<span className="font-cinzel text-2xl text-gold-shine drop-shadow-sm select-none">
 						H
 					</span>
@@ -29,12 +29,12 @@ export default function HostHeader({
 				</div>
 
 				<div className="flex flex-col">
-					<h1 className="font-cinzel text-xl leading-none tracking-[0.05em] text-transparent bg-linear-to-b from-white via-gold-shine to-gold-base bg-clip-text drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] lg:text-2xl select-none">
+					<h1 className="font-cinzel text-xl leading-none tracking-[0.05em] text-transparent bg-linear-to-b from-gold-shine via-gold-shine to-gold-base bg-clip-text drop-shadow-[0_2px_8px_rgba(212,175,55,0.4)] lg:text-2xl select-none">
 						HOST STATION
 					</h1>
-					<p className="mt-1 font-vn text-[12px] italic text-gold-shine/60 tracking-wide lg:text-[13px]">
+					<p className="mt-1 font-vn text-[12px] italic text-gold-shine/70 tracking-wide lg:text-[13px]">
 						Chủ ví:{" "}
-						<span className="font-bold text-gold-shine/90">{ownerUsername}</span>
+						<span className="font-bold text-gold-shine">{ownerUsername}</span>
 					</p>
 				</div>
 			</div>
@@ -55,10 +55,14 @@ export default function HostHeader({
 				<button
 					type="button"
 					aria-label="Đăng xuất khỏi hệ thống"
-					className="group relative flex items-center gap-2 rounded-xl border border-red-vivid/40 bg-red-deep/30 px-5 py-2.5 font-playfair text-sm font-bold text-red-vivid/90 shadow-md transition-all hover:-translate-y-0.5 hover:border-red-vivid/70 hover:bg-red-vivid/20 hover:text-white hover:shadow-[0_4px_12px_rgba(179,20,20,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-vivid/50 active:scale-95"
+					className="group relative flex items-center gap-2 rounded-xl border border-red-vivid/40 bg-red-deep/30 px-5 py-2.5 font-playfair text-sm font-bold text-red-vivid/90 shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:border-red-vivid/70 hover:bg-red-vivid/20 hover:text-white hover:shadow-[0_4px_12px_rgba(179,20,20,0.4)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-vivid/50 active:scale-95"
 					onClick={onLogout}
 				>
-					<LogoutIcon />
+					{/* Button glow effect */}
+					<div className="absolute inset-0 rounded-xl bg-red-vivid/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+					<span className="relative transition-transform duration-300 group-hover:scale-110">
+						<LogoutIcon />
+					</span>
 					<span className="relative z-10">Đăng xuất</span>
 				</button>
 			</nav>
@@ -76,10 +80,12 @@ function HeaderButton({
 		<button
 			type="button"
 			aria-label={ariaLabel}
-			className="group flex items-center gap-2 rounded-xl border border-transparent px-4 py-2.5 font-playfair text-sm font-bold text-gold-shine/70 transition-all hover:bg-gold-base/10 hover:text-gold-shine focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-base/30 active:scale-95"
+			className="group relative flex items-center gap-2 rounded-xl border border-transparent px-4 py-2.5 font-playfair text-sm font-bold text-gold-shine/70 transition-all duration-300 hover:bg-gold-base/10 hover:text-gold-shine hover:shadow-[0_4px_12px_rgba(0,0,0,0.3)] hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-base/30 active:scale-95"
 			onClick={onClick}
 		>
-			<span className="opacity-60 transition-transform group-hover:scale-110 group-hover:opacity-100">
+			{/* Hover glow effect */}
+			<div className="absolute inset-0 rounded-xl bg-gold-base/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+			<span className="relative opacity-60 transition-all duration-300 group-hover:scale-110 group-hover:opacity-100 group-hover:drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]">
 				{icon}
 			</span>
 			<span className="relative z-10">{children}</span>

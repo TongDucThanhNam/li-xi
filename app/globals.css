@@ -448,6 +448,13 @@
   animation: regret-underglow 3s ease-in-out infinite;
 }
 
+/* ── Shimmer effect for buttons and progress bars ── */
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
 /* ── Floating sparkle particles ── */
 
 @keyframes regret-sparkle-rise {

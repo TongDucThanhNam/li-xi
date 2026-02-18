@@ -25,6 +25,7 @@ export default function OtpPinInput({
   const uniqueId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const [isError, setIsError] = useState(false);
   const digits = useMemo(() => toDigits(value, length), [value, length]);
 
   const activeIndex = useMemo(() => {
@@ -55,21 +56,30 @@ export default function OtpPinInput({
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const nextValue = event.currentTarget.value.replace(/\D/g, "").slice(0, length);
     onChange(nextValue);
+    setIsError(false);
   };
 
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Backspace" && value.length === 0) {
+      setIsError(true);
+      setTimeout(() => setIsError(false), 500);
+    }
+  }, [value.length]);
+
   return (
-    <div
+    <fieldset
       className={[
-        "relative grid w-full max-w-[440px] grid-cols-[repeat(var(--otp-length),minmax(0,1fr))] gap-2.5",
+        "relative grid w-full max-w-[440px] grid-cols-[repeat(var(--otp-length),minmax(0,1fr))] gap-2.5 border-0 p-0 m-0",
         disabled ? "opacity-55 pointer-events-none" : "",
       ]
         .filter(Boolean)
         .join(" ")}
       style={{ "--otp-length": length } as CSSProperties}
       onClick={focusInput}
-      role="group"
-      aria-label="PIN input"
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); focusInput(); } }}
+      disabled={disabled}
     >
+      <legend className="sr-only">Nhập mã PIN {length} chữ số</legend>
       <input
         id={`otp-${uniqueId}`}
         ref={inputRef}
@@ -87,18 +97,23 @@ export default function OtpPinInput({
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
         onChange={handleChange}
+        onKeyDown={handleKeyDown}
       />
       {digits.map((digit, index) => (
         <div
-          key={`${uniqueId}-${index}`}
+          key={`digit-${uniqueId}-${index}-${digit}`}
           className={[
-            "relative flex h-[56px] items-center justify-center rounded-[14px] border border-[rgba(212,175,55,0.5)]",
-            "bg-[linear-gradient(180deg,rgba(10,0,0,0.9),rgba(48,2,2,0.8))]",
-            "shadow-[inset_0_1px_2px_rgba(0,0,0,0.45),_0_10px_18px_rgba(0,0,0,0.35)]",
-            "transition-all duration-200",
-            digit ? "border-[rgba(255,219,150,0.82)]" : "",
-            isFocused && index === activeIndex
-              ? "border-[rgba(255,224,130,0.96)] shadow-[0_0_0_3px_rgba(255,224,130,0.2),_0_12px_20px_rgba(0,0,0,0.4)] -translate-y-[2px]"
+            "relative flex h-[56px] items-center justify-center rounded-[14px] border",
+            "bg-[linear-gradient(180deg,rgba(20,0,0,0.85),rgba(60,5,5,0.75))]",
+            "shadow-[inset_0_1px_2px_rgba(0,0,0,0.4),_0_10px_18px_rgba(0,0,0,0.25)]",
+            "transition-all duration-300",
+            isError && index === activeIndex && !digit
+              ? "border-red-vivid/70 bg-red-deep/40 animate-shake"
+              : digit
+                ? "border-[rgba(255,219,150,0.92)]"
+                : "border-[rgba(212,175,55,0.6)]",
+            isFocused && index === activeIndex && !digit
+              ? "border-[rgba(255,224,130,1)] shadow-[0_0_0_3px_rgba(255,224,130,0.35),_0_12px_20px_rgba(0,0,0,0.3)] -translate-y-[2px]"
               : "",
           ]
             .filter(Boolean)
@@ -106,8 +121,11 @@ export default function OtpPinInput({
         >
           <span
             className={[
-              "h-3 w-3 rounded-full bg-[#ffe7ae] shadow-[0_0_12px_rgba(212,175,55,0.6)] opacity-0 transition-opacity",
-              digit ? "opacity-100" : "",
+              "h-3 w-3 rounded-full bg-[#ffe7ae] shadow-[0_0_12px_rgba(212,175,55,0.6)] opacity-0 transition-all duration-300",
+              digit ? "opacity-100 scale-100" : "opacity-0 scale-50",
+              isError && index === activeIndex && !digit
+                ? "!bg-red-vivid !shadow-[0_0_12px_rgba(179,20,20,0.8)] animate-pulse"
+                : "",
             ]
               .filter(Boolean)
               .join(" ")}
@@ -115,6 +133,6 @@ export default function OtpPinInput({
           />
         </div>
       ))}
-    </div>
+    </fieldset>
   );
 }
