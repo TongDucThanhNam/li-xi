@@ -1,27 +1,61 @@
 import OtpPinInput from "@/app/components/OtpPinInput";
+import type { Id } from "@/convex/_generated/dataModel";
+import { buildPublicClaimUrl } from "@/lib/publicAppUrl";
+
+type DeliveryMode = "station" | "link";
+
+type PendingLinkSession = {
+	id: Id<"drawSessions">;
+	guestNameDisplay: string;
+	sharePath: string;
+	campaignName: string | null;
+	createdAt: number;
+	expiresAt: number;
+};
 
 type CreateSessionPanelProps = {
 	guestName: string;
 	hostPin: string;
+	deliveryMode: DeliveryMode;
+	sharePath: string | null;
+	shareExpiresAt: number | null;
+	pendingLinkSessions: PendingLinkSession[];
+	cancellingSessionId: Id<"drawSessions"> | null;
 	pinLength: number;
 	loading: boolean;
 	onGuestNameChange: (value: string) => void;
 	onHostPinChange: (value: string) => void;
+	onDeliveryModeChange: (value: DeliveryMode) => void;
+	onCancelLinkSession: (sessionId: Id<"drawSessions">) => void;
 	onCreate: () => void;
 };
 
 export default function CreateSessionPanel({
 	guestName,
 	hostPin,
+	deliveryMode,
+	sharePath,
+	shareExpiresAt,
+	pendingLinkSessions,
+	cancellingSessionId,
 	pinLength,
 	loading,
 	onGuestNameChange,
 	onHostPinChange,
+	onDeliveryModeChange,
+	onCancelLinkSession,
 	onCreate,
 }: CreateSessionPanelProps) {
 	const canSubmit =
 		!loading && guestName.trim().length >= 2 && hostPin.length === pinLength;
 	const hasGuestNameError = guestName.length > 0 && guestName.trim().length < 2;
+	const shareUrl = sharePath ? buildPublicClaimUrl(sharePath) : sharePath;
+	const buildShareUrl = (path: string) => buildPublicClaimUrl(path);
+	const formatExpiry = (expiresAt: number) =>
+		new Intl.DateTimeFormat("vi-VN", {
+			dateStyle: "short",
+			timeStyle: "short",
+		}).format(new Date(expiresAt));
 
 	return (
 		<div className="relative rounded-2xl border border-gold-base/40 bg-linear-to-br from-[#1a0a0a] to-[#4a0a0a] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all h-full flex flex-col justify-center hover:border-gold-base/60 hover:shadow-[0_20px_50px_rgba(212,175,55,0.15)]">
@@ -44,6 +78,132 @@ export default function CreateSessionPanel({
 				</div>
 
 				<div className="grid gap-5">
+					<div className="grid grid-cols-2 rounded-xl border border-gold-base/25 bg-black-ink/50 p-1">
+						{(["station", "link"] as const).map((mode) => (
+							<button
+								key={mode}
+								type="button"
+								className={`rounded-lg px-3 py-2 font-vn text-sm font-bold transition-all ${
+									deliveryMode === mode
+										? "bg-gold-base text-red-deep shadow-[0_0_18px_rgba(212,175,55,0.2)]"
+										: "text-gold-shine/60 hover:bg-gold-base/10 hover:text-gold-shine"
+								}`}
+								onClick={() => onDeliveryModeChange(mode)}
+							>
+								{mode === "station" ? "Trạm trực tiếp" : "Share link"}
+							</button>
+						))}
+					</div>
+
+					{deliveryMode === "link" && shareUrl ? (
+						<div className="rounded-xl border border-gold-base/30 bg-black-ink/45 p-3">
+							<div className="flex items-center justify-between gap-3">
+								<div className="min-w-0">
+									<p className="font-vn text-[11px] font-bold uppercase tracking-[0.18em] text-gold-base/70">
+										Link rút công khai
+									</p>
+									<p className="mt-1 truncate font-mono text-xs text-gold-shine/75">
+										{shareUrl}
+									</p>
+									{shareExpiresAt ? (
+										<p className="mt-1 font-vn text-[11px] text-gold-shine/45">
+											Hết hạn {formatExpiry(shareExpiresAt)}
+										</p>
+									) : null}
+								</div>
+								<button
+									type="button"
+									className="shrink-0 rounded-full border border-gold-base/35 px-3 py-2 font-vn text-xs font-bold text-gold-base transition-colors hover:bg-gold-base/10"
+									onClick={() => {
+										if (shareUrl) {
+											void navigator.clipboard?.writeText(shareUrl);
+										}
+									}}
+								>
+									Copy
+								</button>
+							</div>
+							<button
+								type="button"
+								className="mt-3 w-full rounded-full border border-gold-base/35 bg-gold-base/10 px-4 py-2.5 font-cinzel text-sm font-bold uppercase tracking-widest text-gold-shine transition-colors hover:bg-gold-base/20"
+								onClick={() => {
+									if (shareUrl && typeof window !== "undefined") {
+										window.open(shareUrl, "_blank", "noopener,noreferrer");
+									}
+								}}
+							>
+								Mở link rút
+							</button>
+						</div>
+					) : null}
+
+					{pendingLinkSessions.length > 0 ? (
+						<div className="grid gap-2 rounded-xl border border-gold-base/20 bg-black-ink/35 p-3">
+							<div className="flex items-center justify-between gap-3">
+								<p className="font-vn text-[11px] font-bold uppercase tracking-[0.18em] text-gold-base/70">
+									Link đang chờ
+								</p>
+								<span className="rounded-full border border-gold-base/20 px-2 py-0.5 font-mono text-[10px] text-gold-shine/55">
+									{pendingLinkSessions.length}
+								</span>
+							</div>
+							<div className="grid max-h-40 gap-2 overflow-auto pr-1">
+								{pendingLinkSessions.map((session) => {
+									const url = buildShareUrl(session.sharePath);
+									const isCancelling = cancellingSessionId === session.id;
+									return (
+										<div
+											key={session.id}
+											className="grid gap-2 rounded-lg border border-gold-base/15 bg-black-ink/45 p-2"
+										>
+											<div className="min-w-0">
+												<p className="truncate font-vn text-sm font-bold text-gold-shine/80">
+													{session.guestNameDisplay}
+												</p>
+												<p className="truncate font-vn text-[11px] text-gold-shine/45">
+													{session.campaignName ?? "Chiến dịch hiện tại"}
+												</p>
+												<p className="truncate font-vn text-[11px] text-gold-shine/35">
+													Hết hạn {formatExpiry(session.expiresAt)}
+												</p>
+											</div>
+											<div className="grid grid-cols-3 gap-2">
+												<button
+													type="button"
+													className="rounded-full border border-gold-base/25 px-2 py-1.5 font-vn text-[11px] font-bold text-gold-base transition-colors hover:bg-gold-base/10"
+													onClick={() => {
+														void navigator.clipboard?.writeText(url);
+													}}
+												>
+													Copy
+												</button>
+												<button
+													type="button"
+													className="rounded-full border border-gold-base/25 px-2 py-1.5 font-vn text-[11px] font-bold text-gold-shine/75 transition-colors hover:bg-gold-base/10"
+													onClick={() => {
+														if (typeof window !== "undefined") {
+															window.open(url, "_blank", "noopener,noreferrer");
+														}
+													}}
+												>
+													Mở
+												</button>
+												<button
+													type="button"
+													className="rounded-full border border-red-vivid/35 px-2 py-1.5 font-vn text-[11px] font-bold text-red-vivid transition-colors hover:bg-red-deep/25 disabled:cursor-not-allowed disabled:opacity-50"
+													disabled={Boolean(cancellingSessionId)}
+													onClick={() => onCancelLinkSession(session.id)}
+												>
+													{isCancelling ? "..." : "Hủy"}
+												</button>
+											</div>
+										</div>
+									);
+								})}
+							</div>
+						</div>
+					) : null}
+
 					<div className="grid gap-2">
 						<div className="flex items-center justify-between">
 							<label
@@ -65,7 +225,7 @@ export default function CreateSessionPanel({
 							hasGuestNameError
 								? "border-red-vivid/50 bg-red-deep/30 focus:border-red-vivid/70 focus:ring-1 focus:ring-red-vivid/40"
 								: guestName.length >= 2
-									? "border-emerald-500/50 bg-emerald-500/15 focus:border-emerald-500/70 focus:ring-1 focus:ring-emerald-500/40"
+									? "border-gold-base/55 bg-gold-base/12 focus:border-gold-base/80 focus:ring-1 focus:ring-gold-base/35"
 									: "border-gold-base/30 bg-[rgba(10,0,0,0.5)] focus:border-gold-base/70 focus:ring-1 focus:ring-gold-base/40 focus:bg-[rgba(20,0,0,0.6)]"
 						}`}
 						value={guestName}
@@ -75,7 +235,7 @@ export default function CreateSessionPanel({
 						placeholder="vd: Nguyen Van A"
 					/>
 							{guestName.length >= 2 && (
-								<div className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500">
+								<div className="absolute right-4 top-1/2 -translate-y-1/2 text-gold-base drop-shadow-[0_0_8px_rgba(212,175,55,0.35)]">
 									<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
 									</svg>
@@ -89,7 +249,7 @@ export default function CreateSessionPanel({
 							htmlFor="otp-pin"
 							className="block font-vn text-[11px] font-bold tracking-[0.2em] uppercase text-gold-shine/40 pl-1"
 						>
-							PIN chủ ví
+							PIN host
 						</label>
 						<div className="flex justify-center">
 							<OtpPinInput

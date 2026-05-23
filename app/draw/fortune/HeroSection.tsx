@@ -2,12 +2,20 @@ import { OrnamentDivider } from "./OrnamentDivider";
 
 export function HeroSection({
 	guestName,
+	campaignTitle,
+	campaignSubtitle,
+	ctaLabel,
+	waitingMessage,
 	statusMessage,
 	canBegin,
 	showHero,
 	onStart,
 }: {
 	guestName?: string;
+	campaignTitle?: string;
+	campaignSubtitle?: string;
+	ctaLabel?: string;
+	waitingMessage?: string;
 	statusMessage?: string;
 	canBegin: boolean;
 	showHero: boolean;
@@ -30,14 +38,20 @@ export function HeroSection({
 			</div>
 
 			<h1 className="m-0 font-cinzel text-[clamp(36px,5.2vw,72px)] leading-[1.05] bg-linear-to-b from-gold-shine to-gold-base bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(212,175,55,0.4)]">
-				Lunar Fortune
+				{campaignTitle || "Lunar Fortune"}
 			</h1>
 
 			<OrnamentDivider className="mt-3 sm:mt-4" />
 
 			<p className="mt-2 sm:mt-3 text-white/50 tracking-[3px] sm:tracking-[4px] uppercase text-xs sm:text-sm font-playfair">
-				Premium Gacha Experience
+				{campaignSubtitle || "Premium Gacha Experience"}
 			</p>
+
+			{guestName ? (
+				<p className="mt-4 font-playfair text-lg italic text-gold-shine/70">
+					{guestName}
+				</p>
+			) : null}
 
 			<button
 				type="button"
@@ -52,12 +66,12 @@ export function HeroSection({
 				{/* Button shine effect */}
 				<div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:animate-[shimmer_1.5s_ease-in-out_infinite] transition-transform" />
 				<span className="relative z-10">
-					{canBegin ? "Thử vận may" : (
-						<>
-							<span className="inline-block animate-pulse mr-1">•••</span>
-							Đang chuẩn bị
-						</>
-					)}
+						{canBegin ? ctaLabel || "Thử vận may" : (
+							<>
+								<span className="inline-block animate-pulse mr-1">•••</span>
+								{waitingMessage || "Đang chuẩn bị"}
+							</>
+						)}
 				</span>
 			</button>
 

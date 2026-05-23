@@ -104,16 +104,16 @@ export default function OtpPinInput({
           key={`digit-${uniqueId}-${index}-${digit}`}
           className={[
             "relative flex h-[56px] items-center justify-center rounded-[14px] border",
-            "bg-[linear-gradient(180deg,rgba(20,0,0,0.85),rgba(60,5,5,0.75))]",
+            "bg-linear-to-b from-black-ink via-red-deep/40 to-black-ink",
             "shadow-[inset_0_1px_2px_rgba(0,0,0,0.4),_0_10px_18px_rgba(0,0,0,0.25)]",
             "transition-all duration-300",
             isError && index === activeIndex && !digit
-              ? "border-red-vivid/70 bg-red-deep/40 animate-shake"
+              ? "border-red-vivid/70 bg-red-vivid/10 animate-shake"
               : digit
-                ? "border-[rgba(255,219,150,0.92)]"
-                : "border-[rgba(212,175,55,0.6)]",
+                ? "border-gold-shine/80"
+                : "border-gold-base/30",
             isFocused && index === activeIndex && !digit
-              ? "border-[rgba(255,224,130,1)] shadow-[0_0_0_3px_rgba(255,224,130,0.35),_0_12px_20px_rgba(0,0,0,0.3)] -translate-y-[2px]"
+              ? "border-gold-base shadow-[0_0_0_3px_rgba(212,175,55,0.2),_0_12px_20px_rgba(0,0,0,0.3)] -translate-y-[2px]"
               : "",
           ]
             .filter(Boolean)
@@ -121,7 +121,7 @@ export default function OtpPinInput({
         >
           <span
             className={[
-              "h-3 w-3 rounded-full bg-[#ffe7ae] shadow-[0_0_12px_rgba(212,175,55,0.6)] opacity-0 transition-all duration-300",
+              "h-3 w-3 rounded-full bg-gold-shine shadow-[0_0_12px_rgba(212,175,55,0.6)] opacity-0 transition-all duration-300",
               digit ? "opacity-100 scale-100" : "opacity-0 scale-50",
               isError && index === activeIndex && !digit
                 ? "!bg-red-vivid !shadow-[0_0_12px_rgba(179,20,20,0.8)] animate-pulse"

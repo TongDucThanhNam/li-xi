@@ -16,14 +16,17 @@ function rarityModalGlow(rarity: Rarity) {
 export function ResultModal({
 	prize,
 	guestName,
+	collectLabel,
 	onCollect,
 }: {
 	prize: Prize | null;
 	guestName?: string;
+	collectLabel?: string;
 	onCollect: () => void;
 }) {
 	const isLegend = prize?.rarity === "legend";
 	const isRare = prize?.rarity === "rare";
+	const resolvedCollectLabel = collectLabel?.trim() || "Nhận thưởng";
 
 	return (
 		<div
@@ -109,7 +112,7 @@ export function ResultModal({
 				>
 					{/* Button shine effect */}
 					<div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:animate-[shimmer_1s_ease-in-out_infinite]" />
-					<span className="relative z-10">Nhận lì xì</span>
+					<span className="relative z-10">{resolvedCollectLabel}</span>
 				</button>
 
 				{/* Confetti particles for legendary */}

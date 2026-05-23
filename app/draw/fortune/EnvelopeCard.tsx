@@ -8,12 +8,12 @@ function ticketRarityClass(rarity: Rarity | null) {
 		return "";
 	}
 	if (rarity === "legend") {
-		return "text-[#8a6e1e] border-2 border-gold-base bg-linear-to-br from-[#fffde7] to-[#fff8e1]";
+		return "text-red-deep border-2 border-gold-base bg-linear-to-br from-gold-shine to-gold-base/35";
 	}
 	if (rarity === "rare") {
-		return "text-red-vivid border border-[#ef9a9a] bg-linear-to-b from-white to-[#ffebee]";
+		return "text-red-vivid border border-red-vivid/45 bg-linear-to-b from-gold-shine to-red-vivid/12";
 	}
-	return "text-[#555] border border-[#ddd] bg-white";
+	return "text-gold-shine/82 border border-gold-base/25 bg-linear-to-b from-red-deep/90 to-black-ink";
 }
 
 /** Classes for root wrapper – NO filter here so overlays stay vivid. */
@@ -98,7 +98,7 @@ export const EnvelopeCard = forwardRef<HTMLDivElement, EnvelopeCardProps>(
 
 					{/* Ticket inside */}
 					<div
-						className={`layerTicket absolute w-[80%] h-[75%] left-[10%] bottom-2 rounded-[4px_4px_2px_2px] flex flex-col items-center justify-center overflow-hidden shadow-[0_2px_5px_rgba(0,0,0,0.2)] transition-[transform,filter,box-shadow] duration-1200 ease-elastic bg-white text-[#333] ${
+						className={`layerTicket absolute w-[80%] h-[75%] left-[10%] bottom-2 rounded-[4px_4px_2px_2px] flex flex-col items-center justify-center overflow-hidden shadow-[0_2px_5px_rgba(0,0,0,0.2)] transition-[transform,filter,box-shadow] duration-1200 ease-elastic bg-black-ink text-gold-shine ${
 							card.isOpened
 								? "shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
 								: ""
@@ -129,12 +129,12 @@ export const EnvelopeCard = forwardRef<HTMLDivElement, EnvelopeCardProps>(
 										card.prize.rarity === "rare")
 										? card.prize.rarity === "legend"
 											? "bg-[rgba(20,0,0,0.72)] text-gold-shine border border-gold-base/55 regret-label"
-											: "bg-[rgba(20,0,0,0.7)] text-[#ffbdbd] border border-red-vivid/55 regret-label"
+											: "bg-[rgba(20,0,0,0.7)] text-gold-shine border border-red-vivid/55 regret-label"
 										: card.prize.rarity === "legend"
-										? "bg-gold-base/20 text-[#8a6e1e]"
+										? "bg-gold-base/20 text-red-deep"
 										: card.prize.rarity === "rare"
 											? "bg-red-vivid/10 text-red-vivid"
-											: "bg-black/5 text-[#888]"
+											: "bg-black-ink/30 text-gold-shine/70"
 								}`}
 							>
 								{card.isMissed &&
@@ -162,11 +162,11 @@ export const EnvelopeCard = forwardRef<HTMLDivElement, EnvelopeCardProps>(
 							zIndex: card.isOpened ? 5 : 20,
 						}}
 					>
-						<div className="absolute inset-0 [clip-path:polygon(0_0,100%_0,50%_85%)] rounded-[4px_4px_0_0] backface-hidden bg-linear-to-b from-[#d32f2f] to-red-vivid filter-[url(#paperRoughness)]">
+						<div className="absolute inset-0 [clip-path:polygon(0_0,100%_0,50%_85%)] rounded-[4px_4px_0_0] backface-hidden bg-linear-to-b from-red-vivid to-red-deep filter-[url(#paperRoughness)]">
 							<div className="absolute inset-0 pointer-events-none z-50 opacity-40 bg-linear-to-br from-transparent via-white/20 to-white/10 mix-blend-overlay" />
 						</div>
-						<div className="absolute inset-0 [clip-path:polygon(0_0,100%_0,50%_85%)] rounded-[4px_4px_0_0] backface-hidden bg-[#4a0505] rotate-y-180 bg-[repeating-linear-gradient(45deg,rgba(255,255,255,0.05)_0,transparent_2px)]" />
-						<div className="absolute bottom-[15%] left-1/2 w-9 h-9 sm:w-11 sm:h-11 -translate-x-1/2 translate-y-1/2 translate-z-px rounded-full bg-[radial-gradient(circle_at_30%_30%,var(--color-gold-shine),var(--color-gold-shine),#8a6e1e)] text-red-deep font-cinzel text-[1.1rem] sm:text-[1.4rem] flex items-center justify-center shadow-[0_4px_10px_rgba(0,0,0,0.5),inset_0_0_0_2px_rgba(255,215,0,0.8)]">
+						<div className="absolute inset-0 [clip-path:polygon(0_0,100%_0,50%_85%)] rounded-[4px_4px_0_0] backface-hidden bg-red-deep rotate-y-180 bg-[repeating-linear-gradient(45deg,rgba(255,248,220,0.05)_0,transparent_2px)]" />
+						<div className="absolute bottom-[15%] left-1/2 w-9 h-9 sm:w-11 sm:h-11 -translate-x-1/2 translate-y-1/2 translate-z-px rounded-full bg-[radial-gradient(circle_at_30%_30%,var(--color-gold-shine),var(--color-gold-base),var(--color-red-deep))] text-red-deep font-cinzel text-[1.1rem] sm:text-[1.4rem] flex items-center justify-center shadow-[0_4px_10px_rgba(0,0,0,0.5),inset_0_0_0_2px_rgba(212,175,55,0.8)]">
 							Lộc
 						</div>
 					</div>

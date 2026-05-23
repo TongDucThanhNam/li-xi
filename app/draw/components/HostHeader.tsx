@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 
 type HostHeaderProps = {
 	ownerUsername: string;
+	onCampaigns?: () => void;
+	onDraw?: () => void;
 	onSetup: () => void;
 	onLeaderboard: () => void;
 	onLogout: () => void;
@@ -9,6 +11,8 @@ type HostHeaderProps = {
 
 export default function HostHeader({
 	ownerUsername,
+	onCampaigns,
+	onDraw,
 	onSetup,
 	onLeaderboard,
 	onLogout,
@@ -24,7 +28,7 @@ export default function HostHeader({
 						H
 					</span>
 					{/* Status Indicator */}
-					<div className="absolute right-0.5 bottom-0.5 h-3.5 w-3.5 rounded-full border-2 border-black-ink bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse" />
+					<div className="absolute right-0.5 bottom-0.5 h-3.5 w-3.5 rounded-full border-2 border-black-ink bg-gold-base shadow-[0_0_8px_rgba(212,175,55,0.6)] animate-pulse" />
 					<div className="absolute inset-0 bg-gold-shine/5 opacity-0 transition-opacity group-hover:opacity-100" />
 				</div>
 
@@ -33,13 +37,31 @@ export default function HostHeader({
 						HOST STATION
 					</h1>
 					<p className="mt-1 font-vn text-[12px] italic text-gold-shine/70 tracking-wide lg:text-[13px]">
-						Chủ ví:{" "}
+						Host chiến dịch:{" "}
 						<span className="font-bold text-gold-shine">{ownerUsername}</span>
 					</p>
 				</div>
 			</div>
 
 			<nav className="relative flex flex-wrap items-center gap-1 sm:gap-2">
+				{onCampaigns ? (
+					<>
+						<HeaderButton onClick={onCampaigns} icon={<SparkIcon />} ariaLabel="Quản lý chiến dịch">
+							Chiến dịch
+						</HeaderButton>
+						<div className="hidden h-5 w-px bg-gold-base/20 sm:block" />
+					</>
+				) : null}
+
+				{onDraw ? (
+					<>
+						<HeaderButton onClick={onDraw} icon={<TicketIcon />} ariaLabel="Mở trạm rút thưởng">
+							Trạm rút
+						</HeaderButton>
+						<div className="hidden h-5 w-px bg-gold-base/20 sm:block" />
+					</>
+				) : null}
+
 				<HeaderButton onClick={onSetup} icon={<SettingsIcon />} ariaLabel="Cấu hình hệ thống">
 					Cấu hình
 				</HeaderButton>
@@ -67,6 +89,47 @@ export default function HostHeader({
 				</button>
 			</nav>
 		</header>
+	);
+}
+
+function SparkIcon() {
+	return (
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			width="18"
+			height="18"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="2"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+		>
+			<path d="M13 2 3 14h8l-1 8 10-12h-8l1-8Z" />
+		</svg>
+	);
+}
+
+function TicketIcon() {
+	return (
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			width="18"
+			height="18"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="2"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+		>
+			<path d="M2 9a3 3 0 0 0 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 0 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+			<path d="M13 5v2" />
+			<path d="M13 17v2" />
+			<path d="M13 11v2" />
+		</svg>
 	);
 }
 

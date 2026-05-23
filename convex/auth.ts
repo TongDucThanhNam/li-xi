@@ -1,12 +1,24 @@
+import Google from "@auth/core/providers/google";
+import { convexAuth, getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
-import { mutation, MutationCtx, query } from "./_generated/server";
+import { internalQuery, mutation, MutationCtx, query } from "./_generated/server";
 import { Doc } from "./_generated/dataModel";
 import {
   normalizeOwnerUsername,
   validateOwnerUsername,
   validatePin,
 } from "../lib/lixiPolicy";
+import { isLegacyAccountAuthEnabled, isLegacyOwnerBridgeEnabled } from "./authorization";
+import {
+  displayNameFromUser,
+  ensureHostProfileForOwner,
+  getHostProfileForOwner,
+} from "./hostProfiles";
 import { createPinHash, verifyPinHash } from "./security";
+
+export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
+  providers: [Google],
+});
 
 type MaybeLegacyUser = Doc<"users"> & {
   pin?: unknown;
@@ -21,6 +33,20 @@ function hasHashedPin(user: MaybeLegacyUser): user is MaybeLegacyUser & { pinHas
 
 function getLegacyPin(user: MaybeLegacyUser) {
   return typeof user.pin === "string" ? user.pin : null;
+}
+
+function assertLegacyAccountAuthEnabled() {
+  if (isLegacyAccountAuthEnabled() && isLegacyOwnerBridgeEnabled()) {
+    return;
+  }
+
+  throw new Error(
+    "Legacy username/PIN account auth chỉ bật khi cả account auth và owner bridge migration được cấu hình. Vui lòng đăng nhập bằng Google."
+  );
+}
+
+function getDisplayName(user: Doc<"users">) {
+  return displayNameFromUser(user);
 }
 
 async function findUserForAuth(ctx: MutationCtx, username: string, usernameNormalized: string) {
@@ -47,6 +73,8 @@ export const register = mutation({
     pin: v.string(),
   },
   handler: async (ctx, args) => {
+    assertLegacyAccountAuthEnabled();
+
     const username = validateOwnerUsername(args.username);
     const pin = validatePin(args.pin);
     const usernameNormalized = normalizeOwnerUsername(username);
@@ -65,6 +93,10 @@ export const register = mutation({
       pinSalt: salt,
       createdAt: Date.now(),
     });
+    const user = await ctx.db.get(userId);
+    if (user) {
+      await ensureHostProfileForOwner(ctx, user, { displayName: username });
+    }
 
     return { userId, username };
   },
@@ -76,6 +108,8 @@ export const login = mutation({
     pin: v.string(),
   },
   handler: async (ctx, args) => {
+    assertLegacyAccountAuthEnabled();
+
     const username = validateOwnerUsername(args.username);
     const pin = validatePin(args.pin);
     const usernameNormalized = normalizeOwnerUsername(username);
@@ -98,6 +132,9 @@ export const login = mutation({
     if (user.usernameNormalized !== usernameNormalized) {
       patchPayload.usernameNormalized = usernameNormalized;
     }
+    if (typeof user.createdAt !== "number") {
+      patchPayload.createdAt = Date.now();
+    }
 
     if (!hasHashedPin(user)) {
       const { hash, salt } = await createPinHash(pin);
@@ -108,25 +145,125 @@ export const login = mutation({
     if (Object.keys(patchPayload).length > 0) {
       await ctx.db.patch(user._id, patchPayload);
     }
+    const profile = await ensureHostProfileForOwner(ctx, user, {
+      displayName: getDisplayName(user),
+    });
 
     return {
       userId: user._id,
-      username: user.username,
+      username: profile.displayName,
     };
   },
 });
 
-export const getUser = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
+export const getCurrentUser = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      return null;
+    }
+
+    const user = await ctx.db.get(userId);
     if (!user) {
       return null;
     }
+    const profile = await getHostProfileForOwner(ctx, user._id);
+    const displayName = profile?.displayName ?? getDisplayName(user);
+
     return {
-      _id: user._id,
-      username: user.username,
-      createdAt: user.createdAt,
+      username: displayName,
+      hostProfile: {
+        displayName,
+        slug: profile?.slug ?? null,
+        defaultCampaignId: profile?.defaultCampaignId ?? null,
+        onboardingCompleted: profile?.onboardingCompleted ?? false,
+      },
+      hasHostPin: hasHashedPin(user),
+    };
+  },
+});
+
+export const getCurrentBillingIdentity = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      return null;
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user) {
+      return null;
+    }
+
+    return {
+      userId: user._id,
+      email: user.email ?? null,
+    };
+  },
+});
+
+export const ensureCurrentHostProfile = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Cần đăng nhập Google để khởi tạo hồ sơ host");
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user) {
+      throw new Error("Không tìm thấy tài khoản host");
+    }
+
+    const profile = await ensureHostProfileForOwner(ctx, user);
+    return {
+      hostProfile: {
+        displayName: profile.displayName,
+        slug: profile.slug,
+        defaultCampaignId: profile.defaultCampaignId ?? null,
+        onboardingCompleted: profile.onboardingCompleted,
+      },
+      hasHostPin: hasHashedPin(user),
+    };
+  },
+});
+
+export const setHostPin = mutation({
+  args: {
+    pin: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Cần đăng nhập để thiết lập PIN host");
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user) {
+      throw new Error("Không tìm thấy tài khoản host");
+    }
+
+    const pin = validatePin(args.pin);
+    const { hash, salt } = await createPinHash(pin);
+    const now = Date.now();
+
+    await ctx.db.patch(user._id, {
+      pinHash: hash,
+      pinSalt: salt,
+      createdAt: user.createdAt ?? now,
+    });
+    const profile = await ensureHostProfileForOwner(ctx, user);
+
+    return {
+      hostProfile: {
+        displayName: profile.displayName,
+        slug: profile.slug,
+        defaultCampaignId: profile.defaultCampaignId ?? null,
+        onboardingCompleted: profile.onboardingCompleted,
+      },
+      hasHostPin: true,
     };
   },
 });

@@ -1,12 +1,28 @@
 import { v } from "convex/values";
 import { mutation, MutationCtx, query, QueryCtx } from "./_generated/server";
 import { Id, Doc } from "./_generated/dataModel";
+import { requireResolvedOwner } from "./authorization";
+import { getUniqueOwnerBudgetForScope } from "./budgetScope";
+import {
+  DEFAULT_CAMPAIGN_BRAND,
+  DEFAULT_CAMPAIGN_DESCRIPTION,
+  DEFAULT_CAMPAIGN_NAME,
+  createUniqueDefaultCampaignSlug,
+  getPreferredActiveCampaignForOwner,
+  listVisibleCampaignsForOwner,
+  sortCampaignsByRecency,
+} from "./campaignIdentity";
+import { assertBudgetItemCount, assertCanCreateCampaign } from "./entitlements";
+import { ensureHostProfileForOwner } from "./hostProfiles";
 import {
   RARITY_VALUES,
   Rarity,
   validateRarity,
+  validatePin,
   validateWholePositiveNumber,
 } from "../lib/lixiPolicy";
+import { isOpenPendingSession } from "./publicLinks";
+import { createPinHash } from "./security";
 
 const rarityValidator = v.union(v.literal("common"), v.literal("rare"), v.literal("legend"));
 
@@ -25,7 +41,23 @@ type BudgetItemSnapshot = {
   initialQuantity: number;
   remainingQuantity: number;
 };
+type BudgetScope = {
+  campaignId?: Id<"campaigns">;
+  source: "campaign" | "legacy-owner";
+};
+type PendingOwnerSessionDeliveryMode = "station" | "link" | undefined;
+type PendingCampaignSessionDeliveryMode = "station" | "link" | undefined;
 const MAX_BUDGET_ITEM_COUNT = 200;
+const PENDING_OWNER_SESSION_DELIVERY_MODES: PendingOwnerSessionDeliveryMode[] = [
+  "station",
+  "link",
+  undefined,
+];
+const PENDING_CAMPAIGN_SESSION_DELIVERY_MODES: PendingCampaignSessionDeliveryMode[] = [
+  "station",
+  "link",
+  undefined,
+];
 
 function validateBudgetInputs(items: BudgetInput[]) {
   if (items.length === 0) {
@@ -138,42 +170,182 @@ async function hasAnyRedemptionForOwner(ctx: ConvexCtx, ownerId: Id<"users">) {
   return oneRedemption.length > 0;
 }
 
-async function hasPendingSessionForOwner(ctx: ConvexCtx, ownerId: Id<"users">) {
-  const onePendingSession = await ctx.db
-    .query("drawSessions")
-    .withIndex("by_owner_status", (q) => q.eq("ownerId", ownerId).eq("status", "pending"))
+async function hasAnyRedemptionForScope(ctx: ConvexCtx, ownerId: Id<"users">, scope: BudgetScope) {
+  if (!scope.campaignId) {
+    return hasAnyRedemptionForOwner(ctx, ownerId);
+  }
+
+  const oneRedemption = await ctx.db
+    .query("redemptions")
+    .withIndex("by_campaign_owner_createdAt", (q) =>
+      q.eq("campaignId", scope.campaignId).eq("ownerId", ownerId)
+    )
     .take(1);
-  return onePendingSession.length > 0;
+  return oneRedemption.length > 0;
+}
+
+async function listPendingOwnerSessionsByDelivery(ctx: ConvexCtx, ownerId: Id<"users">) {
+  const groups = await Promise.all(
+    PENDING_OWNER_SESSION_DELIVERY_MODES.map((deliveryMode) =>
+      ctx.db
+        .query("drawSessions")
+        .withIndex("by_owner_status_delivery", (q) =>
+          q.eq("ownerId", ownerId).eq("status", "pending").eq("deliveryMode", deliveryMode)
+        )
+        .collect()
+    )
+  );
+
+  return groups.flat();
+}
+
+async function listPendingCampaignSessionsByDelivery(
+  ctx: ConvexCtx,
+  ownerId: Id<"users">,
+  campaignId: Id<"campaigns">
+) {
+  const groups = await Promise.all(
+    PENDING_CAMPAIGN_SESSION_DELIVERY_MODES.map((deliveryMode) =>
+      ctx.db
+        .query("drawSessions")
+        .withIndex("by_campaign_owner_status_delivery", (q) =>
+          q
+            .eq("campaignId", campaignId)
+            .eq("ownerId", ownerId)
+            .eq("status", "pending")
+            .eq("deliveryMode", deliveryMode)
+        )
+        .collect()
+    )
+  );
+
+  return groups.flat();
+}
+
+async function hasPendingSessionForOwner(ctx: ConvexCtx, ownerId: Id<"users">) {
+  const pendingSessions = await listPendingOwnerSessionsByDelivery(ctx, ownerId);
+  return pendingSessions.some((session) => isOpenPendingSession(session));
+}
+
+async function hasPendingSessionForScope(ctx: ConvexCtx, ownerId: Id<"users">, scope: BudgetScope) {
+  if (!scope.campaignId) {
+    return hasPendingSessionForOwner(ctx, ownerId);
+  }
+
+  const pendingSessions = await listPendingCampaignSessionsByDelivery(ctx, ownerId, scope.campaignId);
+  return pendingSessions.some((session) => isOpenPendingSession(session));
+}
+
+async function getActiveCampaignForOwner(ctx: ConvexCtx, ownerId: Id<"users">) {
+  const activeCampaign = await getPreferredActiveCampaignForOwner(ctx, ownerId);
+  if (activeCampaign) {
+    return activeCampaign;
+  }
+
+  const visibleCampaigns = await listVisibleCampaignsForOwner(ctx, ownerId);
+
+  return sortCampaignsByRecency(visibleCampaigns)[0] ?? null;
+}
+
+async function ensureDefaultCampaignForOwner(ctx: MutationCtx, ownerId: Id<"users">) {
+  const activeCampaign = await getActiveCampaignForOwner(ctx, ownerId);
+  if (activeCampaign) {
+    if (activeCampaign.status !== "active") {
+      await ctx.db.patch(activeCampaign._id, {
+        status: "active",
+        updatedAt: Date.now(),
+      });
+      const updatedCampaign = await ctx.db.get(activeCampaign._id);
+      if (!updatedCampaign) {
+        throw new Error("Không thể kích hoạt chiến dịch mặc định");
+      }
+      return updatedCampaign;
+    }
+    return activeCampaign;
+  }
+
+  await assertCanCreateCampaign(ctx, ownerId);
+  const now = Date.now();
+  const slug = await createUniqueDefaultCampaignSlug(ctx, ownerId);
+  const campaignId = await ctx.db.insert("campaigns", {
+    ownerId,
+    name: DEFAULT_CAMPAIGN_NAME,
+    slug,
+    brandName: DEFAULT_CAMPAIGN_BRAND,
+    description: DEFAULT_CAMPAIGN_DESCRIPTION,
+    theme: "lunar",
+    status: "active",
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const campaign = await ctx.db.get(campaignId);
+  if (!campaign) {
+    throw new Error("Không thể tạo chiến dịch mặc định");
+  }
+  return campaign;
+}
+
+async function resolveBudgetScope(ctx: ConvexCtx, ownerId: Id<"users">): Promise<BudgetScope> {
+  const activeCampaign = await getActiveCampaignForOwner(ctx, ownerId);
+  if (activeCampaign) {
+    return { campaignId: activeCampaign._id, source: "campaign" };
+  }
+  return { source: "legacy-owner" };
+}
+
+async function resolveMutableBudgetScope(ctx: MutationCtx, ownerId: Id<"users">): Promise<BudgetScope> {
+  const campaign = await ensureDefaultCampaignForOwner(ctx, ownerId);
+  return { campaignId: campaign._id, source: "campaign" };
+}
+
+async function getBudgetForScope(ctx: ConvexCtx, ownerId: Id<"users">, scope: BudgetScope) {
+  return getUniqueOwnerBudgetForScope(ctx, ownerId, scope.campaignId);
 }
 
 async function listBudgetItems(
   ctx: ConvexCtx,
-  ownerId: Id<"users">
+  ownerId: Id<"users">,
+  scope: BudgetScope
 ): Promise<Doc<"budgetItems">[]> {
-  return ctx.db.query("budgetItems").withIndex("by_owner_amount", (q) => q.eq("ownerId", ownerId)).collect();
+  if (scope.campaignId) {
+    return ctx.db
+      .query("budgetItems")
+      .withIndex("by_campaign_owner_amount", (q) =>
+        q.eq("campaignId", scope.campaignId).eq("ownerId", ownerId)
+      )
+      .collect();
+  }
+
+  return ctx.db
+    .query("budgetItems")
+    .withIndex("by_owner_campaign_amount", (q) =>
+      q.eq("ownerId", ownerId).eq("campaignId", undefined)
+    )
+    .collect();
 }
 
 export const getSetupState = query({
-  args: { ownerId: v.id("users") },
-  handler: async (ctx, args) => {
-    const owner = await ctx.db.get(args.ownerId);
-    if (!owner) {
-      throw new Error("Không tìm thấy tài khoản chủ ví");
-    }
+  args: {},
+  handler: async (ctx) => {
+    const { owner, ownerId } = await requireResolvedOwner(ctx, undefined, {
+      notFoundMessage: "Không tìm thấy tài khoản host",
+      forbiddenMessage: "Bạn không có quyền cấu hình tài khoản này",
+    });
 
-    const budget = await ctx.db
-      .query("ownerBudgets")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
-      .first();
+    const scope = await resolveBudgetScope(ctx, ownerId);
+    const budget = await getBudgetForScope(ctx, ownerId, scope);
 
-    const items = await listBudgetItems(ctx, args.ownerId);
+    const items = await listBudgetItems(ctx, ownerId, scope);
 
-    const hasRedemptions = await hasAnyRedemptionForOwner(ctx, args.ownerId);
-    const hasPendingSession = await hasPendingSessionForOwner(ctx, args.ownerId);
+    const hasRedemptions = await hasAnyRedemptionForScope(ctx, ownerId, scope);
+    const hasPendingSession = await hasPendingSessionForScope(ctx, ownerId, scope);
 
     return {
       hasSetup: Boolean(budget?.isSetupCompleted && items.length > 0),
+      budgetScope: scope,
       canConfigure: !hasRedemptions && !hasPendingSession,
+      hasHostPin: typeof owner.pinHash === "string" && typeof owner.pinSalt === "string",
       budget: budget
         ? {
             totalBudget: budget.totalBudget,
@@ -196,7 +368,7 @@ export const getSetupState = query({
 
 export const configureBudget = mutation({
   args: {
-    ownerId: v.id("users"),
+    hostPin: v.optional(v.string()),
     items: v.array(
       v.object({
         amount: v.number(),
@@ -206,16 +378,17 @@ export const configureBudget = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const owner = await ctx.db.get(args.ownerId);
-    if (!owner) {
-      throw new Error("Không tìm thấy tài khoản chủ ví");
-    }
+    const { owner, ownerId } = await requireResolvedOwner(ctx, undefined, {
+      notFoundMessage: "Không tìm thấy tài khoản host",
+      forbiddenMessage: "Bạn không có quyền cấu hình tài khoản này",
+    });
 
-    const redemptionsExist = await hasAnyRedemptionForOwner(ctx, args.ownerId);
+    const scope = await resolveMutableBudgetScope(ctx, ownerId);
+    const redemptionsExist = await hasAnyRedemptionForScope(ctx, ownerId, scope);
     if (redemptionsExist) {
       throw new Error("Đã có lượt rút, không thể cấu hình lại ngân sách");
     }
-    const pendingSessionExists = await hasPendingSessionForOwner(ctx, args.ownerId);
+    const pendingSessionExists = await hasPendingSessionForScope(ctx, ownerId, scope);
     if (pendingSessionExists) {
       throw new Error("Đang có lượt rút chờ xử lý, không thể cấu hình ngân sách");
     }
@@ -223,12 +396,24 @@ export const configureBudget = mutation({
     const { normalized, totalBudget } = validateBudgetInputs(args.items);
     const now = Date.now();
 
-    const existingBudget = await ctx.db
-      .query("ownerBudgets")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
-      .first();
+    if (typeof owner.pinHash !== "string" || typeof owner.pinSalt !== "string") {
+      if (!args.hostPin) {
+        throw new Error("Cần thiết lập PIN host trước khi lưu ngân sách");
+      }
 
-    const existingItems = await listBudgetItems(ctx, args.ownerId);
+      const hostPin = validatePin(args.hostPin);
+      const { hash, salt } = await createPinHash(hostPin);
+      await ctx.db.patch(owner._id, {
+        pinHash: hash,
+        pinSalt: salt,
+        createdAt: owner.createdAt ?? now,
+      });
+    }
+
+    const existingBudget = await getBudgetForScope(ctx, ownerId, scope);
+
+    const existingItems = await listBudgetItems(ctx, ownerId, scope);
+    await assertBudgetItemCount(ctx, ownerId, normalized.length, existingItems.length);
 
     for (const item of existingItems) {
       await ctx.db.delete(item._id);
@@ -236,7 +421,8 @@ export const configureBudget = mutation({
 
     for (const [displayOrder, item] of normalized.entries()) {
       await ctx.db.insert("budgetItems", {
-        ownerId: args.ownerId,
+        ownerId,
+        campaignId: scope.campaignId,
         amount: item.amount,
         rarity: item.rarity,
         initialQuantity: item.quantity,
@@ -257,7 +443,8 @@ export const configureBudget = mutation({
       });
     } else {
       await ctx.db.insert("ownerBudgets", {
-        ownerId: args.ownerId,
+        ownerId,
+        campaignId: scope.campaignId,
         totalBudget,
         remainingBudget: totalBudget,
         isSetupCompleted: true,
@@ -265,27 +452,41 @@ export const configureBudget = mutation({
         updatedAt: now,
       });
     }
+    await ensureHostProfileForOwner(ctx, owner, {
+      defaultCampaignId: scope.campaignId,
+      onboardingCompleted: true,
+    });
 
     return {
       success: true,
       totalBudget,
       itemCount: normalized.length,
+      budgetScope: scope,
     };
   },
 });
 
 export const syncBudgetFromItems = mutation({
-  args: {
-    ownerId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    const owner = await ctx.db.get(args.ownerId);
-    if (!owner) {
-      throw new Error("Không tìm thấy tài khoản chủ ví");
+  args: {},
+  handler: async (ctx) => {
+    const { ownerId } = await requireResolvedOwner(ctx, undefined, {
+      notFoundMessage: "Không tìm thấy tài khoản host",
+      forbiddenMessage: "Bạn không có quyền cấu hình tài khoản này",
+    });
+
+    const scope = await resolveMutableBudgetScope(ctx, ownerId);
+    const redemptionsExist = await hasAnyRedemptionForScope(ctx, ownerId, scope);
+    if (redemptionsExist) {
+      throw new Error("Đã có lượt rút, không thể đồng bộ lại ngân sách");
+    }
+    const pendingSessionExists = await hasPendingSessionForScope(ctx, ownerId, scope);
+    if (pendingSessionExists) {
+      throw new Error("Đang có lượt rút chờ xử lý, không thể đồng bộ ngân sách");
     }
 
-    const existingItems = await listBudgetItems(ctx, args.ownerId);
+    const existingItems = await listBudgetItems(ctx, ownerId, scope);
     const { normalized, totalBudget, remainingBudget } = validateBudgetItemsSnapshot(existingItems);
+    await assertBudgetItemCount(ctx, ownerId, normalized.length, existingItems.length);
     const now = Date.now();
 
     for (const [displayOrder, item] of normalized.entries()) {
@@ -300,10 +501,7 @@ export const syncBudgetFromItems = mutation({
       });
     }
 
-    const existingBudget = await ctx.db
-      .query("ownerBudgets")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
-      .first();
+    const existingBudget = await getBudgetForScope(ctx, ownerId, scope);
 
     if (existingBudget) {
       await ctx.db.patch(existingBudget._id, {
@@ -314,7 +512,8 @@ export const syncBudgetFromItems = mutation({
       });
     } else {
       await ctx.db.insert("ownerBudgets", {
-        ownerId: args.ownerId,
+        ownerId,
+        campaignId: scope.campaignId,
         totalBudget,
         remainingBudget,
         isSetupCompleted: true,
@@ -328,6 +527,7 @@ export const syncBudgetFromItems = mutation({
       totalBudget,
       remainingBudget,
       itemCount: normalized.length,
+      budgetScope: scope,
     };
   },
 });

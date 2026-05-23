@@ -1,10 +1,18 @@
-import { Id } from "@/convex/_generated/dataModel";
-
 const OWNER_SESSION_KEY = "li_xi_owner_session";
 
 export type OwnerSession = {
-  userId: Id<"users">;
   username: string;
+  authSource: "convexAuth";
+};
+
+type StoredLegacyOwnerSession = {
+  userId: string;
+  username: string;
+  authSource?: "legacy";
+};
+
+type LegacyOwnerSessionCleanupSignal = {
+  authSource: "legacy";
 };
 
 type Listener = () => void;
@@ -19,18 +27,22 @@ export function subscribeToOwnerSession(listener: Listener) {
   return () => listeners.delete(listener);
 }
 
-function isOwnerSession(value: unknown): value is OwnerSession {
+function isLegacyOwnerSession(value: unknown): value is StoredLegacyOwnerSession {
   if (!value || typeof value !== "object") {
     return false;
   }
 
   const candidate = value as Record<string, unknown>;
-  return typeof candidate.userId === "string" && typeof candidate.username === "string";
+  return (
+    typeof candidate.userId === "string" &&
+    typeof candidate.username === "string" &&
+    candidate.authSource === "legacy"
+  );
 }
 
-let cachedSession: OwnerSession | null | undefined = undefined;
+let cachedSession: LegacyOwnerSessionCleanupSignal | null | undefined = undefined;
 
-export function readOwnerSession(): OwnerSession | null {
+export function readOwnerSession(): LegacyOwnerSessionCleanupSignal | null {
   if (typeof window === "undefined") {
     return null;
   }
@@ -47,27 +59,18 @@ export function readOwnerSession(): OwnerSession | null {
 
   try {
     const parsed = JSON.parse(raw);
-    if (!isOwnerSession(parsed)) {
+    if (!isLegacyOwnerSession(parsed)) {
       localStorage.removeItem(OWNER_SESSION_KEY);
       cachedSession = null;
       return null;
     }
-    cachedSession = parsed;
+    cachedSession = { authSource: "legacy" };
     return cachedSession;
   } catch {
     localStorage.removeItem(OWNER_SESSION_KEY);
     cachedSession = null;
     return null;
   }
-}
-
-export function writeOwnerSession(session: OwnerSession) {
-  if (typeof window === "undefined") {
-    return;
-  }
-  localStorage.setItem(OWNER_SESSION_KEY, JSON.stringify(session));
-  cachedSession = session;
-  notify();
 }
 
 export function clearOwnerSession() {

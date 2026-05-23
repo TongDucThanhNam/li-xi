@@ -22,7 +22,8 @@ export default function HostShell({ children }: { children: ReactNode }) {
 	};
 
 	const lightTwoStyle: CSSProperties = {
-		background: "radial-gradient(circle, #ff4500 0%, transparent 70%)",
+		background:
+			"radial-gradient(circle, var(--color-red-vivid) 0%, transparent 70%)",
 	};
 
 	const lightThreeStyle: CSSProperties = {
@@ -31,7 +32,8 @@ export default function HostShell({ children }: { children: ReactNode }) {
 	};
 
 	const lightFourStyle: CSSProperties = {
-		background: "radial-gradient(circle, #fff8dc 0%, transparent 70%)",
+		background:
+			"radial-gradient(circle, var(--color-gold-shine) 0%, transparent 70%)",
 	};
 
 	return (

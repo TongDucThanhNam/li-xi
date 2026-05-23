@@ -11,11 +11,17 @@ import { HeroSection } from "./fortune/HeroSection";
 import { createLegendaryBurst, createShards } from "./fortune/legendaryFx";
 
 type FortuneStageProps = {
-	sessionId: string | null;
+	sessionKey: string | null;
 	canStart: boolean;
 	disabled: boolean;
 	statusMessage?: string;
 	guestName?: string;
+	campaignTitle?: string;
+	campaignSubtitle?: string;
+	ctaLabel?: string;
+	collectLabel?: string;
+	waitingMessage?: string;
+	heroAssetUrl?: string | null;
 	rewardPool: RewardPoolItem[];
 	onRedeem: (envelopeIndex: number) => Promise<Prize>;
 	onRevealStateChange: (revealing: boolean) => void;
@@ -57,15 +63,22 @@ function usePrefersReducedMotion() {
 }
 
 export default function FortuneStage({
-	sessionId,
+	sessionKey,
 	canStart,
 	disabled,
 	statusMessage,
 	guestName,
+	campaignTitle,
+	campaignSubtitle,
+	ctaLabel,
+	collectLabel,
+	waitingMessage,
+	heroAssetUrl,
 	rewardPool,
 	onRedeem,
 	onRevealStateChange,
 	onCollect,
+	onExit,
 }: FortuneStageProps) {
 	const [phase, setPhase] = useState<Phase>("IDLE");
 	const [cards, setCards] = useState<CardState[]>(() => createInitialCards());
@@ -83,6 +96,7 @@ export default function FortuneStage({
 
 	const prefersReducedMotion = usePrefersReducedMotion();
 	const canBegin = canStart && !disabled && phase === "IDLE";
+	const canExitToHost = Boolean(onExit) && !canStart && showHero && phase === "IDLE";
 
 	const schedule = (callback: () => void, delayMs: number) => {
 		const timer = window.setTimeout(callback, delayMs);
@@ -118,7 +132,7 @@ export default function FortuneStage({
 	useEffect(() => {
 		resetStage();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [sessionId]);
+	}, [sessionKey]);
 
 	useEffect(() => {
 		return () => {
@@ -390,6 +404,25 @@ export default function FortuneStage({
 
 			<div className="fixed inset-0 pointer-events-none opacity-5 z-10 noise-overlay" />
 
+			{canExitToHost ? (
+				<button
+					type="button"
+					aria-label="Mở bảng điều khiển host"
+					className="absolute right-4 top-4 z-50 rounded-full border border-gold-base/30 bg-black-ink/60 px-4 py-2 font-cinzel text-[10px] font-bold uppercase tracking-[0.18em] text-gold-shine/70 shadow-lg backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:border-gold-base/60 hover:bg-gold-base/10 hover:text-gold-shine focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-base/40 active:scale-95"
+					onClick={onExit}
+				>
+					Host
+				</button>
+			) : null}
+
+			{heroAssetUrl && !legendaryFx.isActive ? (
+				<div
+					className="absolute inset-0 z-0 bg-cover bg-center opacity-25 mix-blend-screen"
+					style={{ backgroundImage: `url(${heroAssetUrl})` }}
+					aria-hidden="true"
+				/>
+			) : null}
+
 			<div
 				className={`absolute inset-0 z-20 bg-black transition-opacity duration-700 ${
 					legendaryFx.isActive ? "opacity-60" : "opacity-0"
@@ -399,6 +432,10 @@ export default function FortuneStage({
 			<div className="absolute inset-0 z-30 flex flex-col items-center justify-center px-4 sm:px-6">
 				<HeroSection
 					guestName={guestName}
+					campaignTitle={campaignTitle}
+					campaignSubtitle={campaignSubtitle}
+					ctaLabel={ctaLabel}
+					waitingMessage={waitingMessage}
 					statusMessage={statusMessage}
 					canBegin={canBegin}
 					showHero={showHero}
@@ -438,9 +475,10 @@ export default function FortuneStage({
 		<div ref={cloneHostRef} className="fixed inset-0 z-[9000] pointer-events-none overflow-visible" />
 
 		<ResultModal
-			prize={modalPrize}
-			guestName={guestName}
-			onCollect={() => {
+				prize={modalPrize}
+				guestName={guestName}
+				collectLabel={collectLabel}
+				onCollect={() => {
 				resetStage();
 				onCollect();
 			}}
