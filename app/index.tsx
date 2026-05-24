@@ -3,12 +3,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { useEffect } from "react";
+import { ShieldCheck } from "lucide-react";
+import { AdminRouteStatus } from "@/app/components/AdminPageShell";
 import { api } from "@/convex/_generated/api";
 import { requireHostRouteAuth } from "@/lib/hostRouteGuard";
 import { useOwnerSession } from "@/lib/useOwnerSession";
+import adminCss from "./styles/admin.css?url";
 
 export const Route = createFileRoute("/")({
 	beforeLoad: requireHostRouteAuth,
+	head: () => ({
+		links: [{ rel: "stylesheet", href: adminCss }],
+	}),
 	component: HomePage,
 });
 
@@ -37,16 +43,11 @@ function HomePage() {
 	}, [navigate, owner, setupState]);
 
 	return (
-		<main className="grid min-h-screen place-items-center bg-black-ink px-6 text-center text-text-primary">
-			<section className="grid gap-5">
-				<div className="mx-auto h-14 w-14 animate-spin rounded-full border-4 border-gold-base/20 border-t-gold-base" />
-				<div>
-					<p className="font-cinzel text-xl text-gold-shine">Đang mở trạm</p>
-					<p className="mt-2 font-vn text-sm text-text-secondary">
-						Đang kiểm tra phiên host và ngân sách chiến dịch.
-					</p>
-				</div>
-			</section>
-		</main>
+		<AdminRouteStatus
+			description="Đang kiểm tra phiên host và ngân sách chiến dịch."
+			icon={<ShieldCheck aria-hidden="true" size={22} strokeWidth={2} />}
+			status="Checking"
+			title="Đang mở trạm"
+		/>
 	);
 }

@@ -10,6 +10,7 @@ export default defineConfig({
   },
   envPrefix: "VITE_",
   resolve: {
+    dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
     tsconfigPaths: true,
   },
   plugins: [
@@ -19,7 +20,7 @@ export default defineConfig({
       router: {
         routesDirectory: "app",
         routeFileIgnorePattern:
-          "(^|/)(components|fortune)(/|$)|(^|/)(ConvexClientProvider|CssDebugger|FortuneStage|hostUtils)(\\.|$)",
+          "(^|/)(components|fortune|templates)(/|$)|(^|/)(ConvexClientProvider|CssDebugger|FortuneStage|hostUtils)(\\.|$)",
       },
     }),
     viteReact(),

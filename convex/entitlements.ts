@@ -3,7 +3,7 @@ import { query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { countOwnerRedemptions } from "./analytics";
 import { requireResolvedOwner } from "./authorization";
 import { polar, polarProducts } from "./polarClient";
-import { isOpenPendingSession } from "./publicLinks";
+import { countOpenPendingOwnerSessions } from "./drawSessionPolicy";
 import {
   isBillingPlanMappingConfigured,
   resolveFallbackTier,
@@ -18,15 +18,9 @@ type EntitlementLimits = Record<LimitKey, LimitValue>;
 type EntitlementUsage = Record<LimitKey, number>;
 type CountedAssetStatus = "reserved" | "uploaded" | "attached";
 type CountedCampaignStatus = "draft" | "active";
-type CountedPendingDeliveryMode = "station" | "link" | undefined;
 
 const ASSET_QUOTA_COUNTED_STATUSES: CountedAssetStatus[] = ["reserved", "uploaded", "attached"];
 const CAMPAIGN_QUOTA_COUNTED_STATUSES: CountedCampaignStatus[] = ["draft", "active"];
-const PENDING_SESSION_QUOTA_DELIVERY_MODES: CountedPendingDeliveryMode[] = [
-  "station",
-  "link",
-  undefined,
-];
 const ASSET_QUOTA_COUNTED_STATUS_SET = new Set<string>(ASSET_QUOTA_COUNTED_STATUSES);
 
 const PLAN_LABELS: Record<PlanTier, string> = {
@@ -158,21 +152,7 @@ async function countAssetsForQuota(ctx: ConvexCtx, ownerId: Id<"users">) {
 }
 
 async function countOpenSessionsForQuota(ctx: ConvexCtx, ownerId: Id<"users">) {
-  const now = Date.now();
-  const sessionGroups = await Promise.all(
-    PENDING_SESSION_QUOTA_DELIVERY_MODES.map((deliveryMode) =>
-      ctx.db
-        .query("drawSessions")
-        .withIndex("by_owner_status_delivery", (q) =>
-          q.eq("ownerId", ownerId).eq("status", "pending").eq("deliveryMode", deliveryMode)
-        )
-        .collect()
-    )
-  );
-
-  return sessionGroups.reduce((total, sessions) => {
-    return total + sessions.filter((session) => isOpenPendingSession(session, now)).length;
-  }, 0);
+  return countOpenPendingOwnerSessions(ctx, ownerId);
 }
 
 async function getUsage(ctx: ConvexCtx, ownerId: Id<"users">): Promise<EntitlementUsage> {

@@ -28,7 +28,7 @@ const checks = [
   },
   {
     path: "/setup",
-    includes: ["Đang tải cấu hình"],
+    includes: ["Loading setup"],
     excludes: ["Not Found"],
   },
   {
@@ -53,7 +53,7 @@ const checks = [
   },
   {
     path: "/leaderboard",
-    includes: ["Đang tải bảng thống kê"],
+    includes: ["Loading leaderboard"],
     excludes: ["Not Found"],
   },
 ];

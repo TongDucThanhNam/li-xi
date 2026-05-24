@@ -8,11 +8,10 @@ import {
   assertTrustedBillingUrl,
   assertTrustedPolarCheckoutUrl,
   getDefaultBillingReturnUrl,
-  isLocalOrPrivateHostname,
-  isRawIpHostname,
   normalizeBillingLocale,
   parseCleanOrigin,
 } from "../lib/billingPolicy.ts";
+import { isLocalOrPrivateHostname, isRawIpHostname } from "../lib/networkPolicy.ts";
 
 const products = {
   pro: "prod_pro",

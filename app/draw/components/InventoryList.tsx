@@ -1,5 +1,6 @@
 import { formatCurrency } from "../hostUtils";
 import type { Rarity } from "@/lib/lixiPolicy";
+import { PackageOpen } from "lucide-react";
 
 type InventoryItem = {
 	amount: number;
@@ -36,9 +37,12 @@ export default function InventoryList({ items }: InventoryListProps) {
 			<div className="grid gap-2 relative z-10 overflow-y-auto flex-1 content-start pr-1 custom-scrollbar">
 				{items.length === 0 ? (
 					<div className="flex flex-col items-center justify-center py-12 border border-dashed border-gold-base/15 rounded-xl bg-black-ink/20">
-						<svg className="w-10 h-10 text-gold-base/20 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label="Chưa có giải thưởng">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-						</svg>
+						<PackageOpen
+							aria-label="Chưa có giải thưởng"
+							className="mb-3 text-gold-base/20"
+							size={40}
+							strokeWidth={1.5}
+						/>
 						<p className="font-vn text-[12px] italic text-gold-shine/30">
 							Chưa có giải thưởng
 						</p>

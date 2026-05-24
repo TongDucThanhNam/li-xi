@@ -9,8 +9,8 @@ import HostHeader from "@/app/draw/components/HostHeader";
 import HostShell from "@/app/draw/components/HostShell";
 import InventoryList from "@/app/draw/components/InventoryList";
 import RecentRedemptions from "@/app/draw/components/RecentRedemptions";
-import FortuneStage from "@/app/draw/FortuneStage";
 import type { RewardPoolItem } from "@/app/draw/fortune/types";
+import { getDrawTemplate, resolveDrawTemplateKey } from "@/app/draw/templates/registry";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { requireHostRouteAuth } from "@/lib/hostRouteGuard";
@@ -56,6 +56,12 @@ type DeliveryMode = "station" | "link";
 
 export const Route = createFileRoute("/draw")({
 	beforeLoad: requireHostRouteAuth,
+	head: () => ({
+		links: [
+			{ rel: "stylesheet", href: getDrawTemplate().cssHref },
+			...getDrawTemplate().fonts,
+		],
+	}),
 	component: DrawPage,
 });
 
@@ -321,11 +327,12 @@ function DrawPage() {
 				? activeSession.rewardPool
 				: [];
 	const guestRewardPoolReady = Boolean(activeSession && guestRewardPool.length > 0);
+	const DrawStage = getDrawTemplate(resolveDrawTemplateKey(guestCampaign?.theme)).Stage;
 
 	if (guestMode) {
 		return (
 			<main className="w-screen h-dvh overflow-hidden bg-black-ink">
-				<FortuneStage
+				<DrawStage
 					sessionKey={activeSession?.id ?? null}
 					guestName={activeSession?.guestNameDisplay}
 					campaignTitle={

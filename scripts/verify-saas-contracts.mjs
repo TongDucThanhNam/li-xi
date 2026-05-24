@@ -115,8 +115,8 @@ assert(
 );
 assert(
   packageJson.scripts?.["test:contracts"] ===
-    "node scripts/verify-saas-contracts.mjs && node scripts/verify-production-readiness.mjs --self-test && node scripts/test-production-readiness-import.mjs && node scripts/validate-production-evidence.mjs --self-test && node scripts/test-production-evidence-validator.mjs && node scripts/validate-production-evidence-report.mjs --self-test && node scripts/test-production-evidence-report-validator.mjs && node scripts/test-host-route-guard.mjs && node scripts/test-authorization-policy.mjs && node scripts/test-secret-policy.mjs && node scripts/test-migration-token-policy.mjs && node scripts/test-asset-policy.mjs && node scripts/test-billing-policy.mjs && node scripts/test-polar-server-policy.mjs && node scripts/test-entitlement-policy.mjs && node scripts/test-public-app-url-policy.mjs && node scripts/test-public-link-policy.mjs && node scripts/test-analytics-policy.mjs",
-  "contract tests must include production readiness self-tests, evidence artifact/report validator self-tests, host route guard regressions, authorization policy regressions, secret policy regressions, migration token policy regressions, asset policy regressions, billing policy regressions, Polar server policy regressions, entitlement policy regressions, public app URL regressions, public link policy regressions, and analytics policy regressions"
+    "node scripts/verify-saas-contracts.mjs && node scripts/verify-production-readiness.mjs --self-test && node scripts/test-production-readiness-import.mjs && node scripts/validate-production-evidence.mjs --self-test && node scripts/test-production-evidence-validator.mjs && node scripts/validate-production-evidence-report.mjs --self-test && node scripts/test-production-evidence-report-validator.mjs && node scripts/test-host-route-guard.mjs && node scripts/test-authorization-policy.mjs && node scripts/test-secret-policy.mjs && node scripts/test-migration-token-policy.mjs && node scripts/test-asset-policy.mjs && node scripts/test-network-policy.mjs && node scripts/test-billing-policy.mjs && node scripts/test-polar-server-policy.mjs && node scripts/test-entitlement-policy.mjs && node scripts/test-public-app-url-policy.mjs && node scripts/test-public-link-policy.mjs && node scripts/test-analytics-policy.mjs && node scripts/test-saas-workflow-policy.mjs",
+  "contract tests must include production readiness self-tests, evidence artifact/report validator self-tests, host route guard regressions, authorization policy regressions, secret policy regressions, migration token policy regressions, asset policy regressions, shared network policy regressions, billing policy regressions, Polar server policy regressions, entitlement policy regressions, public app URL regressions, public link policy regressions, analytics policy regressions, and SaaS workflow policy regressions"
 );
 const productionVerifier = read("scripts/verify-production-readiness.mjs");
 const productionReadinessImportTest = read("scripts/test-production-readiness-import.mjs");
@@ -133,6 +133,8 @@ const billingPolicyTest = read("scripts/test-billing-policy.mjs");
 const polarServerPolicy = read("lib/polarServerPolicy.ts");
 const polarServerPolicyTest = read("scripts/test-polar-server-policy.mjs");
 const entitlementPolicyTest = read("scripts/test-entitlement-policy.mjs");
+const networkPolicy = read("lib/networkPolicy.ts");
+const networkPolicyTest = read("scripts/test-network-policy.mjs");
 const publicAppUrlPolicy = read("lib/publicAppUrlPolicy.ts");
 const publicAppUrlPolicyTest = read("scripts/test-public-app-url-policy.mjs");
 const publicLinkPolicyTest = read("scripts/test-public-link-policy.mjs");
@@ -203,6 +205,42 @@ assert(
   packageJson.scripts?.["test:contracts"]?.includes("node scripts/test-migration-token-policy.mjs"),
   "contract test suite must include migration token policy regression tests"
 );
+assert(
+  packageJson.scripts?.["test:contracts"]?.includes("node scripts/test-network-policy.mjs") &&
+    networkPolicy.includes("export function normalizeHostname") &&
+    networkPolicy.includes("export function isRawIpv4Hostname") &&
+    networkPolicy.includes("export function isRawIpv6Hostname") &&
+    networkPolicy.includes("export function isRawIpHostname") &&
+    networkPolicy.includes("export function isLocalOrPrivateHostname") &&
+    networkPolicy.includes("first === 100 && second >= 64 && second <= 127") &&
+    networkPolicy.includes("first === 169 && second === 254") &&
+    networkPolicy.includes("first === 192 && second === 0 && third === 2") &&
+    networkPolicy.includes("first === 198 && second === 51 && third === 100") &&
+    networkPolicy.includes("first === 203 && second === 0 && third === 113") &&
+    networkPolicy.includes("normalizedHostname.startsWith(\"fd\")") &&
+    networkPolicy.includes("normalizedHostname.startsWith(\"fe80:\")") &&
+    networkPolicy.includes("mappedIpv4") &&
+    networkPolicy.includes("normalizedHostname.startsWith(\"::ffff:\")") &&
+    networkPolicyTest.includes("network policy regression tests passed") &&
+    networkPolicyTest.includes("100.64.0.1") &&
+    networkPolicyTest.includes("169.254.1.1") &&
+    networkPolicyTest.includes("2606:4700:4700::1111"),
+  "shared network policy must own hostname/IP helpers and have regression coverage"
+);
+for (const [consumerName, source] of [
+  ["lib/billingPolicy.ts", read("lib/billingPolicy.ts")],
+  ["lib/publicAppUrlPolicy.ts", read("lib/publicAppUrlPolicy.ts")],
+  ["convex/ops.ts", read("convex/ops.ts")],
+  ["scripts/verify-production-readiness.mjs", read("scripts/verify-production-readiness.mjs")],
+  ["scripts/validate-production-evidence-report.mjs", read("scripts/validate-production-evidence-report.mjs")],
+]) {
+  assert(
+    !/function (?:normalizeHostname|isRawIpv4Hostname|isRawIpv6Hostname|isRawIpHostname|isLocalOrPrivateHostname)\b/.test(
+      source
+    ),
+    `${consumerName} must import shared network helpers instead of redefining them`
+  );
+}
 assert(
 	  productionEvidenceValidator.includes("li-xi.production-readiness-evidence.v1") &&
 	    productionEvidenceValidator.includes("validateProductionEvidence") &&
@@ -373,7 +411,11 @@ assert(
     productionEvidenceReportValidator.includes("commandEnvValue") &&
     productionEvidenceReportValidator.includes("convexDeploymentLabel") &&
     productionEvidenceReportValidator.includes("publicAppOrigin") &&
+    productionEvidenceReportValidator.includes('from "../lib/networkPolicy.ts"') &&
     productionEvidenceReportValidator.includes("isLocalOrPrivateHostname") &&
+    !productionEvidenceReportValidator.includes("function isLocalOrPrivateHostname") &&
+    !productionEvidenceReportValidator.includes("function isRawIpv4Hostname") &&
+    !productionEvidenceReportValidator.includes("function isRawIpv6Hostname") &&
     productionEvidenceReportValidator.includes("must not include a port") &&
     productionEvidenceReportValidator.includes("must be a clean origin") &&
     productionEvidenceReportValidator.includes("must not be a raw IPv4 address") &&
@@ -614,8 +656,9 @@ assert(
     viteConfig.includes('srcDirectory: "."') &&
     viteConfig.includes('routesDirectory: "app"') &&
     viteConfig.includes("routeFileIgnorePattern") &&
-    viteConfig.includes("(^|/)(components|fortune)(/|$)") &&
+    viteConfig.includes("(^|/)(components|fortune|templates)(/|$)") &&
     viteConfig.includes("(^|/)(ConvexClientProvider|CssDebugger|FortuneStage|hostUtils)(\\\\.|$)") &&
+    viteConfig.includes('dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"]') &&
     viteConfig.includes("viteReact()") &&
     viteConfig.includes("nitro()") &&
     !viteConfig.includes("NEXT_PUBLIC_") &&
@@ -635,7 +678,13 @@ assert(
     rootRoute.includes("Prize Draw Campaign Studio") &&
     rootRoute.includes("SaaS prize-draw platform") &&
     !rootRoute.includes("Ứng dụng rút lì xì với ngân sách theo số lượng tờ") &&
-    rootRoute.includes('import appCss from "./globals.css?url"') &&
+    !rootRoute.includes('import appCss from "./globals.css?url"') &&
+    read("app/styles/base.css").includes('@import "tailwindcss"') &&
+    read("app/styles/admin.css").includes('@import "./base.css"') &&
+    read("app/styles/admin.css").includes('@import "@heroui/styles"') &&
+    read("app/styles/draw.css").includes("--color-gold-shine") &&
+    read("app/draw/templates/registry.ts").includes('import drawCss from "@/app/styles/draw.css?url"') &&
+    read("app/draw/templates/registry.ts").includes('cssHref: drawCss') &&
     rootRoute.includes("<ConvexClientProvider>") &&
     rootRoute.includes("<Outlet />") &&
     routerConfig.includes('import { createRouter } from "@tanstack/react-router"') &&
@@ -692,12 +741,12 @@ assert(
     !smokeRoutes.includes('path: "/claim/test-code"') &&
     smokeRoutes.includes('path: "/leaderboard"') &&
     smokeRoutes.includes("Đang mở trạm") &&
-    smokeRoutes.includes("Đang tải cấu hình") &&
+    smokeRoutes.includes("Loading setup") &&
     smokeRoutes.includes("ĐANG TẢI TRẠM RÚT") &&
     smokeRoutes.includes("Đang tải Campaign Studio") &&
     smokeRoutes.includes("Đang kiểm tra link rút") &&
     smokeRoutes.includes("Link không hợp lệ") &&
-    smokeRoutes.includes("Đang tải bảng thống kê"),
+    smokeRoutes.includes("Loading leaderboard"),
   "route smoke coverage must include route-specific root, host, campaign, public-claim, malformed public-claim, and leaderboard shells"
 );
 
@@ -831,11 +880,16 @@ const convexAndLibRuntimeFiles = [
   ...walk("convex", (file) => /\.(tsx?|jsx?)$/.test(file)),
   ...walk("lib", (file) => /\.(tsx?|jsx?)$/.test(file)),
 ];
-assertNoPatternInFiles(
-  convexAndLibRuntimeFiles,
-  /from\s+["'][^"']+\.ts["']/,
-  "Convex/runtime TypeScript modules must avoid .ts import specifiers so Convex codegen typecheck and Node ESM tests both resolve them"
-);
+for (const file of convexAndLibRuntimeFiles) {
+  const source = read(file);
+  const disallowedTsImports = [...source.matchAll(/from\s+["']([^"']+\.ts)["']/g)]
+    .map((match) => match[1])
+    .filter((specifier) => !specifier.endsWith("/networkPolicy.ts") && specifier !== "./networkPolicy.ts");
+  assert(
+    disallowedTsImports.length === 0,
+    `${file} must avoid .ts import specifiers except the shared network policy used by Node ESM contract tests`
+  );
+}
 assertNoPatternInFiles(
   appAndLibFiles,
   /from\s+["']next(?:\/|["'])|import\s+["']next(?:\/|["'])/,
@@ -854,6 +908,12 @@ assert(
   read("scripts/smoke-routes.mjs").includes("VITE_SITE_URL: smokeSiteUrl"),
   "route smoke harness must provide deterministic VITE_SITE_URL for production builds"
 );
+if (existsSync(path.join(root, ".env.local"))) {
+  const envLocal = read(".env.local");
+  assert(!envLocal.includes("NEXT_PUBLIC_"), ".env.local must not contain stale Next public env names");
+  assert(envLocal.includes("VITE_CONVEX_URL="), ".env.local must use VITE_CONVEX_URL for local Convex config");
+  assert(!envLocal.includes("VITE_SITE_URL="), ".env.local must let local dev use browser origin fallback");
+}
 assertNoPatternInFiles(
   appAndLibFiles,
   /emerald-\d+/,
@@ -866,25 +926,27 @@ assertNoPatternInFiles(
 );
 const leaderboardRoute = read("app/leaderboard.tsx");
 assert(
-  leaderboardRoute.includes("text-gold-shine/78") &&
-    leaderboardRoute.includes("text-red-vivid") &&
-    leaderboardRoute.includes("text-gold-shine bg-gold-base/22") &&
-    !leaderboardRoute.includes("#ddceff") &&
-    !leaderboardRoute.includes("rgba(100,69,182") &&
-    !leaderboardRoute.includes("#dfdfdf"),
-  "leaderboard rarity pills must stay inside red/gold/black palette"
+  leaderboardRoute.includes('import adminCss from "./styles/admin.css?url"') &&
+    leaderboardRoute.includes("AdminPageShell") &&
+    leaderboardRoute.includes("Chip color={getRarityStatus(item.rarity)}") &&
+    !leaderboardRoute.includes("text-gold-shine/78") &&
+    !leaderboardRoute.includes("text-red-vivid") &&
+    !leaderboardRoute.includes("text-gold-shine bg-gold-base/22"),
+  "leaderboard route must use HeroUI admin shell and semantic rarity chips instead of the Lunar draw palette"
 );
 assert(
   leaderboardRoute.includes("api.campaigns.getWorkspace") &&
     leaderboardRoute.includes("selectedCampaignId") &&
     leaderboardRoute.includes("api.leaderboard.getCampaignLeaderboard") &&
     leaderboardRoute.includes("api.leaderboard.getCampaignHistory") &&
-    leaderboardRoute.includes("setSelectedCampaignId(campaign.id)") &&
-    leaderboardRoute.includes("Tất cả chiến dịch") &&
+    leaderboardRoute.includes("Tabs") &&
+    leaderboardRoute.includes("onSelectionChange") &&
+    leaderboardRoute.includes("setSelectedCampaignId(") &&
+    leaderboardRoute.includes("All campaigns") &&
     leaderboardRoute.includes("Top giá trị thưởng") &&
     leaderboardRoute.includes("Chưa có lượt nhận thưởng nào.") &&
     leaderboardRoute.includes("Chiến dịch chưa xác định") &&
-    leaderboardRoute.includes("Mã quà") &&
+    leaderboardRoute.includes("envelopeIndex + 1") &&
     leaderboardRoute.includes("Lịch sử gần đây") &&
     !leaderboardRoute.includes("Top theo số tiền") &&
     !leaderboardRoute.includes("Chưa có lượt rút nào.") &&
@@ -1182,19 +1244,11 @@ assert(
     billing.includes('assertTrustedBillingUrl(\n      args.successUrl,\n      "Billing successUrl",\n      process.env.SITE_URL') &&
     billing.includes('assertTrustedBillingUrl(args.returnUrl, "Billing returnUrl", process.env.SITE_URL)') &&
     billing.includes("getDefaultBillingReturnUrl(process.env.SITE_URL)") &&
+    billingPolicy.includes('from "./networkPolicy.ts"') &&
     billingPolicy.includes("export function getConfiguredSiteOrigin") &&
     billingPolicy.includes("export function parseCleanOrigin") &&
-    billingPolicy.includes("export function isLocalOrPrivateHostname") &&
-    billingPolicy.includes("export function isRawIpHostname") &&
-    billingPolicy.includes("first === 100 && second >= 64 && second <= 127") &&
-    billingPolicy.includes("first === 169 && second === 254") &&
-    billingPolicy.includes("first === 192 && second === 0 && third === 2") &&
-    billingPolicy.includes("first === 198 && second === 51 && third === 100") &&
-    billingPolicy.includes("first === 203 && second === 0 && third === 113") &&
-    billingPolicy.includes("normalizedHostname.startsWith(\"fd\")") &&
-    billingPolicy.includes("normalizedHostname.startsWith(\"fe80:\")") &&
-    billingPolicy.includes("mappedIpv4") &&
-    billingPolicy.includes("normalizedHostname.startsWith(\"::ffff:\")") &&
+    !billingPolicy.includes("export function isLocalOrPrivateHostname") &&
+    !billingPolicy.includes("export function isRawIpHostname") &&
     billingPolicy.includes('url.protocol === "https:"') &&
     billingPolicy.includes('url.port === ""') &&
     !billingPolicy.includes('url.protocol === "http:"') &&
@@ -1499,15 +1553,15 @@ assert(
   "budget/PIN setup completion must route hosts into Campaign Studio before creating draw sessions"
 );
 assert(
-  setupRoute.includes('onClick={() => void navigate({ to: "/campaigns" })}') &&
-    setupRoute.includes("Campaign Studio") &&
-    setupRoute.includes("Host chiến dịch") &&
-    setupRoute.includes("Thiết lập PIN host") &&
+  setupRoute.includes('import adminCss from "./styles/admin.css?url"') &&
+    setupRoute.includes("AdminPageShell") &&
+    setupRoute.includes("Budget Setup") &&
+    setupRoute.includes("Host PIN") &&
     setupRoute.includes("Lưu PIN host") &&
     !setupRoute.includes("Chủ ví:") &&
     !setupRoute.includes("PIN chủ ví") &&
-    !setupRoute.includes('onClick={() => void navigate({ to: "/draw" })}'),
-  "setup route navigation must steer hosts back to Campaign Studio instead of bypassing campaign configuration"
+    !setupRoute.includes('onPress={() => void navigate({ to: "/draw" })}'),
+  "setup route must use the HeroUI admin shell while steering hosts back to Campaign Studio after configuration"
 );
 
 const convexFiles = walk("convex", (file) => /\.(ts|js)$/.test(file) && !file.includes("_generated"));
@@ -1518,6 +1572,7 @@ assertNoPatternInFiles(
 );
 
 const draw = read("convex/draw.ts");
+const drawSessionPolicy = read("convex/drawSessionPolicy.ts");
 const budgetScope = read("convex/budgetScope.ts");
 const publicLinks = read("convex/publicLinks.ts");
 assert(
@@ -1548,8 +1603,8 @@ assert(
     draw.includes("isPendingLinkSession(session)") &&
     draw.includes("!isExpiredPendingLinkSession(session") &&
     draw.includes("expiresAt: resolvePublicLinkExpiresAt(session)") &&
-    read("convex/entitlements.ts").includes("isOpenPendingSession(session, now)") &&
-    read("convex/setup.ts").includes("isOpenPendingSession(session)") &&
+    drawSessionPolicy.includes("isOpenPendingSession(session, now)") &&
+    drawSessionPolicy.includes("isOpenPendingSession(session)") &&
     read("convex/migrations.ts").includes("sessionsPatchedPublicCodeExpiry") &&
     read("convex/migrations.ts").includes("skippedInvalidPublicCodeExpiry") &&
     read("convex/migrations.ts").includes("patch.publicCodeExpiresAt = getPublicLinkExpiresAt(session.createdAt)") &&
@@ -1644,19 +1699,21 @@ const redeemPublicSession = section(draw, "export const redeemPublicSession", "}
 const redeemPendingSession = section(draw, "async function redeemPendingSession", "export const redeem = mutation");
 const redeemableSessionCampaignGuard = section(
   draw,
-  "async function assertRedeemableSessionCampaign",
+  "async function requireRedeemableSessionCampaign",
   "async function getCampaignGuestRedemption"
 );
 assert(
   redeemableSessionCampaignGuard.includes("if (!session.campaignId)") &&
     redeemableSessionCampaignGuard.includes("throw new Error(\"Chiến dịch của lượt rút không còn hiệu lực\")") &&
     !redeemableSessionCampaignGuard.includes("if (!session.campaignId) {\n    return;\n  }") &&
-    redeemableSessionCampaignGuard.includes("const campaign = await ctx.db.get(session.campaignId)") &&
+    redeemableSessionCampaignGuard.includes("const campaignId = session.campaignId") &&
+    redeemableSessionCampaignGuard.includes("const campaign = await ctx.db.get(campaignId)") &&
     redeemableSessionCampaignGuard.includes("campaign.ownerId !== session.ownerId") &&
     redeemableSessionCampaignGuard.includes('campaign.status !== "active"') &&
     redeemableSessionCampaignGuard.includes("Chiến dịch của lượt rút không còn hiệu lực") &&
-    redeemPendingSession.includes("await assertRedeemableSessionCampaign(ctx, session)") &&
-    redeemPendingSession.indexOf("await assertRedeemableSessionCampaign(ctx, session)") <
+    redeemableSessionCampaignGuard.includes("return campaignId") &&
+    redeemPendingSession.includes("const campaignId = await requireRedeemableSessionCampaign(ctx, session)") &&
+    redeemPendingSession.indexOf("const campaignId = await requireRedeemableSessionCampaign(ctx, session)") <
       redeemPendingSession.indexOf("await getOwnerBudgetOrThrow"),
   "shared redemption path must fail closed before budget and analytics writes when a session campaign is missing, foreign-owned, or inactive"
 );
@@ -1697,6 +1754,11 @@ const createSessionPanel = read("app/draw/components/CreateSessionPanel.tsx");
 const drawRoute = read("app/draw.tsx");
 const publicAppUrl = read("lib/publicAppUrl.ts");
 const campaignsRoute = read("app/campaigns.tsx");
+const campaignAssetsPanel = read("app/-campaigns/CampaignAssetsPanel.tsx");
+const campaignAssetUploadHook = read("app/-campaigns/useCampaignAssetUpload.ts");
+const campaignBillingActionsHook = read("app/-campaigns/useCampaignBillingActions.ts");
+const campaignReadinessPanel = read("app/-campaigns/ReadinessPanel.tsx");
+const campaignUtils = read("app/-campaigns/utils.ts");
 const hostHeaderComponent = read("app/draw/components/HostHeader.tsx");
 assert(
   hostHeaderComponent.includes("onDraw?: () => void") &&
@@ -1713,10 +1775,10 @@ assert(
   "create-session panel must present the operational PIN as a host PIN, not wallet-era wording"
 );
 assert(
-  campaignsRoute.includes('const changeableSubscriptionStatuses = new Set(["active", "trialing", "past_due"])') &&
-    campaignsRoute.includes("const currentSubscriptionStatus = planState?.subscription?.status?.toLowerCase()") &&
-    campaignsRoute.includes("changeableSubscriptionStatuses.has(currentSubscriptionStatus)") &&
-    !campaignsRoute.includes('planState?.source === "polar" && planState.subscription'),
+  campaignUtils.includes('export const changeableSubscriptionStatuses = new Set(["active", "trialing", "past_due"])') &&
+    campaignBillingActionsHook.includes("const currentSubscriptionStatus = planState?.subscription?.status?.toLowerCase()") &&
+    campaignBillingActionsHook.includes("changeableSubscriptionStatuses.has(currentSubscriptionStatus)") &&
+    !campaignBillingActionsHook.includes('planState?.source === "polar" && planState.subscription'),
   "Campaign Studio billing actions must route past_due subscriptions through subscription change instead of opening duplicate checkout"
 );
 assert(
@@ -1730,6 +1792,7 @@ assert(
   publicAppUrl.includes("import.meta.env.VITE_SITE_URL") &&
     publicAppUrl.includes("parseCleanPublicAppOrigin(import.meta.env.VITE_SITE_URL)") &&
     publicAppUrl.includes("buildPublicAppUrlFromOrigin(path, origin)") &&
+    publicAppUrlPolicy.includes('from "./networkPolicy.ts"') &&
     publicAppUrlPolicy.includes("export function parseCleanPublicAppOrigin") &&
     publicAppUrlPolicy.includes("url.username") &&
     publicAppUrlPolicy.includes("url.password") &&
@@ -1738,8 +1801,7 @@ assert(
     publicAppUrlPolicy.includes('url.pathname !== "/"') &&
     publicAppUrlPolicy.includes("isLocalDevHostname") &&
     publicAppUrlPolicy.includes("isLocalNetworkHostname") &&
-    publicAppUrlPolicy.includes('normalizedHostname.endsWith(".localhost")') &&
-    publicAppUrlPolicy.includes('normalizedHostname.endsWith(".local")') &&
+    publicAppUrlPolicy.includes("isLocalOrPrivateHostname(hostname)") &&
     publicAppUrlPolicy.includes('url.protocol !== "https:"') &&
     publicAppUrlPolicy.includes("isRawIpHostname") &&
     publicAppUrlPolicy.includes('!path.startsWith("/") || path.startsWith("//")') &&
@@ -1773,15 +1835,15 @@ assert(
     createSessionPanel.includes("const buildShareUrl = (path: string) => buildPublicClaimUrl(path)") &&
     !createSessionPanel.includes("buildPublicAppUrl(sharePath)") &&
     !createSessionPanel.includes("window.location.origin") &&
-    campaignsRoute.includes('import { getBillingReturnPublicAppUrl, getPublicAppOrigin } from "@/lib/publicAppUrl"') &&
-    campaignsRoute.includes("origin: getPublicAppOrigin()") &&
-    campaignsRoute.includes("const billingReturnUrl = getBillingReturnPublicAppUrl()") &&
-    campaignsRoute.includes("successUrl: billingReturnUrl") &&
-    campaignsRoute.includes("returnUrl: getBillingReturnPublicAppUrl()") &&
-    !campaignsRoute.includes("successUrl: currentPublicUrl") &&
-    !campaignsRoute.includes("returnUrl: getCurrentPublicAppUrl()") &&
-    !campaignsRoute.includes("window.location.origin") &&
-    !campaignsRoute.includes("window.location.href"),
+    campaignBillingActionsHook.includes('import { getBillingReturnPublicAppUrl, getPublicAppOrigin } from "@/lib/publicAppUrl"') &&
+    campaignBillingActionsHook.includes("origin: getPublicAppOrigin()") &&
+    campaignBillingActionsHook.includes("const billingReturnUrl = getBillingReturnPublicAppUrl()") &&
+    campaignBillingActionsHook.includes("successUrl: billingReturnUrl") &&
+    campaignBillingActionsHook.includes("returnUrl: getBillingReturnPublicAppUrl()") &&
+    !campaignBillingActionsHook.includes("successUrl: currentPublicUrl") &&
+    !campaignBillingActionsHook.includes("returnUrl: getCurrentPublicAppUrl()") &&
+    !campaignBillingActionsHook.includes("window.location.origin") &&
+    !campaignBillingActionsHook.includes("window.location.href"),
   "frontend public share links and Polar return URLs must use VITE_SITE_URL through canonical public app URL helpers"
 );
 assert(
@@ -1868,7 +1930,8 @@ assert(
   campaignsRoute.includes("selectedCampaignId") &&
     campaignsRoute.includes("handleSelectCampaign") &&
     campaignsRoute.includes("handleNewCampaign") &&
-    campaignsRoute.includes('onDraw={() => void navigate({ to: "/draw" })}') &&
+    campaignsRoute.includes("AdminPageShell") &&
+    read("app/components/AdminPageShell.tsx").includes('{ href: "/draw", label: "Draw Station" }') &&
     campaignsRoute.includes("workspace.campaigns.map") &&
     campaignsRoute.includes("Tạo campaign") &&
     campaignsRoute.includes("Chưa lưu vào Convex") &&
@@ -1903,15 +1966,16 @@ assert(
 );
 assert(
     campaignsBackend.includes("hasOpenPendingSessionForCampaign") &&
-    campaignsBackend.includes("PENDING_CAMPAIGN_SESSION_DELIVERY_MODES") &&
-    campaignsBackend.includes('withIndex("by_campaign_owner_status_delivery"') &&
-    campaignsBackend.includes('.eq("campaignId", campaignId)') &&
-    campaignsBackend.includes('.eq("deliveryMode", deliveryMode)') &&
-    campaignsBackend.includes("isOpenPendingSession(session)") &&
+    campaignsBackend.includes('from "./drawSessionPolicy"') &&
+    drawSessionPolicy.includes("PENDING_SESSION_DELIVERY_MODES") &&
+    drawSessionPolicy.includes('withIndex("by_campaign_owner_status_delivery"') &&
+    drawSessionPolicy.includes('.eq("campaignId", campaignId)') &&
+    drawSessionPolicy.includes('.eq("deliveryMode", deliveryMode)') &&
+    drawSessionPolicy.includes("isOpenPendingSession(session)") &&
     campaignsBackend.includes('campaign.status === "active"') &&
     campaignsBackend.includes('args.status !== "active"') &&
-    section(campaignsBackend, "async function activateOnlyCampaign", "async function hasOpenPendingSessionForCampaign").includes("hasOpenPendingSessionForCampaign(ctx, ownerId, campaign._id)") &&
-    section(campaignsBackend, "async function activateOnlyCampaign", "async function hasOpenPendingSessionForCampaign").includes("Không thể kích hoạt chiến dịch khác khi chiến dịch hiện tại còn lượt rút đang chờ") &&
+    section(campaignsBackend, "async function activateOnlyCampaign", "async function campaignView").includes("hasOpenPendingSessionForCampaign(ctx, ownerId, campaign._id)") &&
+    section(campaignsBackend, "async function activateOnlyCampaign", "async function campaignView").includes("Không thể kích hoạt chiến dịch khác khi chiến dịch hiện tại còn lượt rút đang chờ") &&
     campaignsBackend.includes("Không thể tắt chiến dịch khi còn lượt rút đang chờ"),
   "saveCampaign must use campaign+owner+delivery pending-session indexes before explicit or implicit deactivation of active campaigns"
 );
@@ -2042,9 +2106,9 @@ assert(
     assets.includes("Upload asset chưa ở trạng thái được khai báo hợp lệ") &&
     assets.includes("Asset không ở trạng thái được đồng bộ metadata") &&
     assets.includes("Upload asset chưa được khai báo trước khi gửi lên R2") &&
-    campaignsRoute.includes("generateUploadUrl = useMutation(api.assets.generateUploadUrl)") &&
-    campaignsRoute.includes("uploadFileWithProgress") &&
-    campaignsRoute.includes("syncUploadedAssetMetadata({ key })"),
+    campaignAssetUploadHook.includes("generateUploadUrl = useMutation(api.assets.generateUploadUrl)") &&
+    campaignAssetUploadHook.includes("uploadFileWithProgress") &&
+    campaignAssetUploadHook.includes("syncUploadedAssetMetadata({ key })"),
   "R2 upload signed URLs must require campaign-scoped declared metadata and a reserved asset row before the browser can upload"
 );
 assert(
@@ -2112,10 +2176,10 @@ assert(
     read("convex/campaigns.ts").includes("!actualMetadata?.contentType || actualMetadata.size === undefined") &&
     read("convex/campaigns.ts").includes("Chưa đọc được metadata R2") &&
     read("convex/campaigns.ts").includes('metadataSource: "r2"') &&
-    campaignsRoute.includes("pendingUploadedAsset") &&
-    campaignsRoute.includes("handleRetryAttachUploadedAsset") &&
-    campaignsRoute.includes("Thử gắn lại") &&
-    read("design_system.md").includes("Asset retry state") &&
+    campaignAssetUploadHook.includes("pendingUploadedAsset") &&
+    campaignAssetUploadHook.includes("handleRetryAttachUploadedAsset") &&
+    campaignAssetsPanel.includes("Thử gắn lại") &&
+    read("docs/admin-design-system.md").includes("Asset retry state") &&
     draw.includes("getRenderableCampaignAssetUrl") &&
     draw.includes("isRenderableCampaignAsset") &&
     draw.includes("campaignHeroAssetCandidate.campaignId === campaign._id") &&
@@ -2147,11 +2211,12 @@ assert(
 );
 assert(
   draw.includes("countOpenPendingCampaignSessions") &&
-    draw.includes("PENDING_CAMPAIGN_SESSION_DELIVERY_MODES") &&
-    draw.includes("async function listPendingCampaignSessionsByDelivery") &&
-    draw.includes('withIndex("by_campaign_owner_status_delivery"') &&
-    draw.includes('.eq("campaignId", campaignId)') &&
-    draw.includes('.eq("deliveryMode", deliveryMode)') &&
+    draw.includes('from "./drawSessionPolicy"') &&
+    drawSessionPolicy.includes("PENDING_SESSION_DELIVERY_MODES") &&
+    drawSessionPolicy.includes("async function listPendingCampaignSessionsByDelivery") &&
+    drawSessionPolicy.includes('withIndex("by_campaign_owner_status_delivery"') &&
+    drawSessionPolicy.includes('.eq("campaignId", campaignId)') &&
+    drawSessionPolicy.includes('.eq("deliveryMode", deliveryMode)') &&
     draw.includes("pendingSessions.filter(isOpenPendingSession).length") &&
     draw.includes("availablePrizeUnits") &&
     draw.includes("function getPayablePrizeUnitCapacity") &&
@@ -2176,13 +2241,14 @@ assert(
 	  "station and public-link session creation must still require the host operational PIN"
 	);
 assert(
-  draw.includes("PENDING_OWNER_SESSION_DELIVERY_MODES") &&
-    draw.includes("async function listPendingOwnerSessionsByDelivery") &&
-    draw.includes('withIndex("by_owner_status_delivery"') &&
-    draw.includes('q.eq("ownerId", ownerId).eq("status", "pending").eq("deliveryMode", deliveryMode)') &&
-    createSessionAction.includes('listPendingOwnerSessionsByDelivery(ctx, ownerId, [') &&
-    createSessionAction.includes('"station"') &&
-    createSessionAction.includes("undefined") &&
+  draw.includes("PENDING_STATION_SESSION_DELIVERY_MODES") &&
+    drawSessionPolicy.includes("async function listPendingOwnerSessionsByDelivery") &&
+    drawSessionPolicy.includes('withIndex("by_owner_status_delivery"') &&
+    drawSessionPolicy.includes('q.eq("ownerId", ownerId).eq("status", "pending").eq("deliveryMode", deliveryMode)') &&
+    createSessionAction.includes("listPendingOwnerSessionsByDelivery(") &&
+    createSessionAction.includes("PENDING_STATION_SESSION_DELIVERY_MODES") &&
+    drawSessionPolicy.includes('"station"') &&
+    drawSessionPolicy.includes("undefined") &&
     !createSessionAction.includes('withIndex("by_owner_status"'),
   "createSession station-pending guard must use owner+status+delivery buckets while preserving legacy missing-delivery rows"
 );
@@ -2990,27 +3056,17 @@ assert(
     ops.includes("isMigrationTokenConfigured()") &&
     ops.includes("configuredMigrationTokenName()") &&
     ops.includes("convexSiteUrlHttps") &&
+    ops.includes('from "../lib/networkPolicy.ts"') &&
     ops.includes("function buildConvexHttpActionsOrigin") &&
     ops.includes("convexSiteOrigin") &&
     ops.includes("buildConvexHttpActionsOrigin(process.env.CONVEX_SITE_URL)") &&
     ops.includes("googleCallbackUrl: buildPublicEndpoint(convexSiteOrigin") &&
     ops.includes("polarWebhookUrl: buildPublicEndpoint(convexSiteOrigin") &&
     ops.includes("isPublicHttpsOriginUrl") &&
-    ops.includes("function isRawIpHostname") &&
     ops.includes("!isRawIpHostname(hostname)") &&
     ops.includes("isLocalOrPrivateHostname") &&
-    ops.includes('normalizedHostname === "localhost"') &&
-    ops.includes('normalizedHostname.endsWith(".local")') &&
-    ops.includes("first === 10") &&
-    ops.includes("first === 127") &&
-    ops.includes("first === 100 && second >= 64 && second <= 127") &&
-    ops.includes("first === 169 && second === 254") &&
-    ops.includes("first === 172 && second >= 16 && second <= 31") &&
-    ops.includes("first === 192 && second === 168") &&
-    ops.includes("normalizedHostname.startsWith(\"fd\")") &&
-    ops.includes("normalizedHostname.startsWith(\"fe80:\")") &&
-    ops.includes("mappedIpv4") &&
-    ops.includes("normalizedHostname.startsWith(\"::ffff:\")") &&
+    !ops.includes("function isRawIpHostname") &&
+    !ops.includes("function isLocalOrPrivateHostname") &&
     ops.includes("const convexSiteUrlReady = isConvexHttpActionsOrigin(process.env.CONVEX_SITE_URL)") &&
     ops.includes("siteUrlHttps") &&
     ops.includes("const siteUrlReady = isPublicHttpsOriginUrl(process.env.SITE_URL)") &&
@@ -3048,10 +3104,12 @@ assert(
     productionReadinessScript.includes("evaluateFrontendReadiness") &&
     productionReadinessScript.includes("VITE_CONVEX_URL") &&
     productionReadinessScript.includes("VITE_SITE_URL") &&
+    productionReadinessScript.includes('from "../lib/networkPolicy.ts"') &&
     productionReadinessScript.includes("isHttpsOriginUrl") &&
     productionReadinessScript.includes("isPublicHttpsOriginUrl") &&
-    productionReadinessScript.includes("function isRawIpHostname") &&
     productionReadinessScript.includes("!isRawIpHostname(hostname)") &&
+    !productionReadinessScript.includes("function isRawIpHostname") &&
+    !productionReadinessScript.includes("function isLocalOrPrivateHostname") &&
     productionReadinessScript.includes("frontendConvexUrlHttpsOrigin") &&
     productionReadinessScript.includes("frontendSiteUrlPublicOrigin") &&
     productionReadinessScript.includes("frontendLegacyAccountAuthDisabled") &&
@@ -3122,7 +3180,7 @@ assert(
     campaignsRoute.includes("runtimeReadinessRows") &&
     campaignsRoute.includes("readinessEndpointRows") &&
     campaignsRoute.includes("allRequiredReady") &&
-    campaignsRoute.includes("missingRuntimeRequired") &&
+    campaignReadinessPanel.includes("missingRuntimeRequired") &&
     campaignsRoute.includes("googleCallbackUrl") &&
     campaignsRoute.includes("polarWebhookUrl") &&
     campaignsRoute.includes("missingRequired.map((requirement) => requirement.label)"),
@@ -3208,14 +3266,16 @@ assert(
   "campaign and asset entitlement usage must count only indexed quota states, not archived/rejected/malformed full history"
 );
 assert(
-  entitlements.includes("PENDING_SESSION_QUOTA_DELIVERY_MODES") &&
-    entitlements.includes('"station"') &&
-    entitlements.includes('"link"') &&
-    entitlements.includes("undefined") &&
+  entitlements.includes('from "./drawSessionPolicy"') &&
+    drawSessionPolicy.includes("PENDING_SESSION_DELIVERY_MODES") &&
+    drawSessionPolicy.includes('"station"') &&
+    drawSessionPolicy.includes('"link"') &&
+    drawSessionPolicy.includes("undefined") &&
     entitlements.includes("async function countOpenSessionsForQuota") &&
-    entitlements.includes('withIndex("by_owner_status_delivery"') &&
-    entitlements.includes('q.eq("ownerId", ownerId).eq("status", "pending").eq("deliveryMode", deliveryMode)') &&
-    entitlements.includes("isOpenPendingSession(session, now)") &&
+    entitlements.includes("countOpenPendingOwnerSessions(ctx, ownerId)") &&
+    drawSessionPolicy.includes('withIndex("by_owner_status_delivery"') &&
+    drawSessionPolicy.includes('q.eq("ownerId", ownerId).eq("status", "pending").eq("deliveryMode", deliveryMode)') &&
+    drawSessionPolicy.includes("isOpenPendingSession(session, now)") &&
     entitlementUsage.includes("countOpenSessionsForQuota(ctx, ownerId)") &&
     !entitlementUsage.includes('.query("drawSessions")'),
   "open-session entitlement usage must use indexed delivery-mode buckets and exclude expired public links"
@@ -3274,17 +3334,13 @@ assert(
     !setupBudgetItems.includes("item.ownerId === ownerId"),
   "setup budget item reads must use campaign+owner indexes and exact legacy owner+missing-campaign fallback"
 );
-const setupOwnerPendingLock = section(
-  setup,
-  "async function listPendingOwnerSessionsByDelivery",
-  "async function hasPendingSessionForScope"
-);
 assert(
-  setup.includes("PENDING_OWNER_SESSION_DELIVERY_MODES") &&
-    setupOwnerPendingLock.includes('withIndex("by_owner_status_delivery"') &&
-    setupOwnerPendingLock.includes('q.eq("ownerId", ownerId).eq("status", "pending").eq("deliveryMode", deliveryMode)') &&
-    setupOwnerPendingLock.includes("listPendingOwnerSessionsByDelivery(ctx, ownerId)") &&
-    !setupOwnerPendingLock.includes('withIndex("by_owner_status"'),
+  setup.includes("hasOpenPendingSessionForOwner(ctx, ownerId)") &&
+    drawSessionPolicy.includes("PENDING_SESSION_DELIVERY_MODES") &&
+    drawSessionPolicy.includes('withIndex("by_owner_status_delivery"') &&
+    drawSessionPolicy.includes('q.eq("ownerId", ownerId).eq("status", "pending").eq("deliveryMode", deliveryMode)') &&
+    drawSessionPolicy.includes("listPendingOwnerSessionsByDelivery(ctx, ownerId)") &&
+    !drawSessionPolicy.includes('withIndex("by_owner_status"'),
   "setup legacy owner-wide pending-session lock must use owner+status+delivery buckets before expiry filtering"
 );
 assert(
@@ -3312,15 +3368,16 @@ assert(
 assert(
   setup.includes('withIndex("by_campaign_owner_createdAt"') &&
     setup.includes('q.eq("campaignId", scope.campaignId).eq("ownerId", ownerId)') &&
-    !section(setup, "async function hasAnyRedemptionForScope", "async function hasPendingSessionForOwner").includes('.filter((q) => q.eq(q.field("ownerId"), ownerId))'),
+    !section(setup, "async function hasAnyRedemptionForScope", "async function hasPendingSessionForScope").includes('.filter((q) => q.eq(q.field("ownerId"), ownerId))'),
   "campaign-scoped budget history checks must use campaign+owner index before checking for history"
 );
 assert(
-  setup.includes("PENDING_CAMPAIGN_SESSION_DELIVERY_MODES") &&
-    setup.includes("listPendingCampaignSessionsByDelivery(ctx, ownerId, scope.campaignId)") &&
-    setup.includes('withIndex("by_campaign_owner_status_delivery"') &&
-    setup.includes('.eq("campaignId", campaignId)') &&
-    setup.includes('.eq("deliveryMode", deliveryMode)') &&
+  setup.includes("hasOpenPendingSessionForCampaign(ctx, ownerId, scope.campaignId)") &&
+    drawSessionPolicy.includes("PENDING_SESSION_DELIVERY_MODES") &&
+    drawSessionPolicy.includes("listPendingCampaignSessionsByDelivery(ctx, ownerId, campaignId)") &&
+    drawSessionPolicy.includes('withIndex("by_campaign_owner_status_delivery"') &&
+    drawSessionPolicy.includes('.eq("campaignId", campaignId)') &&
+    drawSessionPolicy.includes('.eq("deliveryMode", deliveryMode)') &&
     !section(setup, "async function hasPendingSessionForScope", "async function getActiveCampaignForOwner").includes('q.eq(q.field("campaignId"), scope.campaignId)'),
   "campaign-scoped budget pending-session locks must use campaign+owner+delivery index before checking open sessions"
 );

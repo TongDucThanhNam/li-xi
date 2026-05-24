@@ -12,6 +12,10 @@ import {
   listVisibleCampaignsForOwner,
   sortCampaignsByRecency,
 } from "./campaignIdentity";
+import {
+  hasOpenPendingSessionForCampaign,
+  hasOpenPendingSessionForOwner,
+} from "./drawSessionPolicy";
 import { assertBudgetItemCount, assertCanCreateCampaign } from "./entitlements";
 import { ensureHostProfileForOwner } from "./hostProfiles";
 import {
@@ -21,7 +25,6 @@ import {
   validatePin,
   validateWholePositiveNumber,
 } from "../lib/lixiPolicy";
-import { isOpenPendingSession } from "./publicLinks";
 import { createPinHash } from "./security";
 
 const rarityValidator = v.union(v.literal("common"), v.literal("rare"), v.literal("legend"));
@@ -45,19 +48,7 @@ type BudgetScope = {
   campaignId?: Id<"campaigns">;
   source: "campaign" | "legacy-owner";
 };
-type PendingOwnerSessionDeliveryMode = "station" | "link" | undefined;
-type PendingCampaignSessionDeliveryMode = "station" | "link" | undefined;
-const MAX_BUDGET_ITEM_COUNT = 200;
-const PENDING_OWNER_SESSION_DELIVERY_MODES: PendingOwnerSessionDeliveryMode[] = [
-  "station",
-  "link",
-  undefined,
-];
-const PENDING_CAMPAIGN_SESSION_DELIVERY_MODES: PendingCampaignSessionDeliveryMode[] = [
-  "station",
-  "link",
-  undefined,
-];
+const MAX_BUDGET_ITEM_COUNT = 500;
 
 function validateBudgetInputs(items: BudgetInput[]) {
   if (items.length === 0) {
@@ -184,56 +175,12 @@ async function hasAnyRedemptionForScope(ctx: ConvexCtx, ownerId: Id<"users">, sc
   return oneRedemption.length > 0;
 }
 
-async function listPendingOwnerSessionsByDelivery(ctx: ConvexCtx, ownerId: Id<"users">) {
-  const groups = await Promise.all(
-    PENDING_OWNER_SESSION_DELIVERY_MODES.map((deliveryMode) =>
-      ctx.db
-        .query("drawSessions")
-        .withIndex("by_owner_status_delivery", (q) =>
-          q.eq("ownerId", ownerId).eq("status", "pending").eq("deliveryMode", deliveryMode)
-        )
-        .collect()
-    )
-  );
-
-  return groups.flat();
-}
-
-async function listPendingCampaignSessionsByDelivery(
-  ctx: ConvexCtx,
-  ownerId: Id<"users">,
-  campaignId: Id<"campaigns">
-) {
-  const groups = await Promise.all(
-    PENDING_CAMPAIGN_SESSION_DELIVERY_MODES.map((deliveryMode) =>
-      ctx.db
-        .query("drawSessions")
-        .withIndex("by_campaign_owner_status_delivery", (q) =>
-          q
-            .eq("campaignId", campaignId)
-            .eq("ownerId", ownerId)
-            .eq("status", "pending")
-            .eq("deliveryMode", deliveryMode)
-        )
-        .collect()
-    )
-  );
-
-  return groups.flat();
-}
-
-async function hasPendingSessionForOwner(ctx: ConvexCtx, ownerId: Id<"users">) {
-  const pendingSessions = await listPendingOwnerSessionsByDelivery(ctx, ownerId);
-  return pendingSessions.some((session) => isOpenPendingSession(session));
-}
-
 async function hasPendingSessionForScope(ctx: ConvexCtx, ownerId: Id<"users">, scope: BudgetScope) {
   if (!scope.campaignId) {
-    return hasPendingSessionForOwner(ctx, ownerId);
+    return hasOpenPendingSessionForOwner(ctx, ownerId);
   }
 
-  const pendingSessions = await listPendingCampaignSessionsByDelivery(ctx, ownerId, scope.campaignId);
-  return pendingSessions.some((session) => isOpenPendingSession(session));
+  return hasOpenPendingSessionForCampaign(ctx, ownerId, scope.campaignId);
 }
 
 async function getActiveCampaignForOwner(ctx: ConvexCtx, ownerId: Id<"users">) {
@@ -294,7 +241,41 @@ async function resolveBudgetScope(ctx: ConvexCtx, ownerId: Id<"users">): Promise
   return { source: "legacy-owner" };
 }
 
-async function resolveMutableBudgetScope(ctx: MutationCtx, ownerId: Id<"users">): Promise<BudgetScope> {
+async function getVisibleCampaignForOwner(
+  ctx: ConvexCtx,
+  ownerId: Id<"users">,
+  campaignId: Id<"campaigns">
+) {
+  const campaign = await ctx.db.get(campaignId);
+  if (!campaign || campaign.ownerId !== ownerId || campaign.status === "archived") {
+    throw new Error("Không tìm thấy chiến dịch để cấu hình ngân sách");
+  }
+  return campaign;
+}
+
+async function resolveExplicitBudgetScope(
+  ctx: ConvexCtx,
+  ownerId: Id<"users">,
+  campaignId?: Id<"campaigns">
+): Promise<BudgetScope> {
+  if (!campaignId) {
+    return resolveBudgetScope(ctx, ownerId);
+  }
+
+  const campaign = await getVisibleCampaignForOwner(ctx, ownerId, campaignId);
+  return { campaignId: campaign._id, source: "campaign" };
+}
+
+async function resolveMutableBudgetScope(
+  ctx: MutationCtx,
+  ownerId: Id<"users">,
+  campaignId?: Id<"campaigns">
+): Promise<BudgetScope> {
+  if (campaignId) {
+    const campaign = await getVisibleCampaignForOwner(ctx, ownerId, campaignId);
+    return { campaignId: campaign._id, source: "campaign" };
+  }
+
   const campaign = await ensureDefaultCampaignForOwner(ctx, ownerId);
   return { campaignId: campaign._id, source: "campaign" };
 }
@@ -326,14 +307,22 @@ async function listBudgetItems(
 }
 
 export const getSetupState = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    campaignId: v.optional(v.id("campaigns")),
+  },
+  handler: async (ctx, args) => {
     const { owner, ownerId } = await requireResolvedOwner(ctx, undefined, {
       notFoundMessage: "Không tìm thấy tài khoản host",
       forbiddenMessage: "Bạn không có quyền cấu hình tài khoản này",
     });
 
-    const scope = await resolveBudgetScope(ctx, ownerId);
+    const visibleCampaigns = sortCampaignsByRecency(
+      await listVisibleCampaignsForOwner(ctx, ownerId)
+    );
+    const scope = await resolveExplicitBudgetScope(ctx, ownerId, args.campaignId);
+    const selectedCampaign = scope.campaignId
+      ? visibleCampaigns.find((campaign) => campaign._id === scope.campaignId) ?? null
+      : null;
     const budget = await getBudgetForScope(ctx, ownerId, scope);
 
     const items = await listBudgetItems(ctx, ownerId, scope);
@@ -344,6 +333,20 @@ export const getSetupState = query({
     return {
       hasSetup: Boolean(budget?.isSetupCompleted && items.length > 0),
       budgetScope: scope,
+      selectedCampaign: selectedCampaign
+        ? {
+            id: selectedCampaign._id,
+            name: selectedCampaign.name,
+            status: selectedCampaign.status,
+          }
+        : null,
+      campaigns: visibleCampaigns.map((campaign) => ({
+        id: campaign._id,
+        name: campaign.name,
+        brandName: campaign.brandName ?? null,
+        status: campaign.status,
+        isSelected: campaign._id === scope.campaignId,
+      })),
       canConfigure: !hasRedemptions && !hasPendingSession,
       hasHostPin: typeof owner.pinHash === "string" && typeof owner.pinSalt === "string",
       budget: budget
@@ -368,6 +371,7 @@ export const getSetupState = query({
 
 export const configureBudget = mutation({
   args: {
+    campaignId: v.optional(v.id("campaigns")),
     hostPin: v.optional(v.string()),
     items: v.array(
       v.object({
@@ -383,7 +387,7 @@ export const configureBudget = mutation({
       forbiddenMessage: "Bạn không có quyền cấu hình tài khoản này",
     });
 
-    const scope = await resolveMutableBudgetScope(ctx, ownerId);
+    const scope = await resolveMutableBudgetScope(ctx, ownerId, args.campaignId);
     const redemptionsExist = await hasAnyRedemptionForScope(ctx, ownerId, scope);
     if (redemptionsExist) {
       throw new Error("Đã có lượt rút, không thể cấu hình lại ngân sách");
@@ -467,14 +471,16 @@ export const configureBudget = mutation({
 });
 
 export const syncBudgetFromItems = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    campaignId: v.optional(v.id("campaigns")),
+  },
+  handler: async (ctx, args) => {
     const { ownerId } = await requireResolvedOwner(ctx, undefined, {
       notFoundMessage: "Không tìm thấy tài khoản host",
       forbiddenMessage: "Bạn không có quyền cấu hình tài khoản này",
     });
 
-    const scope = await resolveMutableBudgetScope(ctx, ownerId);
+    const scope = await resolveMutableBudgetScope(ctx, ownerId, args.campaignId);
     const redemptionsExist = await hasAnyRedemptionForScope(ctx, ownerId, scope);
     if (redemptionsExist) {
       throw new Error("Đã có lượt rút, không thể đồng bộ lại ngân sách");

@@ -19,6 +19,11 @@ import {
   assertCanRedeem,
 } from "./entitlements";
 import {
+  PENDING_STATION_SESSION_DELIVERY_MODES,
+  listPendingCampaignSessionsByDelivery,
+  listPendingOwnerSessionsByDelivery,
+} from "./drawSessionPolicy";
+import {
   displayNameFromUser,
   ensureHostProfileForOwner,
 } from "./hostProfiles";
@@ -41,20 +46,8 @@ import { verifyPinHash } from "./security";
 
 type ConvexCtx = QueryCtx | MutationCtx;
 type DeliveryMode = "station" | "link";
-type PendingOwnerSessionDeliveryMode = DeliveryMode | undefined;
-type PendingCampaignSessionDeliveryMode = DeliveryMode | undefined;
 
 const deliveryModeValidator = v.union(v.literal("station"), v.literal("link"));
-const PENDING_OWNER_SESSION_DELIVERY_MODES: PendingOwnerSessionDeliveryMode[] = [
-  "station",
-  "link",
-  undefined,
-];
-const PENDING_CAMPAIGN_SESSION_DELIVERY_MODES: PendingCampaignSessionDeliveryMode[] = [
-  "station",
-  "link",
-  undefined,
-];
 
 function resolveDeliveryMode(deliveryMode: DeliveryMode | undefined): DeliveryMode {
   return deliveryMode ?? "station";
@@ -66,48 +59,6 @@ function resolveSessionDeliveryMode(session: Doc<"drawSessions">): DeliveryMode 
 
 function isStationSession(session: Doc<"drawSessions">) {
   return resolveSessionDeliveryMode(session) === "station";
-}
-
-async function listPendingOwnerSessionsByDelivery(
-  ctx: ConvexCtx,
-  ownerId: Id<"users">,
-  deliveryModes = PENDING_OWNER_SESSION_DELIVERY_MODES
-) {
-  const groups = await Promise.all(
-    deliveryModes.map((deliveryMode) =>
-      ctx.db
-        .query("drawSessions")
-        .withIndex("by_owner_status_delivery", (q) =>
-          q.eq("ownerId", ownerId).eq("status", "pending").eq("deliveryMode", deliveryMode)
-        )
-        .collect()
-    )
-  );
-
-  return groups.flat();
-}
-
-async function listPendingCampaignSessionsByDelivery(
-  ctx: ConvexCtx,
-  ownerId: Id<"users">,
-  campaignId?: Id<"campaigns">
-) {
-  const groups = await Promise.all(
-    PENDING_CAMPAIGN_SESSION_DELIVERY_MODES.map((deliveryMode) =>
-      ctx.db
-        .query("drawSessions")
-        .withIndex("by_campaign_owner_status_delivery", (q) =>
-          q
-            .eq("campaignId", campaignId)
-            .eq("ownerId", ownerId)
-            .eq("status", "pending")
-            .eq("deliveryMode", deliveryMode)
-        )
-        .collect()
-    )
-  );
-
-  return groups.flat();
 }
 
 function secureRandomInt(maxExclusive: number) {
@@ -414,15 +365,21 @@ async function getCampaignForSession(
   return campaignId;
 }
 
-async function assertRedeemableSessionCampaign(ctx: MutationCtx, session: Doc<"drawSessions">) {
+async function requireRedeemableSessionCampaign(
+  ctx: MutationCtx,
+  session: Doc<"drawSessions">
+) {
   if (!session.campaignId) {
     throw new Error("Chiến dịch của lượt rút không còn hiệu lực");
   }
 
-  const campaign = await ctx.db.get(session.campaignId);
+  const campaignId = session.campaignId;
+  const campaign = await ctx.db.get(campaignId);
   if (!campaign || campaign.ownerId !== session.ownerId || campaign.status !== "active") {
     throw new Error("Chiến dịch của lượt rút không còn hiệu lực");
   }
+
+  return campaignId;
 }
 
 async function getCampaignGuestRedemption(
@@ -810,10 +767,11 @@ export const createSession = mutation({
       throw new Error("Tên người rút này đang có lượt chờ xử lý trong chiến dịch này");
     }
 
-    const pendingStationSessions = await listPendingOwnerSessionsByDelivery(ctx, ownerId, [
-      "station",
-      undefined,
-    ]);
+    const pendingStationSessions = await listPendingOwnerSessionsByDelivery(
+      ctx,
+      ownerId,
+      PENDING_STATION_SESSION_DELIVERY_MODES
+    );
     const pendingStationSession = pendingStationSessions.find(isStationSession);
     if (deliveryMode === "station" && pendingStationSession) {
       throw new Error("Đang có một lượt rút trực tiếp chờ xử lý, hãy hoàn tất hoặc hủy lượt hiện tại");
@@ -1028,15 +986,15 @@ async function redeemPendingSession(
   if (isExpiredPendingLinkSession(session)) {
     throw new Error("Link rút đã hết hiệu lực");
   }
-  await assertRedeemableSessionCampaign(ctx, session);
-  const budget = await getOwnerBudgetOrThrow(ctx, session.ownerId, session.campaignId);
+  const campaignId = await requireRedeemableSessionCampaign(ctx, session);
+  const budget = await getOwnerBudgetOrThrow(ctx, session.ownerId, campaignId);
   if (budget.remainingBudget <= 0) {
     throw new Error("Ngân sách đã hết");
   }
   await assertCanRedeem(ctx, session.ownerId);
 
   const availableItems = getPayableBudgetItems(
-    await getAvailableBudgetItems(ctx, session.ownerId, session.campaignId),
+    await getAvailableBudgetItems(ctx, session.ownerId, campaignId),
     budget
   );
   if (availableItems.length === 0) {
@@ -1044,7 +1002,7 @@ async function redeemPendingSession(
   }
   const remainingOpenPendingSessions = Math.max(
     0,
-    (await countOpenPendingCampaignSessions(ctx, session.ownerId, session.campaignId)) - 1
+    (await countOpenPendingCampaignSessions(ctx, session.ownerId, campaignId)) - 1
   );
   const capacityPreservingItems = getCapacityPreservingBudgetItems(
     availableItems,
@@ -1073,7 +1031,7 @@ async function redeemPendingSession(
 
   const redemptionId = await ctx.db.insert("redemptions", {
     ownerId: session.ownerId,
-    campaignId: session.campaignId,
+    campaignId,
     drawSessionId: session._id,
     publicCode: session.publicCode,
     deliveryMode,

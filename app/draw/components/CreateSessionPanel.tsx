@@ -1,6 +1,14 @@
 import OtpPinInput from "@/app/components/OtpPinInput";
 import type { Id } from "@/convex/_generated/dataModel";
 import { buildPublicClaimUrl } from "@/lib/publicAppUrl";
+import {
+	Check,
+	Clipboard,
+	ExternalLink,
+	Gift,
+	Link,
+	XCircle,
+} from "lucide-react";
 
 type DeliveryMode = "station" | "link";
 
@@ -58,26 +66,25 @@ export default function CreateSessionPanel({
 		}).format(new Date(expiresAt));
 
 	return (
-		<div className="relative rounded-2xl border border-gold-base/40 bg-linear-to-br from-[#1a0a0a] to-[#4a0a0a] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all h-full flex flex-col justify-center hover:border-gold-base/60 hover:shadow-[0_20px_50px_rgba(212,175,55,0.15)]">
-			{/* Inner Border */}
+		<div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-gold-base/35 bg-linear-to-br from-[#170606] to-[#3a0707] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop-blur-md transition-colors hover:border-gold-base/55 sm:p-6">
 			<div className="absolute inset-[3px] rounded-[13px] border border-gold-base/10 pointer-events-none" />
 
-			{/* Ambient glow behind panel */}
-			<div className="absolute inset-0 rounded-2xl bg-gold-base/10 blur-2xl opacity-0 transition-opacity duration-700 group-hover:opacity-100 pointer-events-none" />
-
-			<div className="relative z-10 max-w-md mx-auto w-full">
-				<div className="text-center mb-6">
-					<div className="inline-block mb-3 p-2 rounded-full bg-gold-base/10">
-						<svg className="w-5 h-5 text-gold-base" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label="Icon tạo lượt rút">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
-						</svg>
+			<div className="relative z-10 mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col">
+				<div className="mb-5 flex items-center gap-3">
+					<div className="grid size-10 shrink-0 place-items-center rounded-xl bg-gold-base/10 text-gold-base">
+						<Gift aria-hidden="true" size={20} strokeWidth={2} />
 					</div>
-					<h2 className="font-playfair text-[32px] leading-tight tracking-[0.01em] text-transparent bg-linear-to-b from-gold-shine via-gold-shine to-gold-base bg-clip-text drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
-						Tạo lượt rút mới
-					</h2>
+					<div className="min-w-0">
+						<h2 className="font-playfair text-[28px] leading-tight tracking-[0.01em] text-transparent bg-linear-to-b from-gold-shine via-gold-shine to-gold-base bg-clip-text drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
+							Tạo lượt rút mới
+						</h2>
+						<p className="mt-1 font-vn text-sm text-gold-shine/45">
+							Chọn chế độ, nhập khách và xác nhận bằng PIN host.
+						</p>
+					</div>
 				</div>
 
-				<div className="grid gap-5">
+				<div className="grid min-h-0 gap-5 overflow-y-auto pr-1 custom-scrollbar">
 					<div className="grid grid-cols-2 rounded-xl border border-gold-base/25 bg-black-ink/50 p-1">
 						{(["station", "link"] as const).map((mode) => (
 							<button
@@ -113,25 +120,27 @@ export default function CreateSessionPanel({
 								</div>
 								<button
 									type="button"
-									className="shrink-0 rounded-full border border-gold-base/35 px-3 py-2 font-vn text-xs font-bold text-gold-base transition-colors hover:bg-gold-base/10"
+									className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-gold-base/35 px-3 py-2 font-vn text-xs font-bold text-gold-base transition-colors hover:bg-gold-base/10"
 									onClick={() => {
 										if (shareUrl) {
 											void navigator.clipboard?.writeText(shareUrl);
 										}
 									}}
 								>
+									<Clipboard aria-hidden="true" size={13} strokeWidth={2} />
 									Copy
 								</button>
 							</div>
 							<button
 								type="button"
-								className="mt-3 w-full rounded-full border border-gold-base/35 bg-gold-base/10 px-4 py-2.5 font-cinzel text-sm font-bold uppercase tracking-widest text-gold-shine transition-colors hover:bg-gold-base/20"
+								className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-gold-base/35 bg-gold-base/10 px-4 py-2.5 font-cinzel text-sm font-bold uppercase tracking-widest text-gold-shine transition-colors hover:bg-gold-base/20"
 								onClick={() => {
 									if (shareUrl && typeof window !== "undefined") {
 										window.open(shareUrl, "_blank", "noopener,noreferrer");
 									}
 								}}
 							>
+								<ExternalLink aria-hidden="true" size={15} strokeWidth={2} />
 								Mở link rút
 							</button>
 						</div>
@@ -170,30 +179,35 @@ export default function CreateSessionPanel({
 											<div className="grid grid-cols-3 gap-2">
 												<button
 													type="button"
-													className="rounded-full border border-gold-base/25 px-2 py-1.5 font-vn text-[11px] font-bold text-gold-base transition-colors hover:bg-gold-base/10"
+													className="inline-flex items-center justify-center gap-1 rounded-full border border-gold-base/25 px-2 py-1.5 font-vn text-[11px] font-bold text-gold-base transition-colors hover:bg-gold-base/10"
 													onClick={() => {
 														void navigator.clipboard?.writeText(url);
 													}}
 												>
+													<Clipboard aria-hidden="true" size={11} strokeWidth={2} />
 													Copy
 												</button>
 												<button
 													type="button"
-													className="rounded-full border border-gold-base/25 px-2 py-1.5 font-vn text-[11px] font-bold text-gold-shine/75 transition-colors hover:bg-gold-base/10"
+													className="inline-flex items-center justify-center gap-1 rounded-full border border-gold-base/25 px-2 py-1.5 font-vn text-[11px] font-bold text-gold-shine/75 transition-colors hover:bg-gold-base/10"
 													onClick={() => {
 														if (typeof window !== "undefined") {
 															window.open(url, "_blank", "noopener,noreferrer");
 														}
 													}}
 												>
+													<Link aria-hidden="true" size={11} strokeWidth={2} />
 													Mở
 												</button>
 												<button
 													type="button"
-													className="rounded-full border border-red-vivid/35 px-2 py-1.5 font-vn text-[11px] font-bold text-red-vivid transition-colors hover:bg-red-deep/25 disabled:cursor-not-allowed disabled:opacity-50"
+													className="inline-flex items-center justify-center gap-1 rounded-full border border-red-vivid/35 px-2 py-1.5 font-vn text-[11px] font-bold text-red-vivid transition-colors hover:bg-red-deep/25 disabled:cursor-not-allowed disabled:opacity-50"
 													disabled={Boolean(cancellingSessionId)}
 													onClick={() => onCancelLinkSession(session.id)}
 												>
+													{isCancelling ? null : (
+														<XCircle aria-hidden="true" size={11} strokeWidth={2} />
+													)}
 													{isCancelling ? "..." : "Hủy"}
 												</button>
 											</div>
@@ -236,9 +250,7 @@ export default function CreateSessionPanel({
 					/>
 							{guestName.length >= 2 && (
 								<div className="absolute right-4 top-1/2 -translate-y-1/2 text-gold-base drop-shadow-[0_0_8px_rgba(212,175,55,0.35)]">
-									<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-									</svg>
+									<Check aria-hidden="true" size={20} strokeWidth={3} />
 								</div>
 							)}
 						</div>

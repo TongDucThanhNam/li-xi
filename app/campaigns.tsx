@@ -1,224 +1,68 @@
 "use client";
 
+import {
+	Alert,
+	Button,
+	Chip,
+	ProgressCircle,
+	ScrollShadow,
+	Separator,
+} from "@heroui/react";
+import {
+	ActionBar,
+	EmptyState,
+	ItemCard,
+	ItemCardGroup,
+	KPI,
+	KPIGroup,
+	ListView,
+	NumberValue,
+	Widget,
+} from "@heroui-pro/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useAction, useMutation, useQuery } from "convex/react";
-import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import HostHeader from "@/app/draw/components/HostHeader";
-import HostShell from "@/app/draw/components/HostShell";
+import { useMutation, useQuery } from "convex/react";
+import {
+	BadgeCheck,
+	FileText,
+	Image,
+	MonitorPlay,
+	Plus,
+	RadioTower,
+	Save,
+	ServerCog,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AdminPageShell, AdminRouteStatus } from "@/app/components/AdminPageShell";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { requireHostRouteAuth } from "@/lib/hostRouteGuard";
-import {
-	CAMPAIGN_ASSET_ALLOWED_CONTENT_TYPES,
-	validateCampaignAssetPolicy,
-} from "@/lib/assetPolicy";
-import { getBillingReturnPublicAppUrl, getPublicAppOrigin } from "@/lib/publicAppUrl";
+import { getPublicAppOrigin } from "@/lib/publicAppUrl";
 import { useHostLogout } from "@/lib/useHostLogout";
 import { useOwnerSession } from "@/lib/useOwnerSession";
-
-type CampaignTheme = "lunar" | "brand";
-type CampaignStatus = "draft" | "active";
-
-type CampaignForm = {
-	id?: Id<"campaigns">;
-	name: string;
-	slug: string;
-	brandName: string;
-	description: string;
-	claimHeadline: string;
-	claimSubtitle: string;
-	claimCtaLabel: string;
-	claimCollectLabel: string;
-	claimWaitingMessage: string;
-	theme: CampaignTheme;
-	status: CampaignStatus;
-	heroAssetId?: Id<"campaignAssets">;
-};
-
-type CampaignSelection = Id<"campaigns"> | "new" | null;
-
-type PlanResource = {
-	used: number;
-	limit: number | null;
-	isFull: boolean;
-	isExceeded: boolean;
-};
-
-type BillingPlanKey = "pro" | "business";
-type BillingAction = BillingPlanKey | "portal" | null;
-type BillingProductPrice = {
-	amountType?: string;
-	priceAmount?: number;
-	priceCurrency?: string;
-};
-type BillingProduct = {
-	id: string;
-	name: string;
-	description: string | null;
-	isRecurring: boolean;
-	recurringInterval: string | null;
-	prices?: BillingProductPrice[];
-} | null | undefined;
-
-type PendingUploadedAsset = {
-	campaignId: Id<"campaigns">;
-	key: string;
-	fileName: string;
-	contentType: string;
-	size: number;
-};
-
-async function uploadFileWithProgress(
-	url: string,
-	file: File,
-	onProgress?: (progress: { loaded: number; total: number }) => void,
-) {
-	await new Promise<void>((resolve, reject) => {
-		const xhr = new XMLHttpRequest();
-		xhr.open("PUT", url);
-		xhr.setRequestHeader("Content-Type", file.type);
-		if (onProgress) {
-			xhr.upload.onprogress = (event) => {
-				onProgress({ loaded: event.loaded, total: event.total });
-			};
-		}
-		xhr.onload = () => {
-			if (xhr.status >= 200 && xhr.status < 300) {
-				resolve();
-				return;
-			}
-			reject(new Error(`Không thể upload ảnh: ${xhr.statusText || xhr.status}`));
-		};
-		xhr.onerror = () => reject(new Error("Không thể upload ảnh"));
-		xhr.send(file);
-	});
-}
-
-const emptyForm: CampaignForm = {
-	name: "Lunar Fortune",
-	slug: "lunar-fortune",
-	brandName: "Lì Xì Station",
-	description: "Chiến dịch rút phong bao may mắn mặc định.",
-	claimHeadline: "",
-	claimSubtitle: "",
-	claimCtaLabel: "",
-	claimCollectLabel: "",
-	claimWaitingMessage: "",
-	theme: "lunar",
-	status: "active",
-};
-
-function createDraftCampaignForm(index: number): CampaignForm {
-	const suffix = Math.max(1, index);
-	return {
-		name: `Brand Campaign ${suffix}`,
-		slug: `brand-campaign-${suffix}`,
-		brandName: "",
-		description: "",
-		claimHeadline: "",
-		claimSubtitle: "",
-		claimCtaLabel: "",
-		claimCollectLabel: "",
-		claimWaitingMessage: "",
-		theme: "brand",
-		status: "draft",
-	};
-}
-
-function formFromCampaign(campaign: {
-	id: Id<"campaigns">;
-	name: string;
-	slug: string;
-	brandName: string;
-	description: string;
-	claimHeadline: string;
-	claimSubtitle: string;
-	claimCtaLabel: string;
-	claimCollectLabel: string;
-	claimWaitingMessage: string;
-	theme: CampaignTheme;
-	status: "draft" | "active" | "archived";
-	heroAsset?: { id: Id<"campaignAssets"> } | null;
-}): CampaignForm {
-	return {
-		id: campaign.id,
-		name: campaign.name,
-		slug: campaign.slug,
-		brandName: campaign.brandName,
-		description: campaign.description,
-		claimHeadline: campaign.claimHeadline,
-		claimSubtitle: campaign.claimSubtitle,
-		claimCtaLabel: campaign.claimCtaLabel,
-		claimCollectLabel: campaign.claimCollectLabel,
-		claimWaitingMessage: campaign.claimWaitingMessage,
-		theme: campaign.theme,
-		status: campaign.status === "archived" ? "draft" : campaign.status,
-		heroAssetId: campaign.heroAsset?.id,
-	};
-}
-
-const readinessGroupLabels: Record<string, string> = {
-	oauth: "Google OAuth",
-	r2: "Cloudflare R2",
-	polar: "Polar",
-	operations: "Ops",
-};
-
-const r2MetadataPendingError = "Chưa đọc được metadata R2";
-const changeableSubscriptionStatuses = new Set(["active", "trialing", "past_due"]);
-
-function getErrorMessage(unknownError: unknown, fallback: string) {
-	return unknownError instanceof Error ? unknownError.message : fallback;
-}
-
-function isR2MetadataPendingError(unknownError: unknown) {
-	return unknownError instanceof Error && unknownError.message.includes(r2MetadataPendingError);
-}
-
-function formatCurrency(amount: number) {
-	return `${amount.toLocaleString("vi-VN")}đ`;
-}
-
-function formatBillingPrice(product: BillingProduct) {
-	if (!product) {
-		return "Chưa sync";
-	}
-
-	const fixedPrice = product.prices?.find(
-		(price) =>
-			price.amountType === "fixed" &&
-			typeof price.priceAmount === "number" &&
-			typeof price.priceCurrency === "string",
-	);
-	if (!fixedPrice?.priceAmount || !fixedPrice.priceCurrency) {
-		return product.isRecurring ? "Đang cấu hình giá" : "Không định kỳ";
-	}
-
-	const currency = fixedPrice.priceCurrency.toUpperCase();
-	const intervalLabels: Record<string, string> = {
-		day: "ngày",
-		week: "tuần",
-		month: "tháng",
-		year: "năm",
-	};
-	const suffix =
-		product.isRecurring && product.recurringInterval
-			? ` / ${intervalLabels[product.recurringInterval] ?? product.recurringInterval}`
-			: "";
-
-	try {
-		return `${new Intl.NumberFormat("vi-VN", {
-			style: "currency",
-			currency,
-			maximumFractionDigits: 0,
-		}).format(fixedPrice.priceAmount / 100)}${suffix}`;
-	} catch {
-		return `${fixedPrice.priceAmount.toLocaleString("vi-VN")} ${currency}${suffix}`;
-	}
-}
+import { BillingPanel } from "./-campaigns/BillingPanel";
+import { CampaignEditor } from "./-campaigns/CampaignEditor";
+import { ReadinessPanel } from "./-campaigns/ReadinessPanel";
+import type {
+	BillingProduct,
+	CampaignForm,
+	CampaignSelection,
+	PlanResource,
+} from "./-campaigns/types";
+import {
+	createDraftCampaignForm,
+	emptyForm,
+	formFromCampaign,
+	readinessGroupLabels,
+} from "./-campaigns/utils";
+import { useCampaignAssetUpload } from "./-campaigns/useCampaignAssetUpload";
+import { useCampaignBillingActions } from "./-campaigns/useCampaignBillingActions";
+import adminCss from "./styles/admin.css?url";
 
 export const Route = createFileRoute("/campaigns")({
 	beforeLoad: requireHostRouteAuth,
+	head: () => ({
+		links: [{ rel: "stylesheet", href: adminCss }],
+	}),
 	component: CampaignsPage,
 });
 
@@ -248,24 +92,19 @@ function CampaignsPage() {
 	);
 	const saveCampaign = useMutation(api.campaigns.saveCampaign);
 	const ensureDefaultCampaign = useMutation(api.campaigns.ensureDefaultCampaign);
-	const attachUploadedAsset = useMutation(api.campaigns.attachUploadedAsset);
-	const generateUploadUrl = useMutation(api.assets.generateUploadUrl);
-	const syncUploadedAssetMetadata = useMutation(api.assets.syncMetadata);
-	const generateCheckoutLink = useAction(api.billing.generateCheckoutLink);
-	const generateCustomerPortalUrl = useAction(api.billing.generateCustomerPortalUrl);
-	const changeCurrentSubscription = useAction(api.billing.changeCurrentSubscription);
-	const fileInputRef = useRef<HTMLInputElement | null>(null);
-
 	const [form, setForm] = useState<CampaignForm>(emptyForm);
 	const [saving, setSaving] = useState(false);
-	const [uploading, setUploading] = useState(false);
-	const [uploadProgress, setUploadProgress] = useState(0);
-	const [pendingUploadedAsset, setPendingUploadedAsset] =
-		useState<PendingUploadedAsset | null>(null);
-	const [retryingUploadAttach, setRetryingUploadAttach] = useState(false);
 	const [message, setMessage] = useState("");
 	const [error, setError] = useState("");
-	const [billingAction, setBillingAction] = useState<BillingAction>(null);
+	const [contextExpandedKeys, setContextExpandedKeys] = useState<Set<string | number>>(
+		new Set(["readiness"]),
+	);
+	const { billingAction, handleBillingPlan, handleBillingPortal } =
+		useCampaignBillingActions({
+			planState,
+			setError,
+			setMessage,
+		});
 	const campaignAnalytics = useQuery(
 		api.analytics.getCampaignAnalytics,
 		owner && form.id ? { campaignId: form.id } : "skip",
@@ -331,15 +170,48 @@ function CampaignsPage() {
 		selectableRecentAssets.find((asset) => asset.id === form.heroAssetId)?.url ??
 		selectedCampaign?.heroAsset?.url ??
 		null;
+	const selectedHeroAsset =
+		selectableRecentAssets.find((asset) => asset.id === form.heroAssetId) ??
+		selectedCampaign?.heroAsset ??
+		null;
+	const selectedHeroAssetSize =
+		selectedHeroAsset &&
+		"size" in selectedHeroAsset &&
+		typeof selectedHeroAsset.size === "number"
+			? selectedHeroAsset.size
+			: null;
 	const campaignCreateLimitReached =
 		!form.id && (planState?.resources.campaigns.isFull ?? false);
 	const assetLimitReached = planState?.resources.assets.isFull ?? false;
+	const {
+		clearPendingUploadedAsset,
+		handleAssetDrop,
+		handleAssetSelect,
+		handleRetryAttachUploadedAsset,
+		pendingUploadedAsset,
+		retryingUploadAttach,
+		uploading,
+		uploadingAsset,
+		uploadProgress,
+	} = useCampaignAssetUpload({
+		assetLimitReached,
+		campaignId: form.id,
+		ownerReady: Boolean(owner),
+		setError,
+		setForm,
+		setMessage,
+	});
 	const canSave =
 		Boolean(owner) &&
 		form.name.trim().length >= 3 &&
 		form.slug.trim().length >= 3 &&
 		!campaignCreateLimitReached &&
 		!saving;
+	const hasEditorSelection = Boolean(
+		selectedCampaign ||
+			selectedCampaignId === "new" ||
+			(form.id && form.id === selectedCampaignId),
+	);
 	const shareBaseUrl = useMemo(() => {
 		return getPublicAppOrigin();
 	}, []);
@@ -420,7 +292,7 @@ function CampaignsPage() {
 		const nextIndex = (workspace?.campaigns.length ?? 0) + 1;
 		setSelectedCampaignId("new");
 		setForm(createDraftCampaignForm(nextIndex));
-		setPendingUploadedAsset(null);
+		clearPendingUploadedAsset();
 		setError("");
 		setMessage("Đang tạo bản nháp campaign mới.");
 	};
@@ -431,21 +303,21 @@ function CampaignsPage() {
 		setMessage("");
 		setSaving(true);
 		try {
-				const result = await saveCampaign({
-					campaignId: form.id,
-					name: form.name,
-					slug: form.slug,
-					brandName: form.brandName || undefined,
-					description: form.description || undefined,
-					claimHeadline: form.claimHeadline || undefined,
-					claimSubtitle: form.claimSubtitle || undefined,
-					claimCtaLabel: form.claimCtaLabel || undefined,
-					claimCollectLabel: form.claimCollectLabel || undefined,
-					claimWaitingMessage: form.claimWaitingMessage || undefined,
-					theme: form.theme,
-					status: form.status,
-					heroAssetId: form.heroAssetId,
-				});
+			const result = await saveCampaign({
+				campaignId: form.id,
+				name: form.name,
+				slug: form.slug,
+				brandName: form.brandName || undefined,
+				description: form.description || undefined,
+				claimHeadline: form.claimHeadline || undefined,
+				claimSubtitle: form.claimSubtitle || undefined,
+				claimCtaLabel: form.claimCtaLabel || undefined,
+				claimCollectLabel: form.claimCollectLabel || undefined,
+				claimWaitingMessage: form.claimWaitingMessage || undefined,
+				theme: form.theme,
+				status: form.status,
+				heroAssetId: form.heroAssetId,
+			});
 			setForm((current) => ({
 				...current,
 				id: result.campaignId,
@@ -464,195 +336,12 @@ function CampaignsPage() {
 		}
 	};
 
-	const attachPendingHeroAsset = async (
-		asset: PendingUploadedAsset,
-		successMessage: string,
-	) => {
-		if (!owner) {
-			throw new Error("Phiên host không hợp lệ.");
-		}
-
-		const result = await attachUploadedAsset({
-			campaignId: asset.campaignId,
-			key: asset.key,
-			fileName: asset.fileName,
-			contentType: asset.contentType,
-			size: asset.size,
-		});
-		setForm((current) => ({ ...current, heroAssetId: result.assetId }));
-		setPendingUploadedAsset(null);
-		setMessage(successMessage);
-	};
-
-	const handleRetryAttachUploadedAsset = async () => {
-		if (!pendingUploadedAsset || retryingUploadAttach) {
-			return;
-		}
-
-		setError("");
-		setMessage("");
-		setRetryingUploadAttach(true);
-		try {
-			await attachPendingHeroAsset(pendingUploadedAsset, "Đã gắn lại ảnh hero.");
-		} catch (unknownError) {
-			if (!isR2MetadataPendingError(unknownError)) {
-				setPendingUploadedAsset(null);
-			}
-			setError(getErrorMessage(unknownError, "Không thể gắn lại ảnh hero"));
-		} finally {
-			setRetryingUploadAttach(false);
-		}
-	};
-
-	const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-		const campaignId = form.id;
-		if (!owner || !campaignId) {
-			setError("Hãy lưu chiến dịch trước khi upload ảnh.");
-			return;
-		}
-		if (assetLimitReached) {
-			setError("Gói hiện tại đã đạt giới hạn upload ảnh chiến dịch.");
-			return;
-		}
-		const file = event.currentTarget.files?.[0];
-		if (!file) return;
-		try {
-			validateCampaignAssetPolicy({
-				contentType: file.type,
-				fileName: file.name,
-				size: file.size,
-			});
-		} catch (unknownError) {
-			setError(
-				unknownError instanceof Error
-					? unknownError.message
-					: "Không thể kiểm tra ảnh upload",
-			);
-			if (fileInputRef.current) {
-				fileInputRef.current.value = "";
-			}
-			return;
-		}
-
-		setError("");
-		setMessage("");
-		setUploading(true);
-		setUploadProgress(0);
-		try {
-			const { key, url } = await generateUploadUrl({
-				campaignId,
-				fileName: file.name,
-				contentType: file.type,
-				size: file.size,
-			});
-			await uploadFileWithProgress(url, file, ({ loaded, total }) => {
-				setUploadProgress(total > 0 ? Math.round((loaded / total) * 100) : 0);
-			});
-			await syncUploadedAssetMetadata({ key });
-			const uploadedAsset: PendingUploadedAsset = {
-				campaignId,
-				key,
-				fileName: file.name,
-				contentType: file.type,
-				size: file.size,
-			};
-			setPendingUploadedAsset(uploadedAsset);
-			await attachPendingHeroAsset(uploadedAsset, "Đã upload và gắn ảnh hero.");
-		} catch (unknownError) {
-			if (!isR2MetadataPendingError(unknownError)) {
-				setPendingUploadedAsset(null);
-			}
-			setError(getErrorMessage(unknownError, "Không thể upload ảnh chiến dịch"));
-		} finally {
-			setUploading(false);
-			setUploadProgress(0);
-			if (fileInputRef.current) {
-				fileInputRef.current.value = "";
-			}
-		}
-	};
-
-	const handleBillingPlan = async (planKey: BillingPlanKey, product: BillingProduct) => {
-		if (!product?.id) {
-			setError("Gói này chưa được sync từ Polar. Chạy billing:syncPolarProducts trước.");
-			return;
-		}
-		if (typeof window === "undefined" || billingAction) {
-			return;
-		}
-
-		const currentProductId = planState?.subscription?.productId ?? null;
-		if (currentProductId === product.id) {
-			return;
-		}
-
-		setError("");
-		setMessage("");
-		setBillingAction(planKey);
-		try {
-			const billingReturnUrl = getBillingReturnPublicAppUrl();
-			const currentSubscriptionStatus = planState?.subscription?.status?.toLowerCase();
-			if (
-				currentSubscriptionStatus &&
-				changeableSubscriptionStatuses.has(currentSubscriptionStatus)
-			) {
-				await changeCurrentSubscription({ productId: product.id });
-				setMessage(`Đã gửi yêu cầu đổi sang gói ${product.name}.`);
-				return;
-			}
-
-			const { url } = await generateCheckoutLink({
-				productIds: [product.id],
-				origin: getPublicAppOrigin(),
-				successUrl: billingReturnUrl,
-				locale: "vi",
-			});
-			window.location.assign(url);
-		} catch (unknownError) {
-			setError(
-				unknownError instanceof Error
-					? unknownError.message
-					: "Không thể mở checkout Polar",
-			);
-		} finally {
-			setBillingAction(null);
-		}
-	};
-
-	const handleBillingPortal = async () => {
-		if (typeof window === "undefined" || billingAction) {
-			return;
-		}
-
-		setError("");
-		setMessage("");
-		setBillingAction("portal");
-		try {
-			const { url } = await generateCustomerPortalUrl({
-				returnUrl: getBillingReturnPublicAppUrl(),
-			});
-			window.location.assign(url);
-		} catch (unknownError) {
-			setError(
-				unknownError instanceof Error
-					? unknownError.message
-					: "Không thể mở customer portal Polar",
-			);
-		} finally {
-			setBillingAction(null);
-		}
-	};
-
 	if (!owner || workspace === undefined) {
 		return (
-			<HostShell>
-				<div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-4 text-center">
-					<div className="h-16 w-16 animate-spin rounded-full border-4 border-gold-base/20 border-t-gold-base shadow-[0_0_20px_rgba(212,175,55,0.2)]" />
-					<p className="font-cinzel text-sm uppercase tracking-[0.18em] text-gold-shine/75">
-						Đang tải Campaign Studio
-					</p>
-				</div>
-			</HostShell>
+			<AdminRouteStatus
+				description="Đang xác thực host, tải campaign, billing và production readiness."
+				title="Đang tải Campaign Studio"
+			/>
 		);
 	}
 
@@ -694,693 +383,691 @@ function CampaignsPage() {
 					label: "Google callback",
 					value: saasReadiness.endpoints.googleCallbackUrl,
 				},
-				{
-					key: "polarWebhookUrl",
-					label: "Polar webhook",
-					value: saasReadiness.endpoints.polarWebhookUrl,
-				},
-			].filter((row) => row.value)
+			{
+				key: "polarWebhookUrl",
+				label: "Polar webhook",
+				value: saasReadiness.endpoints.polarWebhookUrl,
+			},
+		].filter(
+			(row): row is { key: string; label: string; value: string } =>
+				typeof row.value === "string" && row.value.length > 0,
+		)
 		: [];
 	const readinessReady = saasReadiness?.allRequiredReady ?? false;
 	const visiblePendingUploadedAsset =
 		pendingUploadedAsset?.campaignId === form.id ? pendingUploadedAsset : null;
-
-	return (
-		<HostShell>
-			<section className="relative z-10 flex h-full w-full flex-col gap-4 overflow-hidden animate-fade-in-up">
-				<HostHeader
-					ownerUsername={owner.username}
-					onCampaigns={() => void navigate({ to: "/campaigns" })}
-					onDraw={() => void navigate({ to: "/draw" })}
-					onSetup={() => void navigate({ to: "/setup" })}
-					onLeaderboard={() => void navigate({ to: "/leaderboard" })}
-					onLogout={handleLogout}
-				/>
-
-				<div className="grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-12">
-					<section className="min-h-0 overflow-auto rounded-2xl border border-gold-base/35 bg-linear-to-br from-red-deep/85 via-black-ink/95 to-black-ink p-5 shadow-2xl lg:col-span-7">
-						<div className="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-gold-base/15 pb-4">
-							<div>
-								<p className="font-vn text-xs uppercase tracking-[0.2em] text-gold-base/70">
-									Campaign Studio
-								</p>
-								<h1 className="mt-1 font-cinzel text-3xl text-gold-shine">
-									Chiến dịch bốc thăm
-								</h1>
-							</div>
-							<span className="rounded-full border border-gold-base/35 bg-gold-base/10 px-3 py-1 font-vn text-xs text-gold-shine/80">
-								{form.status === "active" ? "Đang chạy" : "Bản nháp"}
-							</span>
-						</div>
-
-						{workspace.campaigns.length > 0 ? (
-							<div className="mb-5 grid gap-3 rounded-xl border border-gold-base/20 bg-black-ink/45 p-3">
-								<div className="flex flex-wrap items-center justify-between gap-3">
-									<div>
-										<p className="font-vn text-xs uppercase tracking-[0.18em] text-gold-base/60">
-											Campaign list
-										</p>
-										<p className="font-vn text-sm text-gold-shine/55">
-											Chọn campaign để chỉnh copy, asset và trạng thái.
-										</p>
-									</div>
-									<button
-										type="button"
-										className="h-10 rounded-full border border-gold-base/40 px-4 font-vn text-sm font-bold text-gold-base transition-colors hover:bg-gold-base/10 disabled:cursor-not-allowed disabled:opacity-45"
-										disabled={planState?.resources.campaigns.isFull ?? false}
-										onClick={handleNewCampaign}
-									>
-										Tạo campaign
-									</button>
-								</div>
-								<div className="grid gap-2 sm:grid-cols-2">
-									{workspace.campaigns.map((campaign) => (
-										<button
-											key={campaign.id}
-											type="button"
-											className={`min-h-16 rounded-lg border px-3 py-2 text-left transition-colors ${
-												selectedCampaignId === campaign.id
-													? "border-gold-base/70 bg-gold-base/15"
-													: "border-gold-base/15 bg-black-ink/55 hover:border-gold-base/45"
-											}`}
-											onClick={() => handleSelectCampaign(campaign.id)}
-										>
-											<span className="flex items-center justify-between gap-3">
-												<span className="truncate font-cinzel text-base text-gold-shine">
-													{campaign.name}
-												</span>
-												<span
-													className={`shrink-0 rounded-full border px-2 py-0.5 font-vn text-[10px] uppercase tracking-[0.12em] ${
-														campaign.status === "active"
-															? "border-gold-base/35 bg-gold-base/10 text-gold-base"
-															: "border-gold-base/20 bg-black-ink/55 text-gold-shine/45"
-													}`}
-												>
-													{campaign.status === "active" ? "Active" : "Draft"}
-												</span>
-											</span>
-											<span className="mt-1 block truncate font-vn text-xs text-gold-shine/45">
-												/{campaign.slug}
-											</span>
-										</button>
-									))}
-									{selectedCampaignId === "new" ? (
-										<div className="min-h-16 rounded-lg border border-gold-base/70 bg-gold-base/15 px-3 py-2">
-											<p className="font-cinzel text-base text-gold-shine">
-												Campaign mới
-											</p>
-											<p className="mt-1 font-vn text-xs text-gold-shine/45">
-												Chưa lưu vào Convex
-											</p>
-										</div>
-									) : null}
-								</div>
-							</div>
-						) : null}
-
-						{selectedCampaign || selectedCampaignId === "new" || form.id === selectedCampaignId ? (
-							<div className="grid gap-4">
-								<div className="grid gap-2">
-									<label className="font-vn text-xs font-bold uppercase tracking-[0.16em] text-gold-shine/50">
-										Tên chiến dịch
-									</label>
-									<input
-										className="h-12 rounded-xl border border-gold-base/25 bg-black-ink/65 px-4 text-gold-shine outline-none transition-colors focus:border-gold-base/70"
-										value={form.name}
-										onChange={(event) => updateForm("name", event.currentTarget.value)}
-									/>
-								</div>
-
-								<div className="grid gap-4 md:grid-cols-2">
-									<div className="grid gap-2">
-										<label className="font-vn text-xs font-bold uppercase tracking-[0.16em] text-gold-shine/50">
-											Slug
-										</label>
-										<input
-											className="h-12 rounded-xl border border-gold-base/25 bg-black-ink/65 px-4 text-gold-shine outline-none transition-colors focus:border-gold-base/70"
-											value={form.slug}
-											onChange={(event) => updateForm("slug", event.currentTarget.value)}
-										/>
-									</div>
-									<div className="grid gap-2">
-										<label className="font-vn text-xs font-bold uppercase tracking-[0.16em] text-gold-shine/50">
-											Thương hiệu
-										</label>
-										<input
-											className="h-12 rounded-xl border border-gold-base/25 bg-black-ink/65 px-4 text-gold-shine outline-none transition-colors focus:border-gold-base/70"
-											value={form.brandName}
-											onChange={(event) => updateForm("brandName", event.currentTarget.value)}
-										/>
-									</div>
-								</div>
-
-									<div className="grid gap-2">
-										<label className="font-vn text-xs font-bold uppercase tracking-[0.16em] text-gold-shine/50">
-											Mô tả end-user
-										</label>
-									<textarea
-										className="min-h-24 resize-none rounded-xl border border-gold-base/25 bg-black-ink/65 px-4 py-3 text-gold-shine outline-none transition-colors focus:border-gold-base/70"
-										value={form.description}
-										onChange={(event) => updateForm("description", event.currentTarget.value)}
-										/>
-									</div>
-
-									<div className="grid gap-3 rounded-xl border border-gold-base/20 bg-black-ink/45 p-4">
-										<div>
-											<h2 className="font-cinzel text-xl text-gold-shine">
-												Public claim copy
-											</h2>
-											<p className="font-vn text-sm text-gold-shine/55">
-												Copy này hiển thị ở hero khi người nhận mở link rút.
-											</p>
-										</div>
-										<div className="grid gap-3 md:grid-cols-2">
-											<div className="grid gap-2">
-												<label className="font-vn text-xs font-bold uppercase tracking-[0.16em] text-gold-shine/50">
-													Headline
-												</label>
-												<input
-													className="h-12 rounded-xl border border-gold-base/25 bg-black-ink/65 px-4 text-gold-shine outline-none transition-colors focus:border-gold-base/70"
-													value={form.claimHeadline}
-													onChange={(event) =>
-														updateForm("claimHeadline", event.currentTarget.value)
-													}
-													placeholder={form.name || "Lunar Fortune"}
-												/>
-											</div>
-											<div className="grid gap-2">
-												<label className="font-vn text-xs font-bold uppercase tracking-[0.16em] text-gold-shine/50">
-													Start CTA
-												</label>
-												<input
-													className="h-12 rounded-xl border border-gold-base/25 bg-black-ink/65 px-4 text-gold-shine outline-none transition-colors focus:border-gold-base/70"
-													value={form.claimCtaLabel}
-													onChange={(event) =>
-														updateForm("claimCtaLabel", event.currentTarget.value)
-													}
-													placeholder="Thử vận may"
-												/>
-											</div>
-										</div>
-										<div className="grid gap-3 md:grid-cols-2">
-											<div className="grid gap-2">
-												<label className="font-vn text-xs font-bold uppercase tracking-[0.16em] text-gold-shine/50">
-													Subtitle
-												</label>
-												<textarea
-													className="min-h-20 resize-none rounded-xl border border-gold-base/25 bg-black-ink/65 px-4 py-3 text-gold-shine outline-none transition-colors focus:border-gold-base/70"
-													value={form.claimSubtitle}
-													onChange={(event) =>
-														updateForm("claimSubtitle", event.currentTarget.value)
-													}
-													placeholder={form.brandName || "Premium Gacha Experience"}
-												/>
-											</div>
-											<div className="grid gap-2">
-												<label className="font-vn text-xs font-bold uppercase tracking-[0.16em] text-gold-shine/50">
-													Collect CTA
-												</label>
-												<input
-													className="h-12 rounded-xl border border-gold-base/25 bg-black-ink/65 px-4 text-gold-shine outline-none transition-colors focus:border-gold-base/70"
-													value={form.claimCollectLabel}
-													onChange={(event) =>
-														updateForm("claimCollectLabel", event.currentTarget.value)
-													}
-													placeholder="Nhận thưởng"
-												/>
-											</div>
-										</div>
-										<div className="grid gap-3">
-											<div className="grid gap-2">
-												<label className="font-vn text-xs font-bold uppercase tracking-[0.16em] text-gold-shine/50">
-													Thông điệp chờ
-												</label>
-												<textarea
-													className="min-h-20 resize-none rounded-xl border border-gold-base/25 bg-black-ink/65 px-4 py-3 text-gold-shine outline-none transition-colors focus:border-gold-base/70"
-													value={form.claimWaitingMessage}
-													onChange={(event) =>
-														updateForm("claimWaitingMessage", event.currentTarget.value)
-													}
-													placeholder="Đang chuẩn bị lượt rút..."
-												/>
-											</div>
-										</div>
-									</div>
-
-									<div className="grid gap-4 md:grid-cols-2">
-									<div className="grid gap-2">
-										<label className="font-vn text-xs font-bold uppercase tracking-[0.16em] text-gold-shine/50">
-											Theme
-										</label>
-										<div className="grid grid-cols-2 rounded-xl border border-gold-base/25 bg-black-ink/60 p-1">
-											{(["lunar", "brand"] as const).map((theme) => (
-												<button
-													key={theme}
-													type="button"
-													className={`rounded-lg px-3 py-2 font-vn text-sm font-bold transition-colors ${
-														form.theme === theme
-															? "bg-gold-base text-red-deep"
-															: "text-gold-shine/60 hover:bg-gold-base/10"
-													}`}
-													onClick={() => updateForm("theme", theme)}
-												>
-													{theme === "lunar" ? "Lì xì" : "Brand"}
-												</button>
-											))}
-										</div>
-									</div>
-									<div className="grid gap-2">
-										<label className="font-vn text-xs font-bold uppercase tracking-[0.16em] text-gold-shine/50">
-											Trạng thái
-										</label>
-										<div className="grid grid-cols-2 rounded-xl border border-gold-base/25 bg-black-ink/60 p-1">
-											{(["active", "draft"] as const).map((status) => (
-												<button
-													key={status}
-													type="button"
-													className={`rounded-lg px-3 py-2 font-vn text-sm font-bold transition-colors ${
-														form.status === status
-															? "bg-gold-base text-red-deep"
-															: "text-gold-shine/60 hover:bg-gold-base/10"
-													}`}
-													onClick={() => updateForm("status", status)}
-												>
-													{status === "active" ? "Active" : "Draft"}
-												</button>
-											))}
-										</div>
-									</div>
-								</div>
-
-								<div className="grid gap-3 rounded-xl border border-dashed border-gold-base/35 bg-black-ink/45 p-4">
-									<div className="flex flex-wrap items-center justify-between gap-3">
-										<div>
-											<h2 className="font-cinzel text-xl text-gold-shine">Hero asset</h2>
-											<p className="font-vn text-sm text-gold-shine/60">
-												Ảnh này sẽ dùng cho trải nghiệm public claim.
-											</p>
-										</div>
-										<button
-											type="button"
-											className="rounded-full border border-gold-base/40 px-4 py-2 font-vn text-sm font-bold text-gold-base transition-colors hover:bg-gold-base/10 disabled:cursor-not-allowed disabled:opacity-45"
-											disabled={uploading || assetLimitReached}
-											onClick={() => fileInputRef.current?.click()}
-										>
-											{uploading
-												? `Đang upload ${uploadProgress}%`
-												: assetLimitReached
-													? "Đã đạt giới hạn"
-													: "Upload ảnh"}
-										</button>
-										<input
-											ref={fileInputRef}
-											className="hidden"
-											type="file"
-											accept={CAMPAIGN_ASSET_ALLOWED_CONTENT_TYPES.join(",")}
-											onChange={handleUpload}
-										/>
-									</div>
-									{heroPreview ? (
-										<img
-											className="aspect-[16/7] w-full rounded-lg border border-gold-base/20 object-cover"
-											src={heroPreview}
-											alt="Hero chiến dịch"
-										/>
-									) : (
-										<div className="grid aspect-[16/7] place-items-center rounded-lg border border-gold-base/15 bg-red-deep/20 text-center font-vn text-sm text-gold-shine/45">
-											Chưa có ảnh hero
-										</div>
-									)}
-									{visiblePendingUploadedAsset ? (
-										<div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gold-base/20 bg-black-ink/55 px-3 py-2">
-											<div className="min-w-0">
-												<p className="truncate font-vn text-sm font-bold text-gold-shine/75">
-													{visiblePendingUploadedAsset.fileName}
-												</p>
-												<p className="font-vn text-xs text-gold-shine/45">
-													Metadata R2 chưa sẵn sàng, có thể thử gắn lại.
-												</p>
-											</div>
-											<button
-												type="button"
-												className="h-9 rounded-full border border-gold-base/40 px-4 font-vn text-xs font-bold text-gold-base transition-colors hover:bg-gold-base/10 disabled:cursor-not-allowed disabled:opacity-45"
-												disabled={uploading || retryingUploadAttach}
-												onClick={() => void handleRetryAttachUploadedAsset()}
-											>
-												{retryingUploadAttach ? "Đang gắn..." : "Thử gắn lại"}
-											</button>
-										</div>
-									) : null}
-								</div>
-
-								{error || message ? (
-									<div
-										className={`rounded-xl border px-4 py-3 font-vn text-sm ${
-											error
-												? "border-red-vivid/40 bg-red-deep/35 text-red-vivid"
-												: "border-gold-base/35 bg-gold-base/10 text-gold-shine/80"
-										}`}
-									>
-										{error || message}
-									</div>
-								) : null}
-
-								<button
-									type="button"
-									className="h-12 rounded-full border border-gold-base/50 bg-linear-to-r from-gold-base to-gold-shine font-cinzel font-bold uppercase tracking-widest text-red-deep shadow-xl transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45"
-									disabled={!canSave}
-									onClick={handleSave}
-								>
-									{saving
-										? "Đang lưu..."
-										: campaignCreateLimitReached
-											? "Đã đạt giới hạn"
-											: "Lưu chiến dịch"}
-								</button>
-							</div>
-						) : (
-							<div className="grid min-h-[360px] place-items-center rounded-xl border border-dashed border-gold-base/35 bg-black-ink/35 p-8 text-center">
-								<div>
-									<h2 className="font-cinzel text-3xl text-gold-shine">
-										Chưa có chiến dịch
-									</h2>
-									<p className="mt-2 font-vn text-gold-shine/60">
-										Tạo chiến dịch mặc định để bắt đầu chuẩn hóa flow SaaS.
-									</p>
-									<button
-										type="button"
-										className="mt-6 rounded-full border border-gold-base/50 bg-gold-base px-5 py-3 font-cinzel font-bold uppercase tracking-widest text-red-deep"
-										onClick={handleEnsureDefault}
-									>
-										Tạo mặc định
-									</button>
-								</div>
-							</div>
-						)}
-					</section>
-
-					<aside className="min-h-0 overflow-auto rounded-2xl border border-gold-base/30 bg-black-ink/70 p-4 shadow-2xl lg:col-span-5">
-						<h2 className="font-cinzel text-2xl text-gold-shine">Preview</h2>
-						<div className="mt-4 overflow-hidden rounded-xl border border-gold-base/20 bg-red-deep/25">
+	const activeCampaignCount = workspace.campaigns.filter(
+		(campaign) => campaign.status === "active",
+	).length;
+	const draftCampaignCount = workspace.campaigns.filter(
+		(campaign) => campaign.status !== "active",
+	).length;
+	const selectedCampaignLabel =
+		selectedCampaignId === "new" ? "New draft" : selectedCampaign?.name ?? form.name;
+	const campaignListItems = workspace.campaigns.map((campaign) => campaign);
+	const workspaceFeedback = error || message;
+	const copyConfigured = Boolean(
+		(form.claimHeadline || form.name).trim() &&
+			(form.claimSubtitle || form.description).trim() &&
+			(form.claimCtaLabel || "Thử vận may").trim(),
+	);
+	const workflowRows = [
+		{
+			icon: RadioTower,
+			title: "Public status",
+			description:
+				form.status === "active"
+					? "Campaign đang mở cho station và public claim."
+					: "Draft chưa nên phát hành cho khách.",
+			chip: form.status === "active" ? "Active" : "Draft",
+			color: form.status === "active" ? "success" : "default",
+		},
+		{
+			icon: FileText,
+			title: "Claim copy",
+			description: copyConfigured
+				? "Headline, subtitle và CTA đã có nội dung hiển thị."
+				: "Cần bổ sung copy trước khi phát hành.",
+			chip: copyConfigured ? "Ready" : "Missing",
+			color: copyConfigured ? "success" : "warning",
+		},
+		{
+			icon: Image,
+			title: "Hero asset",
+			description: heroPreview
+				? "Ảnh hero đang được dùng trong preview khách."
+				: "Đang dùng fallback visual của template.",
+			chip: heroPreview ? "Uploaded" : "Fallback",
+			color: heroPreview ? "success" : "default",
+		},
+		{
+			icon: ServerCog,
+			title: "Production",
+			description: readinessReady
+				? "Các biến production bắt buộc đã sẵn sàng."
+				: "Cần xử lý readiness trước khi scale campaign.",
+			chip: readinessReady ? "Ready" : "Check",
+			color: readinessReady ? "success" : "danger",
+		},
+	] as const;
+	const claimCopyRows = [
+		{
+			icon: FileText,
+			title: "Headline",
+			description: form.claimHeadline.trim() || form.name,
+			chip: form.claimHeadline.trim() ? "Custom" : "Fallback",
+			color: form.claimHeadline.trim() ? "success" : "default",
+		},
+		{
+			icon: BadgeCheck,
+			title: "Subtitle",
+			description:
+				form.claimSubtitle.trim() ||
+				form.description.trim() ||
+				"Chưa có subtitle cho hero claim.",
+			chip: form.claimSubtitle.trim() || form.description.trim() ? "Ready" : "Missing",
+			color: form.claimSubtitle.trim() || form.description.trim() ? "success" : "warning",
+		},
+		{
+			icon: MonitorPlay,
+			title: "CTA",
+			description: [
+				form.claimCtaLabel.trim() || "Thử vận may",
+				form.claimCollectLabel.trim() || "Nhận thưởng",
+			].join(" / "),
+			chip: form.claimCtaLabel.trim() || form.claimCollectLabel.trim() ? "Custom" : "Default",
+			color: form.claimCtaLabel.trim() || form.claimCollectLabel.trim() ? "success" : "default",
+		},
+	] as const;
+	const assetStateRows = [
+		{
+			icon: Image,
+			title: "Hero source",
+			description: selectedHeroAsset?.fileName ?? "Template fallback visual",
+			chip: selectedHeroAsset ? "Selected" : "Fallback",
+			color: selectedHeroAsset ? "success" : "default",
+		},
+		{
+			icon: BadgeCheck,
+			title: "Recent assets",
+			description: `${selectableRecentAssets.length.toLocaleString("vi-VN")} reusable image${
+				selectableRecentAssets.length === 1 ? "" : "s"
+			}`,
+			chip: selectableRecentAssets.length > 0 ? "Available" : "None",
+			color: selectableRecentAssets.length > 0 ? "success" : "default",
+		},
+		{
+			icon: ServerCog,
+			title: "Upload limit",
+			description: assetLimitReached
+				? "Gói hiện tại đã đạt giới hạn upload."
+				: "Có thể upload ảnh hero mới.",
+			chip: assetLimitReached ? "Limit" : "Open",
+			color: assetLimitReached ? "danger" : "success",
+		},
+	] as const;
+	const completedWorkflowCount = workflowRows.filter(
+		(row) => row.color === "success",
+	).length;
+	const launchProgress = Math.round(
+		(completedWorkflowCount / workflowRows.length) * 100,
+	);
+	const nextWorkflowRow =
+		workflowRows.find((row) => row.color !== "success") ?? workflowRows[0];
+	const campaignContextPanel = (
+		<div className="admin-aside">
+			<Widget className="h-fit">
+				<Widget.Header>
+					<Widget.Title>Preview</Widget.Title>
+					<Widget.Description>Guest-facing draw stage preview.</Widget.Description>
+				</Widget.Header>
+				<Widget.Content>
+					<div className="admin-draw-preview">
+						<div className="admin-draw-preview__media">
 							{heroPreview ? (
 								<img
-									className="aspect-[16/9] w-full object-cover"
-									src={heroPreview}
 									alt="Campaign preview"
+									className="size-full object-cover"
+									src={heroPreview}
 								/>
 							) : (
-								<div className="grid aspect-[16/9] place-items-center bg-black-ink/40 text-gold-shine/45">
-									Lunar Fortune
+								<div className="admin-draw-preview__fallback">
+									<span>Summon Luck</span>
 								</div>
 							)}
-							<div className="p-4">
-								<p className="font-vn text-xs uppercase tracking-[0.2em] text-gold-base/70">
-									{form.brandName || owner.username}
-								</p>
-								<h3 className="mt-1 font-cinzel text-3xl text-gold-shine">
-									{form.claimHeadline || form.name}
-								</h3>
-								<p className="mt-2 font-vn text-sm text-gold-shine/65">
-									{form.claimSubtitle ||
-										form.description ||
-										"Mô tả trải nghiệm claim sẽ hiển thị tại đây."}
-								</p>
-									<p className="mt-3 inline-flex rounded-full border border-gold-base/30 bg-gold-base/10 px-3 py-1 font-vn text-xs text-gold-base">
-										{form.claimCtaLabel || "Thử vận may"}
-									</p>
-									<p className="mt-2 font-vn text-xs text-gold-shine/45">
-										Result CTA: {form.claimCollectLabel || "Nhận thưởng"}
-									</p>
-								</div>
+							<div className="admin-draw-preview__shade" />
+							<div className="admin-draw-preview__badge">
+								{form.theme === "lunar" ? "Lunar Template" : "Brand Template"}
 							</div>
-
-						<div className="mt-5 rounded-xl border border-gold-base/20 bg-black-ink/45 p-4">
-							<div className="flex items-center justify-between gap-3">
-								<div>
-									<p className="font-vn text-xs uppercase tracking-[0.18em] text-gold-base/60">
-										Plan
-									</p>
-									<h3 className="mt-1 font-cinzel text-2xl text-gold-shine">
-										{planState?.label ?? "Đang tải"}
-									</h3>
-								</div>
-								<span className="rounded-full border border-gold-base/35 bg-gold-base/10 px-3 py-1 font-vn text-xs text-gold-shine/75">
-									{planState?.source === "polar" ? "Polar active" : "Fallback"}
-								</span>
-							</div>
-							{planState?.subscription ? (
-								<p className="mt-3 rounded-lg border border-gold-base/15 bg-black-ink/55 px-3 py-2 font-vn text-xs text-gold-shine/65">
-									{planState.subscription.productName} · {planState.subscription.status}
-								</p>
-								) : planState?.billingError ? (
-									<p className="mt-3 rounded-lg border border-red-vivid/25 bg-red-deep/25 px-3 py-2 font-vn text-xs text-red-vivid">
-										{planState.billingError}
-									</p>
-								) : null}
-								<div className="mt-4 grid gap-2">
-									<div className="grid gap-2 sm:grid-cols-2">
-										{billingPlans.map((plan) => {
-											const product = plan.product;
-											const isCurrent =
-												Boolean(product?.id) &&
-												planState?.subscription?.productId === product?.id;
-											const isBusy = billingAction === plan.key;
-											const isDisabled =
-												Boolean(billingAction) || isCurrent || !product?.id;
-
-											return (
-												<button
-													key={plan.key}
-													type="button"
-													className="min-h-[76px] rounded-lg border border-gold-base/30 bg-gold-base/10 px-3 py-2 text-left transition-colors hover:border-gold-base/70 hover:bg-gold-base/15 disabled:cursor-not-allowed disabled:opacity-45"
-													disabled={isDisabled}
-													onClick={() => void handleBillingPlan(plan.key, product)}
-												>
-													<span className="block font-cinzel text-base text-gold-shine">
-														{plan.label}
-													</span>
-													<span className="mt-0.5 block font-vn text-xs text-gold-base">
-														{formatBillingPrice(product)}
-													</span>
-													<span className="mt-1 block font-vn text-xs text-gold-shine/50">
-														{isBusy
-															? "Đang xử lý..."
-															: isCurrent
-																? "Đang dùng"
-																: product?.id
-																	? plan.summary
-																	: "Chưa có product"}
-													</span>
-												</button>
-											);
-										})}
-									</div>
-									<button
-										type="button"
-										className="h-10 rounded-lg border border-gold-base/25 bg-black-ink/65 px-3 font-vn text-sm font-bold text-gold-shine/75 transition-colors hover:border-gold-base/60 hover:text-gold-shine disabled:cursor-not-allowed disabled:opacity-45"
-										disabled={Boolean(billingAction) || !planState?.subscription}
-										onClick={() => void handleBillingPortal()}
-									>
-										{billingAction === "portal"
-											? "Đang mở portal..."
-											: planState?.subscription
-												? "Quản lý subscription"
-												: "Chưa có subscription"}
-									</button>
-								</div>
-								<div className="mt-4 grid gap-3">
-									{planRows.map((row) => (
-										<div key={row.label}>
-										<div className="flex items-center justify-between gap-3 font-vn text-xs">
-											<span className="text-gold-shine/55">{row.label}</span>
-											<span
-												className={
-													row.resource.isExceeded || row.resource.isFull
-														? "font-bold text-red-vivid"
-														: "text-gold-shine/75"
-												}
-											>
-												{formatPlanResource(row.resource)}
-											</span>
-										</div>
-										<div className="mt-1 h-1.5 overflow-hidden rounded-full bg-black-ink/80">
-											<div
-												className={`h-full rounded-full ${
-													row.resource.isExceeded || row.resource.isFull
-														? "bg-red-vivid"
-														: "bg-gold-base"
-												}`}
-												style={{ width: `${planPercent(row.resource)}%` }}
-											/>
-										</div>
-									</div>
+						</div>
+						<div className="admin-draw-preview__body">
+							<p className="admin-draw-preview__brand">
+								{form.brandName || owner.username}
+							</p>
+							<h3 className="admin-draw-preview__title">
+								{form.claimHeadline || form.name}
+							</h3>
+							<p className="admin-draw-preview__copy">
+								{form.claimSubtitle ||
+									form.description ||
+									"Mô tả trải nghiệm claim sẽ hiển thị tại đây."}
+							</p>
+							<div className="admin-draw-preview__envelopes" aria-hidden="true">
+								{[0, 1, 2, 3, 4].map((slot) => (
+									<span className="admin-draw-preview__envelope" key={slot} />
 								))}
 							</div>
-						</div>
-
-						<div className="mt-5 rounded-xl border border-gold-base/20 bg-black-ink/45 p-4">
-							<div className="flex items-center justify-between gap-3">
-								<div>
-									<p className="font-vn text-xs uppercase tracking-[0.18em] text-gold-base/60">
-										SaaS readiness
-									</p>
-									<h3 className="mt-1 font-cinzel text-2xl text-gold-shine">
-										Production env
-									</h3>
-								</div>
-								<span
-									className={`rounded-full border px-3 py-1 font-vn text-xs ${
-										readinessReady
-											? "border-gold-base/35 bg-gold-base/10 text-gold-shine/75"
-											: "border-red-vivid/35 bg-red-deep/25 text-red-vivid"
-									}`}
-								>
-									{saasReadiness === undefined
-										? "Đang kiểm tra"
-										: readinessReady
-											? "Ready"
-											: `${
-													saasReadiness.missingRequired.length +
-													saasReadiness.missingRuntimeRequired.length
-												} thiếu`}
+							<div className="admin-draw-preview__footer">
+								<span className="admin-draw-preview__cta">
+									{form.claimCtaLabel || "Thử vận may"}
+								</span>
+								<span className="admin-draw-preview__result">
+									{form.claimCollectLabel || "Nhận thưởng"}
 								</span>
 							</div>
-
-							{saasReadiness === undefined ? (
-								<div className="mt-4 h-16 animate-pulse rounded-lg border border-gold-base/15 bg-black-ink/55" />
-							) : (
-								<div className="mt-4 grid gap-2">
-									{readinessRows.map((row) => {
-										const isReady = row.missingLabels.length === 0;
-										return (
-											<div
-												key={row.key}
-												className="rounded-lg border border-gold-base/15 bg-black-ink/55 px-3 py-2"
-											>
-												<div className="flex items-center justify-between gap-3 font-vn text-xs">
-													<span className="font-bold text-gold-shine/70">{row.label}</span>
-													<span
-														className={
-															isReady ? "text-gold-base" : "font-bold text-red-vivid"
-														}
-													>
-														{row.configuredRequiredCount} / {row.requiredCount}
-													</span>
-												</div>
-												<p className="mt-1 break-words font-vn text-xs text-gold-shine/45">
-													{isReady
-														? "Đủ biến bắt buộc"
-														: `Thiếu ${row.missingLabels.join(", ")}`}
-												</p>
-											</div>
-										);
-									})}
-									{runtimeReadinessRows.map((row) => (
-										<div
-											key={row.key}
-											className="rounded-lg border border-gold-base/15 bg-black-ink/55 px-3 py-2"
-										>
-											<div className="flex items-center justify-between gap-3 font-vn text-xs">
-												<span className="font-bold text-gold-shine/70">{row.label}</span>
-												<span
-													className={
-														row.isReady ? "text-gold-base" : "font-bold text-red-vivid"
-													}
-												>
-													{row.isReady ? "Ready" : "Thiếu"}
-												</span>
-											</div>
-											<p className="mt-1 break-words font-vn text-xs text-gold-shine/45">
-												{row.detail}
-											</p>
-										</div>
-									))}
-									{readinessEndpointRows.map((row) => (
-										<div
-											key={row.key}
-											className="rounded-lg border border-gold-base/15 bg-black-ink/55 px-3 py-2"
-										>
-											<div className="flex items-center justify-between gap-3 font-vn text-xs">
-												<span className="font-bold text-gold-shine/70">{row.label}</span>
-												<span className="text-gold-base">Endpoint</span>
-											</div>
-											<p className="mt-1 break-all font-mono text-[11px] text-gold-shine/50">
-												{row.value}
-											</p>
-										</div>
-									))}
-								</div>
-							)}
 						</div>
+					</div>
+				</Widget.Content>
+			</Widget>
 
-						<div className="mt-5 rounded-xl border border-gold-base/20 bg-black-ink/45 p-4">
-							<p className="font-vn text-xs uppercase tracking-[0.18em] text-gold-base/60">
-								Campaign metrics
+			<BillingPanel
+				billingAction={billingAction}
+				billingPlans={billingPlans}
+				planRows={planRows}
+				planState={planState}
+				formatPlanResource={formatPlanResource}
+				onBillingPlan={(planKey, product) => void handleBillingPlan(planKey, product)}
+				onBillingPortal={() => void handleBillingPortal()}
+				planPercent={planPercent}
+			/>
+
+			<ReadinessPanel
+				campaignAnalytics={campaignAnalytics}
+				contextExpandedKeys={contextExpandedKeys}
+				formHeroAssetId={form.heroAssetId}
+				readinessEndpointRows={readinessEndpointRows}
+				readinessReady={readinessReady}
+				readinessRows={readinessRows}
+				runtimeReadinessRows={runtimeReadinessRows}
+				saasReadiness={saasReadiness}
+				selectableRecentAssets={selectableRecentAssets}
+				shareBaseUrl={shareBaseUrl}
+				onExpandedKeysChange={setContextExpandedKeys}
+				onHeroAssetSelect={(assetId) => updateForm("heroAssetId", assetId)}
+			/>
+		</div>
+	);
+
+	return (
+		<AdminPageShell
+			description="Configure campaign identity, public claim copy, hero assets, billing, and production readiness."
+			eyebrow="Campaign Studio"
+			hasFloatingActionBar
+			onLogout={handleLogout}
+			ownerUsername={owner.username}
+			aside={campaignContextPanel}
+			title="Chiến dịch bốc thăm"
+		>
+			<KPIGroup className="admin-kpi-strip">
+				<KPI>
+					<KPI.Header>
+						<KPI.Icon status="success">
+							<FileText aria-hidden="true" size={16} strokeWidth={2} />
+						</KPI.Icon>
+						<KPI.Title>Campaigns</KPI.Title>
+						<KPI.Trend trend="neutral">{activeCampaignCount} active</KPI.Trend>
+					</KPI.Header>
+					<KPI.Content>
+						<KPI.Value maximumFractionDigits={0} value={workspace.campaigns.length} />
+					</KPI.Content>
+				</KPI>
+				<KPIGroup.Separator />
+				<KPI>
+					<KPI.Header>
+						<KPI.Icon status={form.status === "active" ? "success" : "warning"}>
+							<RadioTower aria-hidden="true" size={16} strokeWidth={2} />
+						</KPI.Icon>
+						<KPI.Title>Selected</KPI.Title>
+					</KPI.Header>
+					<KPI.Content>
+						<div className="min-w-0">
+							<p className="truncate text-xl font-semibold text-foreground">
+								{selectedCampaignLabel}
 							</p>
-							<div className="mt-3 grid grid-cols-2 gap-3">
-								<div className="rounded-lg border border-gold-base/15 bg-black-ink/55 p-3">
-									<p className="font-vn text-xs text-gold-shine/45">Lượt tạo</p>
-									<p className="mt-1 font-cinzel text-2xl text-gold-shine">
-										{campaignAnalytics?.sessionCreatedEvents.toLocaleString("vi-VN") ?? "--"}
-									</p>
+							<p className="mt-1 text-xs text-muted">Editing in Studio</p>
+						</div>
+					</KPI.Content>
+				</KPI>
+				<KPIGroup.Separator />
+				<KPI>
+					<KPI.Header>
+						<KPI.Icon status={planState?.source === "polar" ? "success" : "warning"}>
+							<ServerCog aria-hidden="true" size={16} strokeWidth={2} />
+						</KPI.Icon>
+						<KPI.Title>Plan</KPI.Title>
+						<KPI.Trend trend={planState?.source === "polar" ? "up" : "neutral"}>
+							{planState?.source === "polar" ? "Polar" : "Fallback"}
+						</KPI.Trend>
+					</KPI.Header>
+					<KPI.Content>
+						<div className="min-w-0">
+							<p className="truncate text-xl font-semibold text-foreground">
+								{planState?.label ?? "Loading"}
+							</p>
+							<p className="mt-1 text-xs text-muted">Workspace limits</p>
+						</div>
+					</KPI.Content>
+				</KPI>
+				<KPIGroup.Separator />
+				<KPI>
+					<KPI.Header>
+						<KPI.Icon status="success">
+							<BadgeCheck aria-hidden="true" size={16} strokeWidth={2} />
+						</KPI.Icon>
+						<KPI.Title>Redeemed</KPI.Title>
+					</KPI.Header>
+					<KPI.Content>
+						<KPI.Value
+							currency="VND"
+							maximumFractionDigits={0}
+							style="currency"
+							value={campaignAnalytics?.aggregatedRedeemedAmount ?? 0}
+						/>
+					</KPI.Content>
+				</KPI>
+			</KPIGroup>
+
+			{workspaceFeedback ? (
+				<Alert status={error ? "danger" : "success"}>
+					<Alert.Indicator />
+					<Alert.Content>
+						<Alert.Title>{workspaceFeedback}</Alert.Title>
+						<Alert.Description>
+							{error
+								? "Kiểm tra lại cấu hình campaign hoặc billing rồi thử lại."
+								: "Workspace đã cập nhật. Preview và readiness panel sẽ phản ánh trạng thái mới."}
+						</Alert.Description>
+					</Alert.Content>
+				</Alert>
+			) : null}
+
+			<Widget>
+				<Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
+					<div>
+						<Widget.Title>Launch command</Widget.Title>
+						<Widget.Description>
+							Tổng quan campaign đang chỉnh trước khi chuyển sang station hoặc public claim.
+						</Widget.Description>
+					</div>
+					<div className="flex flex-wrap gap-2">
+						<Chip color={form.status === "active" ? "success" : "default"} variant="soft">
+							{form.status === "active" ? "Active" : "Draft"}
+						</Chip>
+						<Chip variant="soft">
+							{form.theme === "lunar" ? "Lunar template" : "Brand template"}
+						</Chip>
+					</div>
+				</Widget.Header>
+				<Widget.Content className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+					<div className="grid gap-5">
+						<div className="min-w-0">
+							<p className="truncate text-2xl font-semibold text-foreground">
+								{form.claimHeadline || form.name}
+							</p>
+							<p className="mt-2 line-clamp-2 max-w-3xl text-sm leading-6 text-muted">
+								{form.claimSubtitle ||
+									form.description ||
+									"Thêm headline, subtitle và CTA để public claim có nội dung rõ ràng."}
+							</p>
+						</div>
+						<ItemCardGroup
+							className="admin-card-grid--two"
+							layout="grid"
+							variant="secondary"
+						>
+							{workflowRows.map((row) => (
+								<ItemCard className="items-start" key={row.title} variant="secondary">
+									<ItemCard.Icon
+										className={
+											row.color === "success"
+												? "text-success"
+												: row.color === "danger"
+													? "text-danger"
+													: row.color === "warning"
+														? "text-warning"
+														: "text-muted"
+										}
+									>
+										<row.icon
+											aria-hidden="true"
+											size={18}
+											strokeWidth={2}
+										/>
+									</ItemCard.Icon>
+									<ItemCard.Content>
+										<ItemCard.Title>{row.title}</ItemCard.Title>
+										<ItemCard.Description className="line-clamp-2 whitespace-normal">
+											{row.description}
+										</ItemCard.Description>
+									</ItemCard.Content>
+									<ItemCard.Action>
+										<Chip color={row.color} size="sm" variant="soft">
+											{row.chip}
+										</Chip>
+									</ItemCard.Action>
+								</ItemCard>
+							))}
+						</ItemCardGroup>
+					</div>
+					<div className="admin-command-summary">
+						<div className="flex items-center gap-4">
+							<ProgressCircle
+								aria-label="Campaign launch progress"
+								color={launchProgress === 100 ? "success" : "accent"}
+								value={launchProgress}
+							>
+								<ProgressCircle.Track>
+									<ProgressCircle.TrackCircle />
+									<ProgressCircle.FillCircle />
+								</ProgressCircle.Track>
+							</ProgressCircle>
+							<div className="min-w-0">
+								<div className="flex items-baseline gap-2">
+									<NumberValue
+										className="text-2xl font-semibold tabular-nums text-foreground"
+										maximumFractionDigits={0}
+										value={launchProgress}
+									>
+										<NumberValue.Suffix>
+											<span className="ml-0.5 text-sm font-medium text-muted">%</span>
+										</NumberValue.Suffix>
+									</NumberValue>
+									<Chip
+										color={launchProgress === 100 ? "success" : "accent"}
+										size="sm"
+										variant="soft"
+									>
+										{completedWorkflowCount}/{workflowRows.length}
+									</Chip>
 								</div>
-								<div className="rounded-lg border border-gold-base/15 bg-black-ink/55 p-3">
-									<p className="font-vn text-xs text-gold-shine/45">Đã trao</p>
-									<p className="mt-1 font-cinzel text-2xl text-gold-shine">
-										{campaignAnalytics?.redemptionCreatedEvents.toLocaleString("vi-VN") ?? "--"}
-									</p>
-								</div>
-								<div className="rounded-lg border border-gold-base/15 bg-black-ink/55 p-3">
-									<p className="font-vn text-xs text-gold-shine/45">Aggregate</p>
-									<p className="mt-1 font-cinzel text-2xl text-gold-shine">
-										{campaignAnalytics?.aggregatedRedemptionCount.toLocaleString("vi-VN") ?? "--"}
-									</p>
-								</div>
-								<div className="rounded-lg border border-gold-base/15 bg-black-ink/55 p-3">
-									<p className="font-vn text-xs text-gold-shine/45">Tổng thưởng</p>
-									<p className="mt-1 font-cinzel text-lg text-gold-shine">
-										{campaignAnalytics
-											? formatCurrency(campaignAnalytics.aggregatedRedeemedAmount)
-											: "--"}
-									</p>
-								</div>
+								<p className="mt-1 text-xs leading-5 text-muted">
+									Launch readiness across public status, copy, asset, and production.
+								</p>
 							</div>
 						</div>
-
-						<div className="mt-5 rounded-xl border border-gold-base/20 bg-black-ink/45 p-4">
-							<p className="font-vn text-xs uppercase tracking-[0.18em] text-gold-base/60">
-								Public link base
+						<div className="admin-command-summary__note">
+							<p className="admin-command-summary__note-label">
+								{launchProgress === 100 ? "Ready to launch" : "Next step"}
 							</p>
-							<p className="mt-2 break-all rounded-lg bg-black-ink/70 px-3 py-2 font-mono text-xs text-gold-shine/70">
+							<div className="admin-command-summary__note-header">
+								<p className="admin-command-summary__note-title">
+									{nextWorkflowRow.title}
+								</p>
+								<Chip color={nextWorkflowRow.color} size="sm" variant="soft">
+									{nextWorkflowRow.chip}
+								</Chip>
+							</div>
+							<p className="admin-command-summary__note-copy line-clamp-2">
+								{nextWorkflowRow.description}
+							</p>
+						</div>
+						<div className="grid gap-1">
+							<p className="text-xs font-medium text-muted">Public claim route</p>
+							<p className="break-all font-mono text-xs text-foreground">
 								{shareBaseUrl}/claim/&lt;publicCode&gt;
 							</p>
 						</div>
+					</div>
+				</Widget.Content>
+			</Widget>
 
-						<div className="mt-5">
-							<h3 className="font-cinzel text-xl text-gold-shine">Ảnh gần đây</h3>
-							<div className="mt-3 grid grid-cols-2 gap-3">
-								{selectableRecentAssets.map((asset) => (
-									<button
-										key={asset.id}
-										type="button"
-										className="group overflow-hidden rounded-lg border border-gold-base/20 bg-black-ink/45 text-left transition-colors hover:border-gold-base/60"
-										onClick={() => updateForm("heroAssetId", asset.id)}
-									>
-										<img
-											className="aspect-video w-full object-cover opacity-85 transition-opacity group-hover:opacity-100"
-											src={asset.url}
-											alt={asset.fileName}
-										/>
-										<p className="truncate px-2 py-1.5 font-vn text-xs text-gold-shine/60">
-											{asset.fileName}
-										</p>
-									</button>
-								))}
+			<div className="grid min-w-0 gap-6">
+				<div className="grid gap-6">
+					<Widget className="h-fit">
+						<Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
+							<div>
+								<Widget.Title>Campaign list</Widget.Title>
+								<Widget.Description>
+									Chọn campaign để chỉnh copy, asset và trạng thái.
+								</Widget.Description>
 							</div>
-						</div>
-					</aside>
+							<div className="flex flex-wrap items-center gap-2">
+								<Chip size="sm" variant="soft">
+									{workspace.campaigns.length} campaigns
+								</Chip>
+								<Button
+									isDisabled={planState?.resources.campaigns.isFull ?? false}
+									type="button"
+									variant="outline"
+									onPress={handleNewCampaign}
+								>
+									<Plus aria-hidden="true" size={16} strokeWidth={2} />
+									Tạo campaign
+								</Button>
+							</div>
+						</Widget.Header>
+						<Widget.Content className="gap-4">
+							<ScrollShadow className="max-h-[320px] pr-1">
+								{workspace.campaigns.length > 0 ? (
+									<div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+										<ItemCardGroup variant="secondary">
+											<ItemCard variant="secondary">
+												<ItemCard.Icon className="text-success">
+													<RadioTower aria-hidden="true" size={18} strokeWidth={2} />
+												</ItemCard.Icon>
+												<ItemCard.Content>
+													<ItemCard.Description>Active</ItemCard.Description>
+													<ItemCard.Title>
+														<NumberValue
+															className="tabular-nums"
+															value={activeCampaignCount}
+														/>
+													</ItemCard.Title>
+												</ItemCard.Content>
+											</ItemCard>
+											<ItemCard variant="secondary">
+												<ItemCard.Icon className="text-muted">
+													<FileText aria-hidden="true" size={18} strokeWidth={2} />
+												</ItemCard.Icon>
+												<ItemCard.Content>
+													<ItemCard.Description>Draft</ItemCard.Description>
+													<ItemCard.Title>
+														<NumberValue
+															className="tabular-nums"
+															value={draftCampaignCount}
+														/>
+													</ItemCard.Title>
+												</ItemCard.Content>
+											</ItemCard>
+										</ItemCardGroup>
+										<div className="grid min-w-0 gap-3">
+											<ListView
+												aria-label="Campaign list"
+												items={campaignListItems}
+												selectedKeys={
+													selectedCampaignId && selectedCampaignId !== "new"
+														? new Set([selectedCampaignId])
+														: new Set()
+												}
+												selectionBehavior="replace"
+												selectionMode="single"
+												variant="secondary"
+												onAction={(key) => handleSelectCampaign(key as Id<"campaigns">)}
+											>
+												{(campaign) => (
+													<ListView.Item id={campaign.id} textValue={campaign.name}>
+														<ListView.ItemContent>
+															<FileText
+																aria-hidden="true"
+																className="size-4 shrink-0 text-muted"
+																strokeWidth={2}
+															/>
+															<div className="flex min-w-0 flex-col">
+																<ListView.Title>{campaign.name}</ListView.Title>
+																<ListView.Description>/{campaign.slug}</ListView.Description>
+															</div>
+														</ListView.ItemContent>
+														<ListView.ItemAction>
+															<Chip
+																color={campaign.status === "active" ? "success" : "default"}
+																size="sm"
+																variant="soft"
+															>
+																{campaign.status === "active" ? "Active" : "Draft"}
+															</Chip>
+														</ListView.ItemAction>
+													</ListView.Item>
+												)}
+											</ListView>
+											{selectedCampaignId === "new" ? (
+												<ItemCard variant="secondary">
+													<ItemCard.Content>
+														<ItemCard.Title>Campaign mới</ItemCard.Title>
+														<ItemCard.Description>Chưa lưu vào Convex</ItemCard.Description>
+													</ItemCard.Content>
+													<ItemCard.Action>
+														<Chip size="sm" variant="soft">
+															Draft
+														</Chip>
+													</ItemCard.Action>
+												</ItemCard>
+											) : null}
+										</div>
+									</div>
+								) : (
+									<EmptyState size="sm">
+										<EmptyState.Header>
+											<EmptyState.Media variant="icon">
+												<FileText aria-hidden="true" size={20} strokeWidth={2} />
+											</EmptyState.Media>
+											<EmptyState.Title>Chưa có chiến dịch</EmptyState.Title>
+											<EmptyState.Description>
+												Tạo chiến dịch mặc định để bắt đầu chuẩn hóa flow SaaS.
+											</EmptyState.Description>
+										</EmptyState.Header>
+										<EmptyState.Content>
+											<Button type="button" onPress={handleEnsureDefault}>
+												<Plus aria-hidden="true" size={16} strokeWidth={2} />
+												Tạo mặc định
+											</Button>
+										</EmptyState.Content>
+									</EmptyState>
+								)}
+							</ScrollShadow>
+						</Widget.Content>
+					</Widget>
 				</div>
-			</section>
-		</HostShell>
+
+				<div className="grid min-w-0 gap-6">
+					{hasEditorSelection ? (
+						<CampaignEditor
+							assetLimitReached={assetLimitReached}
+							assetStateRows={assetStateRows}
+							claimCopyRows={claimCopyRows}
+							form={form}
+							heroPreview={heroPreview}
+							retryingUploadAttach={retryingUploadAttach}
+							selectedHeroAsset={selectedHeroAsset}
+							selectedHeroAssetSize={selectedHeroAssetSize}
+							uploading={uploading}
+							uploadingAsset={uploadingAsset}
+							uploadProgress={uploadProgress}
+							visiblePendingUploadedAsset={visiblePendingUploadedAsset}
+							onAssetDrop={handleAssetDrop}
+							onAssetSelect={handleAssetSelect}
+							onFormChange={updateForm}
+							onRetryAttachUploadedAsset={() => void handleRetryAttachUploadedAsset()}
+						/>
+					) : (
+						<Widget>
+							<Widget.Content className="min-h-[360px] items-center justify-center">
+								<EmptyState>
+									<EmptyState.Header>
+										<EmptyState.Media variant="icon">
+											<FileText aria-hidden="true" size={24} strokeWidth={2} />
+										</EmptyState.Media>
+										<EmptyState.Title>Chọn campaign để chỉnh sửa</EmptyState.Title>
+										<EmptyState.Description className="max-w-sm text-pretty">
+											Editor sẽ hiển thị claim copy, trạng thái public và hero asset sau khi
+											bạn chọn một campaign trong danh sách.
+										</EmptyState.Description>
+									</EmptyState.Header>
+									<EmptyState.Content className="flex-row flex-wrap justify-center gap-2">
+										{workspace.campaigns[0] ? (
+											<Button
+												type="button"
+												variant="secondary"
+												onPress={() => handleSelectCampaign(workspace.campaigns[0].id)}
+											>
+												<FileText aria-hidden="true" size={16} strokeWidth={2} />
+												Chọn campaign đầu tiên
+											</Button>
+										) : (
+											<Button type="button" onPress={handleEnsureDefault}>
+												<Plus aria-hidden="true" size={16} strokeWidth={2} />
+												Tạo mặc định
+											</Button>
+										)}
+										<Button
+											isDisabled={planState?.resources.campaigns.isFull ?? false}
+											type="button"
+											variant="outline"
+											onPress={handleNewCampaign}
+										>
+											<Plus aria-hidden="true" size={16} strokeWidth={2} />
+											Tạo campaign
+										</Button>
+									</EmptyState.Content>
+								</EmptyState>
+							</Widget.Content>
+						</Widget>
+					)}
+				</div>
+			</div>
+			<ActionBar
+				aria-label="Campaign actions"
+				className="admin-action-bar"
+				isOpen={hasEditorSelection}
+			>
+				<ActionBar.Prefix>
+					<Chip
+						className="max-w-[180px] shrink-0 tabular-nums"
+						color={form.status === "active" ? "success" : "default"}
+						size="sm"
+						variant="soft"
+					>
+						<Chip.Label className="truncate">
+							{form.status === "active" ? "Active" : "Draft"} · {launchProgress}%
+						</Chip.Label>
+					</Chip>
+				</ActionBar.Prefix>
+				<Separator orientation="vertical" />
+				<ActionBar.Content>
+					<Button
+						aria-label="Open station"
+						size="sm"
+						type="button"
+						variant="ghost"
+						onPress={() => void navigate({ to: "/draw" })}
+					>
+						<MonitorPlay aria-hidden="true" size={16} strokeWidth={2} />
+						<span className="action-bar__label">Station</span>
+					</Button>
+					<Button
+						aria-label="Save campaign"
+						isDisabled={!canSave}
+						isPending={saving}
+						size="sm"
+						type="button"
+						onPress={handleSave}
+					>
+						<Save aria-hidden="true" size={16} strokeWidth={2} />
+						<span className="action-bar__label">
+							{campaignCreateLimitReached ? "Limit reached" : "Save"}
+						</span>
+					</Button>
+				</ActionBar.Content>
+			</ActionBar>
+		</AdminPageShell>
 	);
 }

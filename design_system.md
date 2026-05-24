@@ -1,4 +1,11 @@
-# Lunar Fortune Design System
+# Draw Template Design System: Lunar Fortune
+
+This document governs the custom draw/claim experience only: station guest draw
+screens, public claim links, and the current `li-xi` draw template. Admin,
+Campaign Studio, setup, leaderboard, billing, and operational management screens
+should use HeroUI Pro patterns and tokens instead of this red/gold skin.
+
+For admin UI direction, see `docs/admin-design-system.md`.
 
 ## Brand Essence
 - Premium lễ hội Tết, sang trọng, điện ảnh, thiên về đỏ son và vàng kim.
@@ -40,7 +47,7 @@
   - Dùng cùng cấu trúc pill cao như primary CTA nhưng nền tối hơn để phân biệt hành động phụ.
   - Border vàng mảnh, text gold-shine, icon nằm bên trái trong vòng tròn sáng nhẹ.
   - Không dùng màu thương hiệu OAuth làm palette chính; chỉ dùng icon/label để nhận diện.
-- Framed Panels (host/admin screens):
+- Framed Panels (draw host screens):
   - Single border with one subtle inner stroke.
   - Soft gold highlight + deep red gradient fill.
   - Optional thin header divider line.
@@ -49,37 +56,23 @@
   - Error, locked, or unavailable states use red-vivid borders/fill with gold-shine text.
   - Success or informational states use gold-base borders/fill with gold-shine text.
   - Do not introduce green, orange, blue, or other status palettes.
-- Campaign Studio:
-  - Dùng cùng Framed Panel cho cấu hình chiến dịch, nhưng layout được phép dày hơn host/admin.
-  - Asset upload/dropzone là vùng viền vàng đứt nhẹ, nền black-ink/red-deep, thumbnail nằm trong khung 8px radius.
-  - Asset retry state dùng hàng compact trong dropzone, viền vàng mảnh, nền black-ink/red-deep, nút outline vàng; không tạo toast hoặc panel màu mới.
-  - Trạng thái active/draft dùng stat pill nhỏ, không tạo palette mới ngoài red/gold/black hiện có.
 - Claim Copy Controls:
-  - Đặt trong Campaign Studio dưới nhóm cấu hình chiến dịch, dùng input/textarea cùng kiểu Framed Panel.
+  - Preview trong admin phải phản ánh copy end-user nhưng không kéo red/gold admin styling vào form quản trị.
   - Cho phép brand chỉnh headline, subtitle, nhãn CTA ngắn, và thông điệp chờ; không cho đổi font hoặc palette.
   - Preview phải phản ánh copy end-user, nhưng vẫn giữ title gradient gold, subtitle tracking lớn, và CTA pill.
   - CTA label tối đa ngắn để không vỡ nút mobile; nếu trống dùng mặc định “Thử vận may”.
+- Brand Campaign Template:
+  - `brand` dùng cùng shell điện ảnh đỏ/vàng như `li-xi` để không phá palette draw hiện tại.
+  - Brand khác biệt bằng campaign copy, brand name, hero asset, collect copy, và snapshot dữ liệu, không bằng font hoặc màu mới.
+  - Route draw/claim phải resolve template từ campaign theme để `brand` không chỉ là nhãn trong admin.
 - Station Guest Wait:
   - Sau Collect, màn station giữ full-screen hero với CTA disabled và thông điệp chờ lượt rút tiếp theo.
   - Nút quay lại host chỉ là control nhỏ ở góc trên, viền vàng mảnh, nền black-ink trong suốt; không dùng màu hoặc panel mới.
-- Plan Usage Panel:
-  - Dùng panel nhỏ nền black-ink với viền vàng mảnh, đặt trong admin/campaign sidebar.
-  - Usage bar dùng gold-base khi còn hạn mức và red-vivid khi đầy/vượt, không thêm màu trạng thái mới.
-  - Badge billing/plan dùng capsule nhỏ cùng kiểu Stat Pills, giữ chữ ngắn để không vỡ layout mobile.
-- Billing Actions:
-  - Đặt trong Plan Usage Panel hoặc ngay bên dưới, dùng 2 nút tối đa trên một hàng desktop và xếp dọc trên mobile.
-  - Checkout/upgrade dùng viền vàng + nền gold-base nhẹ; customer portal dùng nút outline tối để phân cấp thấp hơn.
-  - Trạng thái đang xử lý giữ chiều cao nút cố định, không đổi layout; lỗi billing dùng red-vivid trong panel hiện có.
-  - Không thêm màu nhận diện Polar riêng; billing vẫn theo palette red/gold/black của hệ thống.
-- Campaign Metrics Panel:
-  - Đặt trong sidebar admin/campaign, cùng nền black-ink và viền vàng mảnh như Plan Usage Panel.
-  - Metric tile dùng 2 cột, radius 8px, số liệu bằng Cinzel, label bằng font-vn nhỏ.
-  - Không dùng chart màu mới; nếu cần trạng thái cảnh báo thì dùng red-vivid hiện có.
-- Ops Readiness Panel:
-  - Đặt trong sidebar admin/campaign, cùng nền black-ink và viền vàng mảnh như Plan Usage Panel.
-  - Hiển thị trạng thái cấu hình OAuth/R2/Polar bằng hàng compact, không lộ secret value.
-  - Dùng gold-base cho nhóm đã đủ cấu hình và red-vivid cho nhóm còn thiếu; không thêm màu trạng thái mới.
-  - Nếu host đang ở legacy bridge, hiển thị trạng thái không khả dụng thay vì yêu cầu nhập token trong UI.
+- Public Claim Loading/Closed:
+  - Loading, invalid, completed, expired, or replayed claim states use the same full-viewport Lunar shell as the guest draw.
+  - Use one centered framed panel with icon, short title, and one concise message; avoid extra decorative borders or oversized shadows.
+  - Loading copy must remain readable on mobile and should not use aggressive uppercase for Vietnamese text.
+  - Closed/invalid states use gold icon treatment for neutral/completed states and red-vivid only for genuine invalid/error states.
 - Stat Pills (budget bar):
   - Rounded capsules with gold outline.
   - Dark fill + light gold text.

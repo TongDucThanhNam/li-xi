@@ -24,12 +24,12 @@ import {
   sortCampaignsByRecency,
 } from "./campaignIdentity";
 import { assertCanCreateCampaign } from "./entitlements";
+import { hasOpenPendingSessionForCampaign } from "./drawSessionPolicy";
 import {
   displayNameFromUser,
   ensureHostProfileForOwner,
   getHostProfileForOwner,
 } from "./hostProfiles";
-import { isOpenPendingSession } from "./publicLinks";
 import { validateCampaignAssetPolicy } from "../lib/assetPolicy";
 
 const campaignThemeValidator = v.union(v.literal("lunar"), v.literal("brand"));
@@ -40,12 +40,6 @@ const campaignStatusValidator = v.union(
 );
 
 type CampaignStatus = "draft" | "active" | "archived";
-type PendingCampaignSessionDeliveryMode = "station" | "link" | undefined;
-const PENDING_CAMPAIGN_SESSION_DELIVERY_MODES: PendingCampaignSessionDeliveryMode[] = [
-  "station",
-  "link",
-  undefined,
-];
 const attachableCampaignAssetStatuses = new Set(["reserved", "uploaded"]);
 
 function sanitizeText(value: string, fieldName: string, minLength: number, maxLength: number) {
@@ -91,30 +85,6 @@ async function activateOnlyCampaign(
       });
     }
   }
-}
-
-async function hasOpenPendingSessionForCampaign(
-  ctx: MutationCtx,
-  ownerId: Id<"users">,
-  campaignId: Id<"campaigns">
-) {
-  const groups = await Promise.all(
-    PENDING_CAMPAIGN_SESSION_DELIVERY_MODES.map((deliveryMode) =>
-      ctx.db
-        .query("drawSessions")
-        .withIndex("by_campaign_owner_status_delivery", (q) =>
-          q
-            .eq("campaignId", campaignId)
-            .eq("ownerId", ownerId)
-            .eq("status", "pending")
-            .eq("deliveryMode", deliveryMode)
-        )
-        .collect()
-    )
-  );
-  const pendingSessions = groups.flat();
-
-  return pendingSessions.some((session) => isOpenPendingSession(session));
 }
 
 async function campaignView(ctx: QueryCtx, campaignId: Id<"campaigns">) {

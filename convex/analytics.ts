@@ -120,7 +120,7 @@ export async function recordSessionCreated(
   ctx: MutationCtx,
   sessionId: Id<"drawSessions">,
   ownerId: Id<"users">,
-  campaignId?: Id<"campaigns">
+  campaignId: Id<"campaigns">
 ) {
   await recordAnalyticsCounterEvent(ctx, {
     eventKey: sessionCounterEventKey(sessionId),

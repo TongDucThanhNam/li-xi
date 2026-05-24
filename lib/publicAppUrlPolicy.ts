@@ -1,6 +1,4 @@
-function normalizeHostname(hostname: string) {
-	return hostname.toLowerCase().replace(/^\[(.*)\]$/, "$1");
-}
+import { isLocalOrPrivateHostname, isRawIpHostname, normalizeHostname } from "./networkPolicy.ts";
 
 function isLocalDevHostname(hostname: string) {
 	const normalizedHostname = normalizeHostname(hostname);
@@ -12,13 +10,7 @@ function isLocalDevHostname(hostname: string) {
 }
 
 function isLocalNetworkHostname(hostname: string) {
-	const normalizedHostname = normalizeHostname(hostname);
-	return normalizedHostname.endsWith(".localhost") || normalizedHostname.endsWith(".local");
-}
-
-function isRawIpHostname(hostname: string) {
-	const normalizedHostname = normalizeHostname(hostname);
-	return /^\d+\.\d+\.\d+\.\d+$/.test(normalizedHostname) || normalizedHostname.includes(":");
+	return isLocalOrPrivateHostname(hostname);
 }
 
 const publicClaimPathPattern = /^\/claim\/[a-f0-9]{24}$/;
