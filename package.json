@@ -9,7 +9,11 @@
     "start": "node .output/server/index.mjs",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "npm run test:contracts && npm run test:smoke",
+    "test": "vitest",
+    "test:once": "vitest run",
+    "test:debug": "vitest --inspect-brk --no-file-parallelism",
+    "test:coverage": "vitest run --coverage --coverage.reporter=text",
+    "test:all": "npm run test:once && npm run test:contracts && npm run test:smoke",
     "test:contracts": "node scripts/verify-saas-contracts.mjs && node scripts/verify-production-readiness.mjs --self-test && node scripts/test-production-readiness-import.mjs && node scripts/validate-production-evidence.mjs --self-test && node scripts/test-production-evidence-validator.mjs && node scripts/validate-production-evidence-report.mjs --self-test && node scripts/test-production-evidence-report-validator.mjs && node scripts/test-host-route-guard.mjs && node scripts/test-authorization-policy.mjs && node scripts/test-secret-policy.mjs && node scripts/test-migration-token-policy.mjs && node scripts/test-asset-policy.mjs && node scripts/test-network-policy.mjs && node scripts/test-billing-policy.mjs && node scripts/test-polar-server-policy.mjs && node scripts/test-entitlement-policy.mjs && node scripts/test-public-app-url-policy.mjs && node scripts/test-public-link-policy.mjs && node scripts/test-analytics-policy.mjs && node scripts/test-saas-workflow-policy.mjs",
     "test:smoke": "node scripts/smoke-routes.mjs",
     "verify:local": "node scripts/verify-local-readiness.mjs",
@@ -42,19 +46,22 @@
     "recharts": "^3.8.1"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
     "@eslint/js": "^9.39.2",
     "@tailwindcss/vite": "^4.3.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.2",
+    "convex-test": "^0.0.53",
     "eslint": "^9",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.6.0",
     "tailwindcss": "^4.1.18",
     "typescript": "^5",
     "typescript-eslint": "^8.59.4",
-    "vite": "^8.0.13"
+    "vite": "^8.0.13",
+    "vitest": "^4.1.7"
   },
   "ignoreScripts": [
     "sharp",
