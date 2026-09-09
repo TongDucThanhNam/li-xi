@@ -7,6 +7,11 @@ commit filled evidence if it contains deployment-specific operational data.
 The repo ignores `li-xi-production-readiness*.json` and `production-evidence/`
 as a guardrail for accidental local artifact output.
 
+This template still uses the current `public claim` evidence field names for
+canonical `/play/<publicCode>` and the `/claim/<publicCode>` compatibility route. Treat those fields as
+public play-link evidence for the current li xi game template, not as the
+generic product model for future games.
+
 After filling the report, validate it with:
 
 ```bash
@@ -82,7 +87,7 @@ the exact `/api/auth/callback/google` path.
 `Host profile row id` must be a concrete observed host profile row id or alias,
 not `yes`, `pass`, a placeholder, or dashboard URL.
 `Redirect target after sign-in` must be a root-relative host app route:
-`/setup` or `/campaigns`. Do not record a full external URL,
+`/onboarding` or `/campaigns`. Do not record a full external URL,
 scheme-relative URL, public claim URL, query string, or route with a hash fragment.
 `Public claim code` must be the exact 24-character lowercase hex token minted by
 the backend, not a share URL, label, or placeholder.
@@ -196,6 +201,10 @@ directly against production.
 - Notes:
 
 ## Polar
+
+Checkout and customer-portal return URLs must use the canonical
+`/settings/billing` route. Checkout may add only `?checkout=success`; the portal
+return URL must not add a query string.
 
 - Polar customer id:
 - Polar subscription id:

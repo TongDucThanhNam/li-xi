@@ -1,0 +1,35 @@
+[WorkspaceLayout] app/_workspace/-components/WorkspaceLayout.tsx
+  [line 23] const [asideHost, setAsideHost] = useState<HTMLDivElement | null>(null);
+  [line 34] <Sidebar.Header>
+  [line 37] <Sparkles aria-hidden="true" size={18} />
+  [line 49] <Sidebar.Content>
+  [line 50] <Sidebar.Group>
+  [line 51] <Sidebar.GroupLabel>Không gian làm việc</Sidebar.GroupLabel>
+  [line 52] <Sidebar.Menu aria-label="Điều hướng không gian làm việc" showGuideLines={false}>
+  [line 55] return (
+  [line 56] <Sidebar.MenuItem
+  [line 62] <Sidebar.MenuIcon><Icon aria-hidden="true" size={18} /></Sidebar.MenuIcon>
+  [line 63] <Sidebar.MenuLabel>{item.label}</Sidebar.MenuLabel>
+  [line 70] <Sidebar.Footer>
+  [line 72] <Avatar size="sm" variant="soft">
+  [line 73] <Avatar.Fallback>{owner?.username?.[0]?.toUpperCase() ?? "H"}</Avatar.Fallback>
+  [line 76] <Tooltip>
+  [line 77] <Button aria-label="Đăng xuất" isIconOnly onPress={() => void logout()} variant="ghost">
+  [line 78] <LogOut aria-hidden="true" size={17} />
+  [line 80] <Tooltip.Content>Đăng xuất</Tooltip.Content>
+  [line 84] <Sidebar.Rail />
+  [line 88] return (
+  [line 89] <AppLayout
+  [line 96] <Navbar height="3.5rem" maxWidth="full" size="sm">
+  [line 97] <Navbar.Header>
+  [line 98] <AppLayout.MenuToggle aria-label="Mở điều hướng" tooltip="Mở điều hướng" />
+  [line 99] <Tooltip>
+  [line 100] <Sidebar.Trigger aria-label="Thu gọn điều hướng" />
+  [line 101] <Tooltip.Content>Thu gọn điều hướng</Tooltip.Content>
+  [line 103] <Navbar.Content>
+  [line 104] <Navbar.Item className="text-sm font-medium">
+  [line 109] <AppLayout.AsideTrigger
+  [line 121] <Sidebar>{sidebarContent}</Sidebar>
+  [line 122] <Sidebar.Mobile>{sidebarContent}</Sidebar.Mobile>
+  [line 127] <AdminWorkspaceContext.Provider value={workspaceContext}>
+  [line 128] <Outlet />

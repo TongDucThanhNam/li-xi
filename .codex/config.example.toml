@@ -1,0 +1,13 @@
+# Copy to config.toml and replace the placeholder locally.
+# config.toml is ignored because it contains your HeroUI personal token.
+[mcp_servers.heroui-pro]
+url = "https://mcp.heroui.pro/mcp"
+
+[mcp_servers.heroui-pro.http_headers]
+x-heroui-personal-token = "REPLACE_WITH_YOUR_HEROUI_PERSONAL_TOKEN"
+
+# Build Core, then replace this path. Open EMC to start
+# the persistent local endpoint; the stdio adapter discovers its credentials.
+#[mcp_servers.emc]
+#command = 'C:/path/to/eragear-media-copilot/apps/core/dist/emc-core.exe'
+#args = ['--mcp-stdio']

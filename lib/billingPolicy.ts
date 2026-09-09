@@ -1,6 +1,6 @@
 import { isLocalOrPrivateHostname, isRawIpHostname } from "./networkPolicy.ts";
 
-const billingReturnPath = "/campaigns";
+const billingReturnPath = "/settings/billing";
 const allowedBillingReturnPaths = new Set([billingReturnPath]);
 const allowedCheckoutResultValues = new Set(["success"]);
 

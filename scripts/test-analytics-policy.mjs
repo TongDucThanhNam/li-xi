@@ -5,7 +5,9 @@ import {
   campaignMetricKey,
   estimateAnalyticsCounterEventWrite,
   ownerMetricKey,
+  playSessionCounterEventKey,
   redemptionCounterEventKey,
+  rewardCounterEventKey,
   sessionCounterEventKey,
 } from "../lib/analyticsPolicy.ts";
 
@@ -13,6 +15,11 @@ assert.equal(ownerMetricKey("user_1", "session_created"), "owner:user_1:session_
 assert.equal(campaignMetricKey("campaign_1", "redemption_created"), "campaign:campaign_1:redemption_created");
 assert.equal(sessionCounterEventKey("session_1"), "session:session_1:session_created");
 assert.equal(redemptionCounterEventKey("redemption_1"), "redemption:redemption_1:redemption_created");
+assert.equal(playSessionCounterEventKey("session_1", "game_open"), "play-session:session_1:game_open");
+assert.equal(playSessionCounterEventKey("session_1", "public_play_link_open"), "play-session:session_1:public_play_link_open");
+assert.equal(rewardCounterEventKey("redemption_1", "reward_outcome"), "reward:redemption_1:reward_outcome");
+assert.equal(rewardCounterEventKey("redemption_1", "reward_claim"), "reward:redemption_1:reward_claim");
+assert.equal(rewardCounterEventKey("redemption_1", "game_completion"), "reward:redemption_1:game_completion");
 assert.throws(() => ownerMetricKey("", "session_created"), /ownerId analytics không được rỗng/);
 assert.throws(() => campaignMetricKey("   ", "redemption_created"), /campaignId analytics không được rỗng/);
 assert.throws(() => sessionCounterEventKey(""), /sessionId analytics không được rỗng/);

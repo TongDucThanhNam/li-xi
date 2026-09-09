@@ -1,9 +1,15 @@
-# Draw Template Design System: Lunar Fortune
+# Game Template Design System: Lunar Fortune
 
-This document governs the custom draw/claim experience only: station guest draw
-screens, public claim links, and the current `li-xi` draw template. Admin,
-Campaign Studio, setup, leaderboard, billing, and operational management screens
-should use HeroUI Pro patterns and tokens instead of this red/gold skin.
+This document governs the current `li-xi` / Lunar Fortune game template only:
+station guest play screens, public play/claim compatibility links, and the
+existing envelope draw implementation. It is not the global style system for all
+future campaign games.
+
+Admin, Campaign Studio, setup, leaderboard, billing, and operational management
+screens should use HeroUI Pro patterns and tokens instead of this red/gold skin.
+Future game templates such as lucky wheel, raffle draw, scratch card, quiz, or
+memory match should define their own game-template design notes before
+implementation.
 
 For admin UI direction, see `docs/admin-design-system.md`.
 
@@ -61,10 +67,10 @@ For admin UI direction, see `docs/admin-design-system.md`.
   - Cho phép brand chỉnh headline, subtitle, nhãn CTA ngắn, và thông điệp chờ; không cho đổi font hoặc palette.
   - Preview phải phản ánh copy end-user, nhưng vẫn giữ title gradient gold, subtitle tracking lớn, và CTA pill.
   - CTA label tối đa ngắn để không vỡ nút mobile; nếu trống dùng mặc định “Thử vận may”.
-- Brand Campaign Template:
-  - `brand` dùng cùng shell điện ảnh đỏ/vàng như `li-xi` để không phá palette draw hiện tại.
+- Brand Variant:
+  - `brand` hiện vẫn dùng cùng shell điện ảnh đỏ/vàng như `li-xi`; đây là biến thể của game template lì xì, không phải template game độc lập.
   - Brand khác biệt bằng campaign copy, brand name, hero asset, collect copy, và snapshot dữ liệu, không bằng font hoặc màu mới.
-  - Route draw/claim phải resolve template từ campaign theme để `brand` không chỉ là nhãn trong admin.
+  - Khi thêm game template thật, tạo CSS/theme riêng qua game-template registry thay vì mở rộng file này cho mọi game.
 - Station Guest Wait:
   - Sau Collect, màn station giữ full-screen hero với CTA disabled và thông điệp chờ lượt rút tiếp theo.
   - Nút quay lại host chỉ là control nhỏ ở góc trên, viền vàng mảnh, nền black-ink trong suốt; không dùng màu hoặc panel mới.
@@ -108,4 +114,5 @@ For admin UI direction, see `docs/admin-design-system.md`.
 
 ## Implementation Notes
 - Ưu tiên CSS variables và lớp kiểu `hero-*`, `mag-btn`, `grid-container`, `card-*`.
-- Nếu thêm component mới, mô tả trong file này trước khi triển khai.
+- Nếu thêm component mới cho `li-xi`, mô tả trong file này trước khi triển khai.
+- Nếu thêm game template mới, tạo section hoặc file design-system riêng cho template đó và đăng ký CSS riêng qua game-template registry.

@@ -1,0 +1,80 @@
+[AuthFeature] app/-auth/AuthFeature.tsx
+  [line 114] if (!currentUser) {
+  [line 126] if (!isCancelled) {
+  [line 133] if (!isCancelled) {
+  [line 146] return () => {
+  [line 167] return (
+  [line 168] <main className="grid min-h-dvh items-start justify-items-center bg-background px-4 pb-10 pt-8 text-foreground sm:px-6 sm:pt-10 lg:px-8 lg:pt-14">
+  [line 173] <Gift aria-hidden="true" size={20} strokeWidth={2} />
+  [line 176] <Chip color="accent" variant="soft">
+  [line 179] <h1 className="mt-4 text-3xl font-semibold tracking-normal text-foreground sm:text-4xl">
+  [line 182] <p className="mt-3 max-w-md text-sm leading-6 text-muted">
+  [line 188] <Widget>
+  [line 189] <Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
+  [line 191] <Widget.Title>Đăng nhập dành cho host</Widget.Title>
+  [line 192] <Widget.Description>
+  [line 196] <Chip color="accent" variant="soft">
+  [line 200] <Widget.Content className="gap-5">
+  [line 203] <ProgressCircle
+  [line 209] <ProgressCircle.Track>
+  [line 210] <ProgressCircle.TrackCircle />
+  [line 211] <ProgressCircle.FillCircle />
+  [line 216] <ShieldCheck aria-hidden="true" size={16} strokeWidth={2} />
+  [line 221] <p className="text-2xl font-semibold tabular-nums text-foreground">
+  [line 224] <Chip
+  [line 232] <p className="mt-1 text-sm leading-6 text-muted">
+  [line 238] <Alert status="danger">
+  [line 239] <Alert.Indicator />
+  [line 240] <Alert.Content>
+  [line 241] <Alert.Title>{error}</Alert.Title>
+  [line 246] <Alert status="accent" aria-live="polite">
+  [line 247] <Alert.Indicator>
+  [line 248] <Spinner size="sm" />
+  [line 250] <Alert.Content>
+  [line 251] <Alert.Title>Đang hoàn tất đăng nhập</Alert.Title>
+  [line 252] <Alert.Description>
+  [line 259] <ItemCardGroup aria-label="Trạng thái đăng nhập" className="admin-auth-checklist" variant="transparent">
+  [line 263] return (
+  [line 264] <ItemCard className="items-start" key={item.title} variant="transparent">
+  [line 265] <ItemCard.Icon
+  [line 274] <Icon aria-hidden="true" size={18} strokeWidth={2} />
+  [line 276] <ItemCard.Content>
+  [line 277] <ItemCard.Title>{item.title}</ItemCard.Title>
+  [line 278] <ItemCard.Description className="hidden whitespace-normal sm:line-clamp-2 sm:block">
+  [line 282] <ItemCard.Action>
+  [line 283] <Chip color={item.color} size="sm" variant="soft">
+  [line 292] <Button
+  [line 303] <Spinner color="current" size="sm" />
+  [line 317] <section className="grid gap-4">
+  [line 318] <Widget>
+  [line 319] <Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
+  [line 321] <Widget.Title>Luồng làm việc</Widget.Title>
+  [line 322] <Widget.Description>
+  [line 326] <Chip color="success" variant="soft">
+  [line 330] <Widget.Content>
+  [line 331] <AuthFlowStepper currentStep={authStep} />
+  [line 335] <Widget>
+  [line 336] <Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
+  [line 338] <Widget.Title>Khu vực vận hành</Widget.Title>
+  [line 339] <Widget.Description>
+  [line 343] <Chip variant="soft">{authFeatureItems.length} mô-đun</Chip>
+  [line 345] <Widget.Content>
+  [line 346] <ItemCardGroup
+  [line 355] return (
+  [line 356] <ItemCard className="items-start" key={item.label} variant="secondary">
+  [line 357] <ItemCard.Icon>
+  [line 358] <Icon aria-hidden="true" size={18} strokeWidth={2} />
+  [line 360] <ItemCard.Content>
+  [line 361] <ItemCard.Title>{item.label}</ItemCard.Title>
+  [line 362] <ItemCard.Description className="hidden whitespace-normal sm:block">
+  [line 379] return (
+  [line 380] <Stepper currentStep={currentStep} orientation="vertical" size="sm">
+  [line 384] return (
+  [line 385] <Stepper.Step key={step.title}>
+  [line 386] <Stepper.Indicator>
+  [line 387] <Stepper.Icon>
+  [line 388] <Icon aria-hidden="true" size={14} strokeWidth={2} />
+  [line 391] <Stepper.Content>
+  [line 392] <Stepper.Title>{step.title}</Stepper.Title>
+  [line 393] <Stepper.Description>{step.description}</Stepper.Description>
+  [line 395] <Stepper.Separator />

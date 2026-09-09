@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
+import { campaignGameConfigValidator, gameTemplateIdValidator } from "./gameTemplateValues";
 
 const rarityValidator = v.union(v.literal("common"), v.literal("rare"), v.literal("legend"));
 const drawSessionStatusValidator = v.union(
@@ -78,6 +79,20 @@ export default defineSchema({
     .index("by_owner_status", ["ownerId", "status"])
     .index("by_owner_slug", ["ownerId", "slug"]),
 
+  campaignGames: defineTable({
+    ownerId: v.id("users"),
+    campaignId: v.id("campaigns"),
+    templateId: gameTemplateIdValidator,
+    config: campaignGameConfigValidator,
+    status: v.union(v.literal("draft"), v.literal("active"), v.literal("archived")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_campaign", ["campaignId"])
+    .index("by_campaign_template", ["campaignId", "templateId"])
+    .index("by_owner_template_status", ["ownerId", "templateId", "status"]),
+
   campaignAssets: defineTable({
     ownerId: v.id("users"),
     campaignId: v.optional(v.id("campaigns")),
@@ -121,7 +136,16 @@ export default defineSchema({
     eventKey: v.string(),
     ownerId: v.id("users"),
     campaignId: v.optional(v.id("campaigns")),
-    metric: v.union(v.literal("session_created"), v.literal("redemption_created")),
+    metric: v.union(
+      v.literal("session_created"),
+      v.literal("redemption_created"),
+      v.literal("game_open"),
+      v.literal("game_start"),
+      v.literal("game_completion"),
+      v.literal("reward_outcome"),
+      v.literal("reward_claim"),
+      v.literal("public_play_link_open")
+    ),
     source: v.union(v.literal("live"), v.literal("backfill")),
     createdAt: v.number(),
   })

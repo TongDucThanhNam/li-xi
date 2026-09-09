@@ -91,9 +91,9 @@ const validReport = `# Production Evidence
 - Plan change result: pass
 - Customer portal result: pass
 - Checkout return origin: https://app.example.com
-- Checkout return URL: https://app.example.com/campaigns?checkout=success
+- Checkout return URL: https://app.example.com/settings/billing?checkout=success
 - Customer portal return origin: https://app.example.com
-- Customer portal return URL: https://app.example.com/campaigns
+- Customer portal return URL: https://app.example.com/settings/billing
 - Polar webhook URL: https://prod-a.convex.site/polar/events
 - Webhook receipt time: 2026-05-22T00:00:00.000Z
 - Convex billing state: active
@@ -407,7 +407,7 @@ assertRejects(
     "- Redirect target after sign-in: /campaigns",
     "- Redirect target after sign-in: /draw"
   ),
-  "Google OAuth.Redirect target after sign-in must be one of: /setup, /campaigns"
+  "Google OAuth.Redirect target after sign-in must be one of: /onboarding, /campaigns"
 );
 
 assertRejects(
@@ -455,17 +455,17 @@ assertRejects(
 assertRejects(
   "wrong Polar checkout return path",
   validReport.replace(
-    "- Checkout return URL: https://app.example.com/campaigns?checkout=success",
+    "- Checkout return URL: https://app.example.com/settings/billing?checkout=success",
     "- Checkout return URL: https://app.example.com/draw?checkout=success"
   ),
-  "Polar.Checkout return URL must use /campaigns"
+  "Polar.Checkout return URL must use /settings/billing"
 );
 
 assertRejects(
   "unexpected Polar checkout return query",
   validReport.replace(
-    "- Checkout return URL: https://app.example.com/campaigns?checkout=success",
-    "- Checkout return URL: https://app.example.com/campaigns?next=/draw"
+    "- Checkout return URL: https://app.example.com/settings/billing?checkout=success",
+    "- Checkout return URL: https://app.example.com/settings/billing?next=/draw"
   ),
   "Polar.Checkout return URL must use one of these query strings: (none), ?checkout=success"
 );
@@ -491,17 +491,17 @@ assertRejects(
 assertRejects(
   "wrong Polar portal return path",
   validReport.replace(
-    "- Customer portal return URL: https://app.example.com/campaigns",
+    "- Customer portal return URL: https://app.example.com/settings/billing",
     "- Customer portal return URL: https://app.example.com/leaderboard"
   ),
-  "Polar.Customer portal return URL must use /campaigns"
+  "Polar.Customer portal return URL must use /settings/billing"
 );
 
 assertRejects(
   "unexpected Polar portal return query",
   validReport.replace(
-    "- Customer portal return URL: https://app.example.com/campaigns",
-    "- Customer portal return URL: https://app.example.com/campaigns?checkout=success"
+    "- Customer portal return URL: https://app.example.com/settings/billing",
+    "- Customer portal return URL: https://app.example.com/settings/billing?checkout=success"
   ),
   "Polar.Customer portal return URL must use one of these query strings: (none)"
 );

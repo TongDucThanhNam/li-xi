@@ -11,11 +11,11 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Li Xi Station | Prize Draw Campaign Studio" },
+      { title: "Campaign Game Studio | Marketing Game Platform" },
       {
         name: "description",
         content:
-          "SaaS prize-draw platform for branded lucky campaigns, public claim links, campaign assets, and premium guest experiences.",
+          "Nền tảng chiến dịch trò chơi marketing với liên kết chơi công khai, tài sản thương hiệu, phần thưởng và trải nghiệm khách hàng cao cấp.",
       },
     ],
     links: [],

@@ -10,9 +10,9 @@ export const RARITY_VALUES = ["common", "rare", "legend"] as const;
 export type Rarity = (typeof RARITY_VALUES)[number];
 
 export const RARITY_LABELS: Record<Rarity, string> = {
-  common: "Common",
-  rare: "Rare",
-  legend: "Legend",
+  common: "Phổ biến",
+  rare: "Hiếm",
+  legend: "Huyền thoại",
 };
 
 const OWNER_USERNAME_RE = /^[a-zA-Z0-9_.-]+$/;

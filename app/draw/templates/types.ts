@@ -1,39 +1,15 @@
-import type { ComponentType } from "react";
-import type { RewardPoolItem } from "@/app/draw/fortune/types";
-import type { Rarity } from "@/lib/lixiPolicy";
+import type {
+	GameStageProps,
+	GameTemplate,
+	GameTemplateFontLink,
+} from "@/app/game-templates/types";
+import type { CampaignStyleVariant, GameTemplateId } from "@/lib/gameTemplates";
 
-export type DrawTemplateKey = "li-xi" | "brand";
-export type CampaignThemeKey = "lunar" | "brand";
+export type DrawTemplateKey = GameTemplateId;
+export type CampaignThemeKey = CampaignStyleVariant;
+export type DrawTemplateFontLink = GameTemplateFontLink;
+export type DrawStageProps = GameStageProps;
 
-export type DrawTemplateFontLink = {
-	crossOrigin?: string;
-	href: string;
-	rel: "preconnect" | "stylesheet";
-};
-
-export type DrawStageProps = {
-	canStart: boolean;
-	campaignSubtitle?: string;
-	campaignTitle?: string;
-	collectLabel?: string;
-	ctaLabel?: string;
-	disabled: boolean;
-	guestName?: string;
-	heroAssetUrl?: string | null;
-	onCollect: () => void;
-	onExit?: () => void;
-	onRedeem: (envelopeIndex: number) => Promise<{ amount: number; rarity: Rarity }>;
-	onRevealStateChange: (revealing: boolean) => void;
-	rewardPool: RewardPoolItem[];
-	sessionKey: string | null;
-	statusMessage?: string;
-	waitingMessage?: string;
-};
-
-export type DrawTemplate = {
+export type DrawTemplate = GameTemplate & {
 	key: DrawTemplateKey;
-	name: string;
-	Stage: ComponentType<DrawStageProps>;
-	cssHref: string;
-	fonts: DrawTemplateFontLink[];
 };

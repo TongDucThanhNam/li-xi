@@ -1,19 +1,27 @@
-# Li Xi Station
+# Campaign Game Studio
 
-SaaS prize-draw platform cho branded lucky campaigns. Theme Tết/lì xì là
-default campaign skin, nhưng host có thể cấu hình chiến dịch, upload asset,
-tạo lượt rút tại trạm, phát public claim link, theo dõi billing/analytics, và
-giữ trải nghiệm end-user premium.
+Marketing game campaign platform cho brand, agency và campaign operator chạy
+chiến dịch tri ân khách hàng bằng game tương tác. Lì xì/rút phong bao hiện là
+game template đầu tiên, không phải giới hạn sản phẩm. Platform phải mở đường cho
+các game như vòng quay may mắn, rút thăm, scratch card, quiz, slot-style reveal,
+memory match và các branded mini-game khác.
 
-Flow sản phẩm chính:
+Xem hướng sản phẩm chuẩn tại
+[docs/product-direction.md](docs/product-direction.md). Các tên hiện có như
+`drawSessions`, `redemptions`, `/draw`, `/claim/<publicCode>` là implementation
+hiện tại của game lì xì và bề mặt migration; tính năng mới nên đi theo ngôn ngữ
+campaign/game/play-session/reward.
+
+Flow sản phẩm đích:
 
 1. Host đăng nhập bằng Google OAuth.
 2. Host tạo/cấu hình chiến dịch trong Campaign Studio.
-3. Host cấu hình ngân sách giải thưởng theo chiến dịch.
-4. Host tạo lượt rút trực tiếp hoặc public claim link cho người tham gia.
-5. Người tham gia vào màn hình trạm hoặc link public `/claim/<publicCode>`.
-6. Người tham gia chọn 1 trong 10 phong bao theo campaign skin.
-7. Kết quả được lưu và hiển thị trong leaderboard/analytics theo host hoặc chiến dịch.
+3. Host chọn một game template cho chiến dịch, ví dụ lì xì, vòng quay, rút thăm, scratch card hoặc quiz.
+4. Host cấu hình luật chơi, reward/reward inventory, style, asset, kênh public play link hoặc station mode, và PIN vận hành khi cần.
+5. Người tham gia mở link/QR/station và bắt đầu từ premium game hero.
+6. Người tham gia chơi theo cơ chế của game đã chọn.
+7. Hệ thống lưu play session, reward outcome/claim nếu có, và analytics theo campaign/game.
+8. Dashboard hiển thị opens, starts, completions, reward outcomes, claims, conversion, channel/share performance và các metric riêng của từng game.
 
 ## Công nghệ
 
@@ -43,10 +51,15 @@ Truy cập:
 
 - `http://localhost:3000/auth`
 - `http://localhost:3000/campaigns`
-- `http://localhost:3000/setup`
-- `http://localhost:3000/draw`
-- `http://localhost:3000/leaderboard`
-- `http://localhost:3000/claim/<publicCode>`
+- `http://localhost:3000/campaigns/<campaignId>/games/<campaignGameId>`
+- `http://localhost:3000/analytics`
+- `http://localhost:3000/settings/operations`
+- `http://localhost:3000/operate/<campaignGameId>`
+- `http://localhost:3000/station/<campaignGameId>`
+- `http://localhost:3000/play/<publicCode>`
+
+Các đường `/setup`, `/draw`, `/leaderboard` và `/claim/<publicCode>` được giữ làm
+bề mặt tương thích và chuyển vào ngữ cảnh canonical tương ứng.
 
 ## Verification
 
@@ -77,16 +90,16 @@ readiness must be accepted, and remaining risks must be `None`.
 
 Use [docs/production-verification-runbook.md](docs/production-verification-runbook.md)
 to collect the live/staging evidence for Google OAuth, R2 uploads, Polar billing,
-public claim links, analytics counters, and temporary-token shutdown before
-calling the SaaS migration production-ready. Use
+public play/claim links, analytics counters, and temporary-token shutdown before
+calling the platform migration production-ready. Use
 [docs/production-evidence-template.md](docs/production-evidence-template.md) to
 record the live/staging results without mixing them into repo secrets, then run
 `npm run verify:evidence-report -- <filled-evidence-report.md>` before treating
 the release as production-ready.
 
-`npm run test:contracts` checks SaaS invariants that should not regress: no
+`npm run test:contracts` checks platform invariants that should not regress: no
 Next.js route/import surface, required TanStack Start files, Convex components,
-Google OAuth wiring, public claim privacy, campaign-scoped participant checks,
+Google OAuth wiring, public play/claim privacy, campaign-scoped participant checks,
 owner-bridge identity boundaries, ops readiness wiring, and production readiness
 self-tests for invalid `CONVEX_SITE_URL` shapes, frontend legacy flag shutdown,
 exact Google OAuth callback and Polar webhook derivation from the Convex HTTP
@@ -105,19 +118,23 @@ expiry fail-closed behavior, and open-session filtering. Analytics policy
 regressions verify Sharded Counter event keys and idempotent owner/campaign
 counter upgrade behavior. The contract gate also requires the live/staging
 production verification runbook to remain linked from the repo docs and to keep
-explicit evidence gates for OAuth, public claims, R2, Polar, analytics, and
+explicit evidence gates for OAuth, public play/claim links, R2, Polar, analytics, and
 temporary-token shutdown.
 
 `npm run test:smoke` builds the TanStack Start app with deterministic public Vite
-env, starts the production server on port `3100`, checks the core host flow routes (`/auth`, `/setup`,
-`/draw`, `/campaigns`, `/claim/abcdefabcdefabcdefabcdef`, `/claim/not-a-code`, `/leaderboard`), verifies route-specific
-loading shells plus `/auth` staying Google-first by default, then removes `.output`. Use
+env, starts the production server on port `3100`, and checks the complete
+canonical/compatibility SSR matrix: entry/auth/onboarding, campaign
+index/create/overview/games/editor/rewards/distribution, analytics, all settings
+routes, operator/station, valid-shaped and malformed `/play` plus `/claim`, and
+the `/setup`, `/draw`, and `/leaderboard` aliases. It verifies route-specific
+loading or closed states plus `/auth` staying Google-first by default, then
+removes `.output`. Use
 `SMOKE_BASE_URL=http://localhost:3000` to run the same checks against an already
 running server.
 
 ## Migration / Backfill
 
-Legacy owner records can be promoted into the SaaS model per host. Run dry-run
+Legacy owner records can be promoted into the platform account/campaign model per host. Run dry-run
 first; then run without `dryRun` after checking skipped counts and the bounded
 `auditDecisions` sample for rows that need manual repair. When running from CLI
 without an authenticated Convex Auth session, set and pass `LI_XI_MIGRATION_TOKEN`
@@ -129,7 +146,7 @@ npx convex run migrations:backfillOwnerSaaSModel '{ "ownerId": "<user-id>", "dry
 npx convex run migrations:backfillOwnerSaaSModel '{ "ownerId": "<user-id>", "migrationToken": "<random-secret>" }'
 ```
 
-Expired public claim links fail closed at runtime and are no longer mutable
+Expired public play compatibility links fail closed at runtime and are no longer mutable
 through the normal host cancel flow. To clean old pending link rows after the
 expiry window, run the owner-scoped maintenance mutation:
 
@@ -143,7 +160,7 @@ The cleanup scans oldest pending `link` rows and legacy pending rows with missin
 helper considers expired or malformed. Dry-run output includes redacted
 session-level keep/cancel decisions with session id, delivery bucket, whether a
 public code exists, campaign id, timestamps, resolved expiry, and reason, but not
-the raw public claim code. Apply sets `status: "cancelled"` and `cancelledAt`
+the raw public code. Apply sets `status: "cancelled"` and `cancelledAt`
 while preserving public code, snapshots, campaign, and guest audit fields.
 
 If old data has a host profile default campaign that points to an archived,
@@ -281,7 +298,7 @@ Production readiness kiểm tra `AUTH_GOOGLE_ID` có dạng Google OAuth client 
 thực, không phải placeholder, không quá ngắn và không chứa whitespace.
 `ops:getSaaSReadiness` cũng trả `endpoints.googleCallbackUrl` để tránh cấu hình
 sai callback theo deployment. Campaign Studio hiển thị cùng URL này trong panel
-SaaS readiness khi host đăng nhập bằng Google OAuth.
+platform readiness khi host đăng nhập bằng Google OAuth.
 
 Legacy username/PIN account auth and the legacy owner-bridge compatibility flag
 are disabled by default. They can be temporarily enabled only during migration
@@ -329,7 +346,7 @@ nối, và không được là IPv4 literal.
 credential thật: không phải placeholder, không quá ngắn, không chứa whitespace
 hoặc dấu `< >`.
 
-Polar cho SaaS billing:
+Polar cho platform billing:
 
 ```bash
 npx convex env set POLAR_ORGANIZATION_TOKEN <token>
@@ -431,7 +448,7 @@ thông tin thiếu, không trả giá trị secret hoặc product ID. Host-facin
 trong Campaign Studio không trả tên env hoặc runtime detail đầy đủ; nó chỉ dùng
 label cấu hình, trạng thái ready/missing và endpoint setup public.
 Runbook [docs/production-verification-runbook.md](docs/production-verification-runbook.md)
-ghi lại bằng chứng cần thu ở staging/production trước khi đóng checklist SaaS.
+ghi lại bằng chứng cần thu ở staging/production trước khi đóng checklist platform.
 
 Campaign Studio dùng product catalog này qua query đã xác thực
 `billing:getConfiguredProducts` để hiển thị nút nâng cấp Pro/Business, đổi gói
@@ -482,36 +499,43 @@ npx convex env set LI_XI_DEFAULT_PLAN pro
 npx convex env set LI_XI_ENABLE_PAID_PLAN_FALLBACK true
 ```
 
-## Quy tắc nghiệp vụ chính
+## Quy tắc nghiệp vụ hiện tại
+
+Phần này mô tả implementation đang có, phần lớn vẫn là game template lì xì/rút
+phong bao. Khi phát triển game mới, dùng hướng domain trong
+`docs/product-direction.md` thay vì nhân rộng thuật ngữ draw/claim/redemption.
 
 - PIN luôn 6 chữ số.
-- Google OAuth là account login mặc định; PIN host vẫn là lớp xác nhận thao tác tạo lượt rút.
+- Google OAuth là account login mặc định; PIN host vẫn là lớp xác nhận thao tác station/public play quan trọng.
 - Auth API chỉ expose current user đang đăng nhập; không có public query tra profile bằng arbitrary user id.
-- Host setup và cấu hình ngân sách yêu cầu Convex Auth, không mở qua legacy owner bridge. Host PIN có thể được thiết lập cùng lúc lưu ngân sách hoặc lưu riêng nếu ngân sách đã bị khóa bởi lịch sử rút.
+- Cấu hình phần thưởng yêu cầu Convex Auth và được giới hạn theo campaign. Host PIN là cài đặt vận hành cấp tài khoản riêng tại `/settings/operations`, không được tạo hoặc thay đổi từ màn hình phần thưởng.
 - Legacy username/PIN account auth và legacy `ownerId` bridge mặc định bị tắt, chỉ dùng như migration/account-linking bridge khi bật env riêng; backend legacy login/register yêu cầu bật cả account-auth flag và owner-bridge flag. Host UI không còn hiển thị form legacy.
 - Production readiness fail nếu legacy username/PIN account auth hoặc legacy `ownerId` bridge còn bật; trạng thái production-ready yêu cầu owner identity đến từ Convex Auth.
 - Production readiness fail nếu `LI_XI_MIGRATION_TOKEN` hoặc `LIXI_MIGRATION_TOKEN` còn cấu hình; migration token chỉ bật tạm khi chạy backfill rồi phải gỡ.
 - Backend ưu tiên owner từ Convex Auth; các API host-facing không nhận `ownerId` từ client, còn migration maintenance dùng authenticated owner hoặc migration token thay vì unauthenticated `ownerId` bridge.
-- Frontend localStorage bridge chỉ còn là cache legacy cũ để dọn dẹp; Google OAuth identity lấy từ Convex Auth live state, stale legacy cache bị xóa/ignored, và OAuth completion materialize host profile trước khi điều hướng host chưa setup vào `/setup`, host đã setup vào Campaign Studio `/campaigns`.
-- Campaign Studio là bề mặt điều phối host sau setup: các default redirect đưa host về đây, setup navigation quay về đây, và header Campaign Studio có CTA `Trạm rút` để host chủ động mở `/draw` sau khi cấu hình campaign.
-- Các route host-only (`/`, `/setup`, `/draw`, `/campaigns`, `/leaderboard`) có TanStack `beforeLoad` guard để chặn truy cập browser khi không có Convex Auth token. Trên SSR guard chỉ defer vì Convex Auth token nằm ở browser storage; component phải skip Convex query cho đến khi `useOwnerSession` xác thực live xong và vẫn redirect về `/auth` nếu không có owner hợp lệ.
+- Frontend localStorage bridge chỉ còn là cache legacy cũ để dọn dẹp; Google OAuth identity lấy từ Convex Auth live state, stale legacy cache bị xóa/ignored, và OAuth completion materialize host profile trước khi điều hướng host mới vào `/onboarding`, host đã cấu hình vào `/campaigns`.
+- Pathless workspace layout sở hữu guard, HeroUI AppLayout và navigation cho `/onboarding`, campaign routes, `/analytics`, settings và `/operate`. Station `/station/<campaignGameId>` và public play `/play/<publicCode>` nằm ngoài admin shell.
+- `/setup`, `/draw` và `/leaderboard` là alias được guard và có destination xác định; chúng không sở hữu implementation song song. `/claim/<publicCode>` dùng lại cùng public-play feature với `/play/<publicCode>`.
 - Host profile lưu display name, slug public global-unique, onboarding state và default campaign tách khỏi bảng user auth; API đọc/ghi host profile yêu cầu Convex Auth và không mở qua legacy owner bridge, còn repair dữ liệu legacy nằm trong migration commands. Automatic slug kể cả fallback theo owner id đều phải kiểm tra `by_slug`, còn explicit slug save sẽ báo lỗi nếu slug không hợp lệ hoặc đã thuộc host khác.
 - Host profile lookup fail-closed nếu một owner có nhiều profile row; sửa bằng `migrations:repairDuplicateHostProfiles` trước khi cho host tiếp tục vận hành.
 - Default campaign trong host profile chỉ được trỏ tới campaign active/draft thuộc owner; campaign đã archive không thể được lưu làm default. Dữ liệu cũ có default campaign archived/missing/foreign có thể sửa bằng `migrations:repairHostProfileDefaultCampaign`.
 - Campaign slug là unique trong từng host; campaign mặc định cũng dùng helper tạo slug unique thay vì reuse slug cố định, và mọi fallback theo owner id đều phải kiểm tra `by_owner_slug` trước khi trả về.
+- `lib/gameTemplates.ts` là catalog game-template dùng chung; `app/game-templates/registry.ts` bind template `li-xi` vào stage component, CSS URL, fonts, config schema/defaults, editor/preview metadata, reward/result UI và analytics labels. `app/draw/templates/*` chỉ là compatibility wrapper cho template li xi hiện tại; `brand` là style variant trong config, không phải game template riêng.
+- Convex lưu campaign game instance trong bảng `campaignGames` với `templateId`, `config`, `status`, `ownerId` và `campaignId`. Campaign Studio gửi `gameTemplateId` và `gameConfig`, còn backend normalize qua helper campaign-game để các chiến dịch mới có boundary campaign/game thay vì mở rộng draw-specific config.
+- Current draw sessions được bọc bằng play-session identity trong `convex/playSessions.ts`: `gameTemplateId`, `legacyDrawSessionId`, `playSessionId`, trạng thái play session và `publicPlayPath`. Đường `/claim/<publicCode>` vẫn tồn tại như public play compatibility route cho template li xi.
 - Plan limit ưu tiên Polar subscription có product ID đã cấu hình, sau đó mới fallback theo `LI_XI_DEFAULT_PLAN`; `billingConfigured` trong plan state chỉ true khi có Polar organization token và Pro/Business product IDs đầy đủ, khác nhau.
 - Fallback Pro/Business chỉ có hiệu lực khi `LI_XI_ENABLE_PAID_PLAN_FALLBACK=true`; production readiness fail nếu override dev/staging này còn bật, để paid tier production luôn đến từ Polar.
-- Chỉ lượt `Share link` mới mint `publicCode`; link public dùng token hex 24 ký tự sinh từ 12 byte random, được kiểm tra lại sau khi insert để không trả về link mới nếu token làm public claim trở nên mơ hồ, chỉ resolve pending rows qua index `publicCode + status` và chỉ hợp lệ khi có đúng một lượt link pending, dùng một lượt và hết hiệu lực sau khi redeem/cancel.
-- Link public mới có hạn 7 ngày; sau hạn, guest claim không resolve, quota open-session và khóa ngân sách không tính link đó nữa. Open-session quota đọc các bucket pending theo `ownerId + status + deliveryMode` trước khi lọc expiry, thay vì scan toàn bộ pending session của host. Expiry timestamp không hợp lệ hoặc vượt quá TTL 7 ngày từ `createdAt` hợp lệ đều fail-closed thay vì giữ link mở; host cũng không thể hủy các link đã hết hạn/hỏng expiry như một lượt pending hợp lệ. `migrations:cleanupExpiredPublicLinks` là maintenance path có `dryRun` để chuyển các pending public link đã hết hạn/hỏng expiry sang `cancelled` mà vẫn giữ audit fields; cron `cleanup expired public claim links` chạy hourly qua index global `status + deliveryMode + createdAt` để cleanup không chỉ phụ thuộc thao tác thủ công. Các row legacy có `publicCode` nhưng chưa có `deliveryMode` được xử lý như link-mode, và migration backfill gán expiry dựa trên `createdAt` hợp lệ hoặc báo `skippedInvalidPublicCodeExpiry` nếu timestamp hỏng.
-- Nút mở link share trên host mở route public `/claim/<publicCode>`; link-mode không đi qua màn hình rút trực tiếp tại trạm.
+- Chỉ lượt `Share link`/public play link mới mint `publicCode`; link public dùng token hex 24 ký tự sinh từ 12 byte random, được kiểm tra lại sau khi insert để không trả về link mới nếu token làm public play route trở nên mơ hồ, chỉ resolve pending rows qua index `publicCode + status` và chỉ hợp lệ khi có đúng một lượt link pending, dùng một lượt và hết hiệu lực sau khi redeem/cancel.
+- Link public mới có hạn 7 ngày; sau hạn, public play route không resolve, quota open-session và khóa ngân sách không tính link đó nữa. Open-session quota đọc các bucket pending theo `ownerId + status + deliveryMode` trước khi lọc expiry, thay vì scan toàn bộ pending session của host. Expiry timestamp không hợp lệ hoặc vượt quá TTL 7 ngày từ `createdAt` hợp lệ đều fail-closed thay vì giữ link mở; host cũng không thể hủy các link đã hết hạn/hỏng expiry như một lượt pending hợp lệ. `migrations:cleanupExpiredPublicLinks` là maintenance path có `dryRun` để chuyển các pending public link đã hết hạn/hỏng expiry sang `cancelled` mà vẫn giữ audit fields; cron `cleanup expired public claim links` chạy hourly qua index global `status + deliveryMode + createdAt` để cleanup không chỉ phụ thuộc thao tác thủ công. Các row legacy có `publicCode` nhưng chưa có `deliveryMode` được xử lý như link-mode, và migration backfill gán expiry dựa trên `createdAt` hợp lệ hoặc báo `skippedInvalidPublicCodeExpiry` nếu timestamp hỏng.
+- Link share mới dùng canonical route `/play/<publicCode>`; `/claim/<publicCode>` tiếp tục hoạt động cho link cũ. Link-mode không đi qua station guest route.
 - Link share và Polar checkout/customer portal return URL trên frontend được dựng từ `VITE_SITE_URL` khi có cấu hình, fallback về browser origin chỉ phục vụ local dev/smoke.
 - Host draw screen đọc pending station/link qua bucket `ownerId + status + deliveryMode`, rồi hiển thị các link public đang chờ cùng thời điểm hết hạn để copy, mở lại hoặc hủy sau khi refresh.
-- Redeem bằng link chỉ dùng `publicCode` và chỉ trả kết quả trúng thưởng, không lộ internal session id hoặc ngân sách còn lại; redeem/cancel lượt trực tiếp phải đi qua Convex Auth owner session.
-- Public claim API chỉ trả copy/theme/media công khai và các loại giải cho animation, không trả internal session/campaign id.
-- Public claim read trả trạng thái đóng nếu scoped budget bị thiếu, đã hết tiền, hoặc không còn prize unit khả dụng và payable theo ngân sách còn lại, để guest không vào animation cho link không thể chi trả.
-- Public claim chỉ dùng campaign fallback khi campaign đó thuộc đúng owner của session; legacy/malformed reference không được lộ campaign của host khác.
-- Campaign Studio cho phép chỉnh claim headline, subtitle, CTA, thông điệp chờ và snapshot copy đó vào session/redemption.
-- Chỉ campaign `active` mới được tạo lượt rút trực tiếp hoặc link share; campaign `draft` có thể cấu hình trước trong Studio nhưng chưa được phát thưởng.
+- Redeem bằng public play link chỉ dùng `publicCode` và chỉ trả kết quả trúng thưởng, không lộ internal session id hoặc ngân sách còn lại; redeem/cancel lượt trực tiếp phải đi qua Convex Auth owner session.
+- Public play API chỉ trả copy/theme/media công khai và các loại giải cho animation, không trả internal session/campaign id.
+- Public play read trả trạng thái đóng nếu scoped budget bị thiếu, đã hết tiền, hoặc không còn prize unit khả dụng và payable theo ngân sách còn lại, để guest không vào animation cho link không thể chi trả.
+- Public play chỉ dùng campaign fallback khi campaign đó thuộc đúng owner của session; legacy/malformed reference không được lộ campaign của host khác.
+- Game editor canonical resolve editor/preview từ template registry, cho phép chỉnh public play headline, subtitle, CTA, collect CTA, thông điệp chờ và hero asset trước khi snapshot vào play session/reward.
+- Chỉ campaign `active` mới được tạo lượt chơi trực tiếp hoặc public play link; campaign `draft` có thể cấu hình trước trong Studio nhưng chưa được phát thưởng.
 - Campaign workspace query fail-closed nếu client truyền `selectedCampaignId` không thuộc active/draft campaigns của owner, thay vì fallback sang active campaign và recent assets khác.
 - Active campaign resolver ưu tiên `defaultCampaignId` trong host profile khi campaign đó còn active thuộc owner; nếu không, backend chọn active campaign mới cập nhật gần nhất, để dữ liệu legacy có nhiều active không phụ thuộc vào thứ tự index.
 - Nếu host đã có draft campaign nhưng chưa có campaign `active`, backend yêu cầu kích hoạt campaign thay vì tự tạo thêm campaign mặc định mới.
@@ -536,14 +560,14 @@ npx convex env set LI_XI_ENABLE_PAID_PLAN_FALLBACK true
 - Entitlements hiện được enforce ở campaign count, asset upload, tổng số mệnh giá ngân sách trên toàn tài khoản,
   lượt rút đang mở, và tổng redemption volume; redemption usage đọc từ Convex Aggregate thay vì collect toàn bộ lịch sử trao thưởng.
 - Campaign analytics dùng Aggregate cho redemption count/amount và Sharded Counter cho
-  session/redemption events. Analytics reporting queries yêu cầu Convex Auth và không mở qua legacy owner bridge. Counter events được đánh dấu trong `analyticsCounterEvents`
-  theo session/redemption key để live writes và backfill không cộng trùng; nếu một owner backfill
+  campaign/game metrics: opens, starts, completions, reward outcomes, claims, conversion và public play link opens, bên cạnh legacy session/redemption counters. Analytics reporting queries yêu cầu Convex Auth và không mở qua legacy owner bridge. Counter events được đánh dấu trong `analyticsCounterEvents`
+  theo session/redemption/play-session/reward key để live writes và backfill không cộng trùng; nếu một owner backfill
   gặp row có `campaignId` trỏ tới campaign không thuộc owner thì chỉ sửa owner aggregate/counter,
   không ghi campaign counter hoặc campaign Aggregate cho campaign lạ. Nếu một owner backfill
   đã ghi event cho legacy redemption khi chưa có `campaignId`, campaign backfill có thể nâng cấp
   marker đó sang campaign scope đúng một lần và chỉ cộng thêm campaign counter. Owner backfill sửa cả
   owner Aggregate/counter và Aggregate/counter của campaign thuộc owner; campaign backfill sửa campaign
-  Aggregate totals và campaign Sharded Counter events bằng campaign+owner indexes cho row đã scoped, chỉ scan owner history để vá legacy redemption chưa có `campaignId`. Route `/leaderboard` có bộ lọc tất cả/từng campaign và dùng cả view theo owner
+  Aggregate totals và campaign Sharded Counter events bằng campaign+owner indexes cho row đã scoped, chỉ scan owner history để vá legacy redemption chưa có `campaignId`. Session backfill cũng khôi phục `game_start`; redemption backfill khôi phục `game_completion`, `reward_outcome` và `reward_claim`. Route `/analytics` giữ campaign và view (`overview`, `games`, `rewards`, `channels`) trong URL; `/leaderboard` chuyển vào rewards view và dùng cả view theo owner
   lẫn view theo campaign đã kiểm tra ownership; các API leaderboard/history yêu cầu Convex Auth và không mở qua legacy owner bridge; campaign reads dùng index `campaignId + ownerId`
   trước khi áp dụng giới hạn kết quả để row import hỏng không làm thiếu bảng xếp hạng. Analytics backfill là write operation nên chỉ chạy
   bằng authenticated owner hoặc `LI_XI_MIGRATION_TOKEN` / `LIXI_MIGRATION_TOKEN` kèm `ownerId`; không dựa vào legacy owner bridge.

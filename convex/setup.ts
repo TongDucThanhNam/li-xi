@@ -3,6 +3,7 @@ import { mutation, MutationCtx, query, QueryCtx } from "./_generated/server";
 import { Id, Doc } from "./_generated/dataModel";
 import { requireResolvedOwner } from "./authorization";
 import { getUniqueOwnerBudgetForScope } from "./budgetScope";
+import { ensureDefaultCampaignGame } from "./campaignGameConfig";
 import {
   DEFAULT_CAMPAIGN_BRAND,
   DEFAULT_CAMPAIGN_DESCRIPTION,
@@ -22,10 +23,8 @@ import {
   RARITY_VALUES,
   Rarity,
   validateRarity,
-  validatePin,
   validateWholePositiveNumber,
 } from "../lib/lixiPolicy";
-import { createPinHash } from "./security";
 
 const rarityValidator = v.union(v.literal("common"), v.literal("rare"), v.literal("legend"));
 
@@ -206,8 +205,10 @@ async function ensureDefaultCampaignForOwner(ctx: MutationCtx, ownerId: Id<"user
       if (!updatedCampaign) {
         throw new Error("Không thể kích hoạt chiến dịch mặc định");
       }
+      await ensureDefaultCampaignGame(ctx, updatedCampaign);
       return updatedCampaign;
     }
+    await ensureDefaultCampaignGame(ctx, activeCampaign);
     return activeCampaign;
   }
 
@@ -220,7 +221,7 @@ async function ensureDefaultCampaignForOwner(ctx: MutationCtx, ownerId: Id<"user
     slug,
     brandName: DEFAULT_CAMPAIGN_BRAND,
     description: DEFAULT_CAMPAIGN_DESCRIPTION,
-    theme: "lunar",
+    theme: "brand",
     status: "active",
     createdAt: now,
     updatedAt: now,
@@ -230,6 +231,7 @@ async function ensureDefaultCampaignForOwner(ctx: MutationCtx, ownerId: Id<"user
   if (!campaign) {
     throw new Error("Không thể tạo chiến dịch mặc định");
   }
+  await ensureDefaultCampaignGame(ctx, campaign);
   return campaign;
 }
 
@@ -399,20 +401,6 @@ export const configureBudget = mutation({
 
     const { normalized, totalBudget } = validateBudgetInputs(args.items);
     const now = Date.now();
-
-    if (typeof owner.pinHash !== "string" || typeof owner.pinSalt !== "string") {
-      if (!args.hostPin) {
-        throw new Error("Cần thiết lập PIN host trước khi lưu ngân sách");
-      }
-
-      const hostPin = validatePin(args.hostPin);
-      const { hash, salt } = await createPinHash(hostPin);
-      await ctx.db.patch(owner._id, {
-        pinHash: hash,
-        pinSalt: salt,
-        createdAt: owner.createdAt ?? now,
-      });
-    }
 
     const existingBudget = await getBudgetForScope(ctx, ownerId, scope);
 

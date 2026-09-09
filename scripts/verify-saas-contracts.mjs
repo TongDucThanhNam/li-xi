@@ -7,7 +7,7 @@ const root = process.cwd();
 const failures = [];
 
 function read(relativePath) {
-  return readFileSync(path.join(root, relativePath), "utf8");
+  return readFileSync(path.join(root, relativePath), "utf8").replace(/\r\n/g, "\n");
 }
 
 function fail(message) {
@@ -98,11 +98,11 @@ assert(
 assert(
   packageJson.scripts?.["verify:production"] ===
     "node scripts/verify-production-readiness.mjs --prod",
-  "verify:production script must check production SaaS readiness"
+  "verify:production script must check production platform readiness"
 );
 assert(
   packageJson.scripts?.["verify:local"] === "node scripts/verify-local-readiness.mjs",
-  "verify:local script must run the local SaaS readiness gate"
+  "verify:local script must run the local platform readiness gate"
 );
 assert(
   packageJson.scripts?.["verify:evidence"] === "node scripts/validate-production-evidence.mjs",
@@ -116,7 +116,7 @@ assert(
 assert(
   packageJson.scripts?.["test:contracts"] ===
     "node scripts/verify-saas-contracts.mjs && node scripts/verify-production-readiness.mjs --self-test && node scripts/test-production-readiness-import.mjs && node scripts/validate-production-evidence.mjs --self-test && node scripts/test-production-evidence-validator.mjs && node scripts/validate-production-evidence-report.mjs --self-test && node scripts/test-production-evidence-report-validator.mjs && node scripts/test-host-route-guard.mjs && node scripts/test-authorization-policy.mjs && node scripts/test-secret-policy.mjs && node scripts/test-migration-token-policy.mjs && node scripts/test-asset-policy.mjs && node scripts/test-network-policy.mjs && node scripts/test-billing-policy.mjs && node scripts/test-polar-server-policy.mjs && node scripts/test-entitlement-policy.mjs && node scripts/test-public-app-url-policy.mjs && node scripts/test-public-link-policy.mjs && node scripts/test-analytics-policy.mjs && node scripts/test-saas-workflow-policy.mjs",
-  "contract tests must include production readiness self-tests, evidence artifact/report validator self-tests, host route guard regressions, authorization policy regressions, secret policy regressions, migration token policy regressions, asset policy regressions, shared network policy regressions, billing policy regressions, Polar server policy regressions, entitlement policy regressions, public app URL regressions, public link policy regressions, analytics policy regressions, and SaaS workflow policy regressions"
+  "contract tests must include production readiness self-tests, evidence artifact/report validator self-tests, host route guard regressions, authorization policy regressions, secret policy regressions, migration token policy regressions, asset policy regressions, shared network policy regressions, billing policy regressions, Polar server policy regressions, entitlement policy regressions, public app URL regressions, public link policy regressions, analytics policy regressions, and platform workflow policy regressions"
 );
 const productionVerifier = read("scripts/verify-production-readiness.mjs");
 const productionReadinessImportTest = read("scripts/test-production-readiness-import.mjs");
@@ -656,7 +656,8 @@ assert(
     viteConfig.includes('srcDirectory: "."') &&
     viteConfig.includes('routesDirectory: "app"') &&
     viteConfig.includes("routeFileIgnorePattern") &&
-    viteConfig.includes("(^|/)(components|fortune|templates)(/|$)") &&
+    (viteConfig.includes("(^|/)(components|fortune|game-templates|templates)(/|$)") ||
+      viteConfig.includes("(^|/)(components|fortune|templates)(/|$)")) &&
     viteConfig.includes("(^|/)(ConvexClientProvider|CssDebugger|FortuneStage|hostUtils)(\\\\.|$)") &&
     viteConfig.includes('dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"]') &&
     viteConfig.includes("viteReact()") &&
@@ -675,16 +676,17 @@ assert(
     rootRoute.includes("HeadContent") &&
     rootRoute.includes("Outlet") &&
     rootRoute.includes("Scripts") &&
-    rootRoute.includes("Prize Draw Campaign Studio") &&
-    rootRoute.includes("SaaS prize-draw platform") &&
+    rootRoute.includes("Campaign Game Studio") &&
+    rootRoute.includes("Marketing Game Platform") &&
     !rootRoute.includes("Ứng dụng rút lì xì với ngân sách theo số lượng tờ") &&
     !rootRoute.includes('import appCss from "./globals.css?url"') &&
     read("app/styles/base.css").includes('@import "tailwindcss"') &&
     read("app/styles/admin.css").includes('@import "./base.css"') &&
     read("app/styles/admin.css").includes('@import "@heroui/styles"') &&
     read("app/styles/draw.css").includes("--color-gold-shine") &&
-    read("app/draw/templates/registry.ts").includes('import drawCss from "@/app/styles/draw.css?url"') &&
-    read("app/draw/templates/registry.ts").includes('cssHref: drawCss') &&
+    read("app/game-templates/registry.ts").includes('import drawCss from "@/app/styles/draw.css?url"') &&
+    read("app/game-templates/registry.ts").includes('cssHref: drawCss') &&
+    read("app/draw/templates/registry.ts").includes("getGameTemplate") &&
     rootRoute.includes("<ConvexClientProvider>") &&
     rootRoute.includes("<Outlet />") &&
     routerConfig.includes('import { createRouter } from "@tanstack/react-router"') &&
@@ -693,7 +695,7 @@ assert(
     routerConfig.includes("routeTree") &&
     routerConfig.includes("scrollRestoration: true") &&
     routerConfig.includes('declare module "@tanstack/react-router"'),
-  "TanStack Start root/router must follow the App Router migration shape with __root, HeadContent/Scripts, generated routeTree, and typed router registration"
+  "TanStack Start root/router must follow the App Router migration shape with __root, HeadContent/Scripts, generated routeTree, typed router registration, and platform-game metadata"
 );
 assert(!("next" in allDependencies), "Next.js package must not remain installed");
 assert(!("postcss" in allDependencies), "PostCSS must not remain a direct dependency after moving Tailwind to the Vite plugin");
@@ -736,18 +738,22 @@ assert(
     smokeRoutes.includes('path: "/setup"') &&
     smokeRoutes.includes('path: "/draw"') &&
     smokeRoutes.includes('path: "/campaigns"') &&
+    smokeRoutes.includes('path: "/operate/abcdefabcdefabcdefabcdef"') &&
+    smokeRoutes.includes('path: "/station/abcdefabcdefabcdefabcdef"') &&
+    smokeRoutes.includes('path: "/play/abcdefabcdefabcdefabcdef"') &&
+    smokeRoutes.includes('path: "/play/not-a-code"') &&
     smokeRoutes.includes('path: "/claim/abcdefabcdefabcdefabcdef"') &&
     smokeRoutes.includes('path: "/claim/not-a-code"') &&
     !smokeRoutes.includes('path: "/claim/test-code"') &&
     smokeRoutes.includes('path: "/leaderboard"') &&
-    smokeRoutes.includes("Đang mở trạm") &&
-    smokeRoutes.includes("Loading setup") &&
-    smokeRoutes.includes("ĐANG TẢI TRẠM RÚT") &&
-    smokeRoutes.includes("Đang tải Campaign Studio") &&
-    smokeRoutes.includes("Đang kiểm tra link rút") &&
-    smokeRoutes.includes("Link không hợp lệ") &&
-    smokeRoutes.includes("Loading leaderboard"),
-  "route smoke coverage must include route-specific root, host, campaign, public-claim, malformed public-claim, and leaderboard shells"
+    smokeRoutes.includes("Đang mở không gian làm việc") &&
+    smokeRoutes.includes("Đang mở thiết lập phù hợp") &&
+    smokeRoutes.includes("Đang xác định trò chơi mặc định") &&
+    smokeRoutes.includes('const workspacePending = ["Đang mở trang", "Đang chuẩn bị dữ liệu và quyền truy cập"]') &&
+    smokeRoutes.includes("Đang tải trạm chơi") &&
+    smokeRoutes.includes("Đang kiểm tra play link") &&
+    smokeRoutes.includes("Play link không hợp lệ"),
+  "route smoke coverage must include canonical workspace, operator, station, play, compatibility, and analytics shells"
 );
 
 for (const removedNextFile of [
@@ -792,8 +798,9 @@ for (const tanstackFile of [
   "app/auth.tsx",
   "app/setup.tsx",
   "app/draw.tsx",
-  "app/campaigns.tsx",
-  "app/leaderboard.tsx",
+  "app/_workspace/campaigns/index.tsx",
+  "app/_workspace/analytics.tsx",
+  "app/play/$publicCode.tsx",
   "app/claim/$publicCode.tsx",
 ]) {
   assertFileExists(tanstackFile);
@@ -813,21 +820,17 @@ const indexRoute = read("app/index.tsx");
 assert(
   indexRoute.includes("api.setup.getSetupState") &&
     indexRoute.includes('to: "/auth"') &&
-    indexRoute.includes('setupState.hasSetup ? "/campaigns" : "/setup"') &&
-    indexRoute.includes("Đang mở trạm") &&
+    indexRoute.includes('setupState.hasSetup ? "/campaigns" : "/onboarding"') &&
+    indexRoute.includes("Đang mở không gian làm việc") &&
     !indexRoute.includes("Premium Gacha Experience") &&
     !indexRoute.includes("Lunar Fortune"),
-  "root route must be a SaaS app-flow gateway into setup or Campaign Studio, not a marketing landing page"
+  "root route must be a platform app-flow gateway into setup or Campaign Studio, not a marketing landing page"
 );
 
 const hostRouteGuard = read("lib/hostRouteGuard.ts");
 const hostRouteAuthPolicy = read("lib/hostRouteAuthPolicy.ts");
 const hostOnlyRouteFiles = [
   "app/index.tsx",
-  "app/setup.tsx",
-  "app/draw.tsx",
-  "app/campaigns.tsx",
-  "app/leaderboard.tsx",
 ];
 const appTsxFiles = walk("app", (file) => file.endsWith(".tsx"));
 assert(
@@ -866,6 +869,15 @@ for (const routeFile of hostOnlyRouteFiles) {
     `${routeFile} must use a TanStack beforeLoad host guard while preserving live owner-session validation and query skipping`
   );
 }
+const workspaceRoute = read("app/_workspace.tsx");
+const workspaceLayout = read("app/_workspace/-components/WorkspaceLayout.tsx");
+assert(
+  workspaceRoute.includes("beforeLoad: requireHostRouteAuth") &&
+    workspaceLayout.includes("useOwnerSession()") &&
+    workspaceLayout.includes("AppLayout") &&
+    workspaceLayout.includes("Outlet"),
+  "canonical workspace routes must share one guarded HeroUI AppLayout boundary"
+);
 assert(
   !read("app/auth.tsx").includes("beforeLoad: requireHostRouteAuth") &&
     !read("app/claim/$publicCode.tsx").includes("beforeLoad: requireHostRouteAuth"),
@@ -924,7 +936,10 @@ assertNoPatternInFiles(
   /#c8ffda|#ffc7a0|rgba\(124,\s*214|rgba\(8,\s*84|rgba\(255,\s*154,\s*96|rgba\(86,\s*29,\s*6/,
   "Host/setup status banners must not introduce green or orange palettes outside the design system"
 );
-const leaderboardRoute = read("app/leaderboard.tsx");
+const leaderboardRoute =
+  read("app/_workspace/-features/AnalyticsFeature.tsx") +
+  read("app/_workspace/analytics.tsx") +
+  read("app/_workspace.tsx");
 assert(
   leaderboardRoute.includes('import adminCss from "./styles/admin.css?url"') &&
     leaderboardRoute.includes("AdminPageShell") &&
@@ -941,9 +956,10 @@ assert(
     leaderboardRoute.includes("api.leaderboard.getCampaignHistory") &&
     leaderboardRoute.includes("Tabs") &&
     leaderboardRoute.includes("onSelectionChange") &&
-    leaderboardRoute.includes("setSelectedCampaignId(") &&
-    leaderboardRoute.includes("All campaigns") &&
-    leaderboardRoute.includes("Top giá trị thưởng") &&
+    leaderboardRoute.includes('to: "/analytics"') &&
+    leaderboardRoute.includes("Tất cả chiến dịch") &&
+    leaderboardRoute.includes("Giá trị thưởng cao nhất") &&
+    !leaderboardRoute.includes("Top giá trị thưởng") &&
     leaderboardRoute.includes("Chưa có lượt nhận thưởng nào.") &&
     leaderboardRoute.includes("Chiến dịch chưa xác định") &&
     leaderboardRoute.includes("envelopeIndex + 1") &&
@@ -951,15 +967,19 @@ assert(
     !leaderboardRoute.includes("Top theo số tiền") &&
     !leaderboardRoute.includes("Chưa có lượt rút nào.") &&
     !leaderboardRoute.includes("Legacy campaign"),
-  "leaderboard route must expose owner-wide and campaign-scoped SaaS analytics views without one-off legacy copy"
+  "leaderboard route must expose owner-wide and campaign-scoped platform analytics views without one-off legacy copy"
 );
-const hostShell = read("app/draw/components/HostShell.tsx");
-assert(
-  hostShell.includes("var(--color-red-vivid)") &&
-    hostShell.includes("var(--color-gold-shine)") &&
-    !hostShell.includes("#ff4500"),
-  "host shell ambient lights must use design-system red/gold tokens"
-);
+for (const legacyHostComponent of [
+  "app/draw/components/BudgetBar.tsx",
+  "app/draw/components/CreateSessionPanel.tsx",
+  "app/draw/components/HostHeader.tsx",
+  "app/draw/components/HostShell.tsx",
+  "app/draw/components/InventoryList.tsx",
+  "app/draw/components/RecentRedemptions.tsx",
+  "app/draw/components/ResultSummary.tsx",
+]) {
+  assertFileMissing(legacyHostComponent);
+}
 const envelopeCard = read("app/draw/fortune/EnvelopeCard.tsx");
 assert(
   envelopeCard.includes("from-gold-shine to-gold-base/35") &&
@@ -1269,7 +1289,7 @@ assert(
     billingPolicy.includes("!isRawIpHostname(requestedUrl.hostname)") &&
     billingPolicy.includes("!isLocalOrPrivateHostname(requestedUrl.hostname)") &&
     billingPolicy.includes("phải là HTTPS public URL không kèm port/credentials/hash") &&
-    billingPolicy.includes("const billingReturnPath = \"/campaigns\"") &&
+    billingPolicy.includes("const billingReturnPath = \"/settings/billing\"") &&
     billingPolicy.includes("allowedBillingReturnPaths") &&
     billingPolicy.includes("allowedCheckoutResultValues") &&
     billingPolicy.includes("!allowedBillingReturnPaths.has(requestedUrl.pathname)") &&
@@ -1294,10 +1314,10 @@ assert(
     billingPolicyTest.includes("billing redirects should not carry arbitrary query params to or from Polar") &&
     billingPolicyTest.includes("billing checkout result query should be constrained to known values") &&
     billingPolicyTest.includes("billing redirects should not mix allowed checkout result with extra params") &&
-    billingPolicyTest.includes("https://100.64.0.1/campaigns") &&
-    billingPolicyTest.includes("https://[fd00::1]/campaigns") &&
-    billingPolicyTest.includes("https://8.8.8.8/campaigns") &&
-    billingPolicyTest.includes("https://[2606:4700:4700::1111]/campaigns") &&
+    billingPolicyTest.includes("https://100.64.0.1/settings/billing") &&
+    billingPolicyTest.includes("https://[fd00::1]/settings/billing") &&
+    billingPolicyTest.includes("https://8.8.8.8/settings/billing") &&
+    billingPolicyTest.includes("https://[2606:4700:4700::1111]/settings/billing") &&
     billingPolicyTest.includes("vi-vn") &&
     billing.includes("polar.createCustomerPortalSession(ctx"),
   "billing checkout and customer portal URLs must be validated against a clean SITE_URL origin"
@@ -1391,7 +1411,7 @@ assert(
     fullReadinessQuery.includes("adminToken: v.optional(v.string())") &&
     fullReadinessQuery.includes("requireOpsAdminToken(args.adminToken)") &&
     fullReadinessQuery.includes("accessSource"),
-  "full SaaS readiness must require a production-safe ops admin token before returning admin configuration state"
+  "full platform readiness must require a production-safe ops admin token before returning admin configuration state"
 );
 assert(
   opsReadinessSource.includes("async function requireHostReadinessAccess") &&
@@ -1399,7 +1419,7 @@ assert(
     opsReadinessSource.includes("Cần đăng nhập Google để xem tóm tắt cấu hình SaaS") &&
     hostReadinessQuery.includes("await requireHostReadinessAccess(ctx)") &&
     hostReadinessQuery.includes("return redactReadinessForHost(await buildSaaSReadiness(ctx))"),
-  "host SaaS readiness must require Convex Auth and return only the redacted host projection"
+  "host platform readiness must require Convex Auth and return only the redacted host projection"
 );
 assert(
   hostReadinessRedaction.includes('accessSource: "convexAuth"') &&
@@ -1408,7 +1428,7 @@ assert(
     !hostReadinessRedaction.includes("configuredName") &&
     !hostReadinessRedaction.includes("acceptedNames") &&
     !hostReadinessRedaction.includes("detail: requirement.detail"),
-  "host SaaS readiness redaction must omit env names and raw runtime details"
+  "host platform readiness redaction must omit env names and raw runtime details"
 );
 
 const authorization = read("convex/authorization.ts");
@@ -1479,12 +1499,13 @@ assertNoPatternInFiles(
 
 const ownerSession = read("lib/ownerSession.ts");
 const useOwnerSession = read("lib/useOwnerSession.ts");
-const authRoute = read("app/auth.tsx");
+const authRoute = read("app/auth.tsx") + read("app/-auth/AuthFeature.tsx");
 const setupRoute = read("app/setup.tsx");
+const onboardingRoute = read("app/_workspace/onboarding.tsx");
+const rewardsSetupFeature = read("app/_workspace/-features/RewardsSetupFeature.tsx");
 const ownerSessionValidator = section(ownerSession, "function isLegacyOwnerSession", "let cachedSession");
 const readOwnerSessionSection = section(ownerSession, "export function readOwnerSession", "export function clearOwnerSession");
 const finishOAuthLogin = section(authRoute, "async function finishOAuthLogin", "const handleGoogleSignIn");
-const configureBudgetHandler = section(setupRoute, "const handleSubmit", "const handleSetHostPin");
 assert(
   ownerSession.includes('authSource: "convexAuth"') &&
     ownerSession.includes("type StoredLegacyOwnerSession") &&
@@ -1532,7 +1553,7 @@ assert(
 assert(
   authRoute.includes("useAuthActions") &&
     authRoute.includes('signIn("google"') &&
-    authRoute.includes("Đăng nhập host chiến dịch") &&
+    authRoute.includes("Đăng nhập dành cho host") &&
     !authRoute.includes("Đăng nhập chủ ví") &&
     !authRoute.includes("legacyAccountAuthEnabled") &&
     !authRoute.includes("legacyOwnerBridgeEnabled") &&
@@ -1544,24 +1565,20 @@ assert(
 assert(
   finishOAuthLogin.includes("clearOwnerSession();") &&
     finishOAuthLogin.includes("ensureCurrentHostProfile({})") &&
-    finishOAuthLogin.includes('setupState.hasSetup ? "/campaigns" : "/setup"') &&
+    finishOAuthLogin.includes('setupState.hasSetup ? "/campaigns" : "/onboarding"') &&
     !finishOAuthLogin.includes("writeOwnerSession"),
   "OAuth login must clear the legacy bridge cache, materialize hostProfile, land configured hosts in Campaign Studio, and avoid persisting Convex Auth identity"
 );
 assert(
-  configureBudgetHandler.includes('navigate({ to: "/campaigns", replace: true })'),
-  "budget/PIN setup completion must route hosts into Campaign Studio before creating draw sessions"
-);
-assert(
-  setupRoute.includes('import adminCss from "./styles/admin.css?url"') &&
-    setupRoute.includes("AdminPageShell") &&
-    setupRoute.includes("Budget Setup") &&
-    setupRoute.includes("Host PIN") &&
-    setupRoute.includes("Lưu PIN host") &&
+  setupRoute.includes('to: "/onboarding"') &&
+    setupRoute.includes('to: "/campaigns/$campaignId/rewards"') &&
+    setupRoute.includes('to: "/settings/operations"') &&
+    onboardingRoute.includes("AdminPageShell") &&
+    onboardingRoute.includes("ensureDefaultCampaign") &&
+    rewardsSetupFeature.includes("AdminPageShell") &&
     !setupRoute.includes("Chủ ví:") &&
-    !setupRoute.includes("PIN chủ ví") &&
-    !setupRoute.includes('onPress={() => void navigate({ to: "/draw" })}'),
-  "setup route must use the HeroUI admin shell while steering hosts back to Campaign Studio after configuration"
+    !setupRoute.includes("PIN chủ ví"),
+  "setup compatibility must deterministically route into canonical onboarding, rewards, or operations surfaces"
 );
 
 const convexFiles = walk("convex", (file) => /\.(ts|js)$/.test(file) && !file.includes("_generated"));
@@ -1667,9 +1684,9 @@ assert(
     publicLinks.includes("export const PUBLIC_CODE_HEX_LENGTH = PUBLIC_CODE_BYTES * 2") &&
     publicLinks.includes("new RegExp(`^[a-f0-9]{${PUBLIC_CODE_HEX_LENGTH}}$`)") &&
     publicLinks.includes("export function normalizePublicCode") &&
-    publicAppUrlPolicy.includes("export function normalizePublicClaimCode") &&
+    publicAppUrlPolicy.includes("export function normalizePublicPlayCode") &&
     publicLinkPolicyTest.includes("normalizePublicCode") &&
-    publicAppUrlPolicyTest.includes("normalizePublicClaimCode") &&
+    publicAppUrlPolicyTest.includes("normalizePublicPlayCode") &&
     draw.includes("assertPublicCodeRemainsUnambiguous") &&
     read("convex/schema.ts").includes('.index("by_publicCode_status", ["publicCode", "status"])') &&
     draw.includes('withIndex("by_publicCode_status"') &&
@@ -1679,7 +1696,7 @@ assert(
     draw.includes("crypto.getRandomValues(bytes)") &&
     !draw.includes("crypto.randomUUID()") &&
     draw.includes("findPendingLinkSessionByPublicCode"),
-  "public claim lookups must use 96-bit random hex publicCode values, validate opaque publicCode format, and resolve pending link sessions only"
+  "public play lookups must use 96-bit random hex publicCode values, validate opaque publicCode format, and resolve pending link sessions only"
 );
 assert(
   draw.includes("pendingLinkSessions.length !== 1") &&
@@ -1750,43 +1767,36 @@ assert(
   "redeemPublicSession must use only publicCode and envelopeIndex public args"
 );
 
-const createSessionPanel = read("app/draw/components/CreateSessionPanel.tsx");
-const drawRoute = read("app/draw.tsx");
+const operatorFeature = read("app/_workspace/-features/OperatorConsoleFeature.tsx");
+const distributionFeature = read("app/_workspace/-features/DistributionFeature.tsx");
+const stationFeature = read("app/station/-features/StationPlayFeature.tsx");
 const publicAppUrl = read("lib/publicAppUrl.ts");
-const campaignsRoute = read("app/campaigns.tsx");
-const campaignAssetsPanel = read("app/-campaigns/CampaignAssetsPanel.tsx");
-const campaignAssetUploadHook = read("app/-campaigns/useCampaignAssetUpload.ts");
-const campaignBillingActionsHook = read("app/-campaigns/useCampaignBillingActions.ts");
-const campaignReadinessPanel = read("app/-campaigns/ReadinessPanel.tsx");
-const campaignUtils = read("app/-campaigns/utils.ts");
-const hostHeaderComponent = read("app/draw/components/HostHeader.tsx");
+const campaignIndexFeature = read("app/_workspace/-features/CampaignIndexFeature.tsx");
+const campaignCreateFeature = read("app/_workspace/-features/CampaignCreateFeature.tsx");
+const campaignGameEditor = read("app/_workspace/-features/CampaignGameEditorFeature.tsx");
+const campaignAssetsPanel = read("app/_workspace/-features/CampaignGameAssetsPanel.tsx");
+const billingSettings = read("app/_workspace/-features/BillingSettingsFeature.tsx");
+const integrationsSettings = read("app/_workspace/-features/IntegrationsSettingsFeature.tsx");
 assert(
-  hostHeaderComponent.includes("onDraw?: () => void") &&
-    hostHeaderComponent.includes("Host chiến dịch") &&
-    !hostHeaderComponent.includes("Chủ ví:") &&
-    hostHeaderComponent.includes("Mở trạm rút thưởng") &&
-    hostHeaderComponent.includes("Trạm rút") &&
-    hostHeaderComponent.includes("function TicketIcon"),
-  "shared host header must support an explicit draw-session CTA for Campaign Studio"
+  operatorFeature.includes("Host PIN") &&
+    operatorFeature.includes("api.draw.createSession") &&
+    operatorFeature.includes("buildPublicPlayUrl") &&
+    !operatorFeature.includes("PIN chủ ví"),
+  "the canonical operator console must own host-PIN session creation and public-play links"
 );
 assert(
-  createSessionPanel.includes("PIN host") &&
-    !createSessionPanel.includes("PIN chủ ví"),
-  "create-session panel must present the operational PIN as a host PIN, not wallet-era wording"
+  billingSettings.includes("plan.subscription") &&
+    billingSettings.includes("plan.resources") &&
+    billingSettings.includes("Nguồn trạng thái"),
+  "billing settings must expose subscription, plan source, and account usage"
 );
 assert(
-  campaignUtils.includes('export const changeableSubscriptionStatuses = new Set(["active", "trialing", "past_due"])') &&
-    campaignBillingActionsHook.includes("const currentSubscriptionStatus = planState?.subscription?.status?.toLowerCase()") &&
-    campaignBillingActionsHook.includes("changeableSubscriptionStatuses.has(currentSubscriptionStatus)") &&
-    !campaignBillingActionsHook.includes('planState?.source === "polar" && planState.subscription'),
-  "Campaign Studio billing actions must route past_due subscriptions through subscription change instead of opening duplicate checkout"
-);
-assert(
-  createSessionPanel.includes('window.open(shareUrl, "_blank", "noopener,noreferrer")') &&
-    createSessionPanel.includes("Mở link rút") &&
-    !createSessionPanel.includes("onOpenGuest") &&
-    !createSessionPanel.includes("Mở màn hình rút tại trạm"),
-  "host share-link UI must open the public claim link instead of the station guest screen"
+  distributionFeature.includes('target="_blank"') &&
+    distributionFeature.includes("Mở liên kết") &&
+    distributionFeature.includes("buildPublicPlayUrl") &&
+    !distributionFeature.includes("onOpenGuest") &&
+    !distributionFeature.includes("Mở màn hình rút tại trạm"),
+  "host share-link UI must open the canonical public play link instead of the station guest screen"
 );
 assert(
   publicAppUrl.includes("import.meta.env.VITE_SITE_URL") &&
@@ -1806,6 +1816,8 @@ assert(
     publicAppUrlPolicy.includes("isRawIpHostname") &&
     publicAppUrlPolicy.includes('!path.startsWith("/") || path.startsWith("//")') &&
     publicAppUrlPolicy.includes("Public app URL path must be root-relative") &&
+    publicAppUrlPolicy.includes("export function assertPublicPlayPath") &&
+    publicAppUrlPolicy.includes("/^\\/play\\/[a-f0-9]{24}$/") &&
     publicAppUrlPolicy.includes("export function assertPublicClaimPath") &&
     publicAppUrlPolicy.includes("/^\\/claim\\/[a-f0-9]{24}$/") &&
     publicAppUrlPolicyTest.includes("http://app.example.com") &&
@@ -1815,80 +1827,82 @@ assert(
     publicAppUrlPolicyTest.includes("https://[fd00::1]") &&
     publicAppUrlPolicyTest.includes("https://app.example.com/campaigns") &&
     publicAppUrlPolicyTest.includes("https://user:pass@app.example.com") &&
-    publicAppUrlPolicyTest.includes("https://evil.example.com/claim/abc123") &&
-    publicAppUrlPolicyTest.includes("//evil.example.com/claim/abc123") &&
+    publicAppUrlPolicyTest.includes("https://evil.example.com/play/abc123") &&
+    publicAppUrlPolicyTest.includes("//evil.example.com/play/abc123") &&
+    publicAppUrlPolicyTest.includes("assertPublicPlayPath(\"/play/abcdefabcdefabcdefabcdef\")") &&
     publicAppUrlPolicyTest.includes("assertPublicClaimPath(\"/claim/abcdefabcdefabcdefabcdef\")") &&
     publicAppUrlPolicyTest.includes("/claim/ABCDEFABCDEFABCDEFABCDEF") &&
     publicAppUrlPolicyTest.includes("public app URL policy regression tests passed") &&
     publicAppUrl.includes("export function getPublicAppOrigin") &&
     publicAppUrl.includes("export function buildPublicAppUrl") &&
+    publicAppUrl.includes("export function buildPublicPlayUrl") &&
+    publicAppUrl.includes("assertPublicPlayPath(path)") &&
     publicAppUrl.includes("export function buildPublicClaimUrl") &&
     publicAppUrl.includes("assertPublicClaimPath(path)") &&
     publicAppUrl.includes("export function getBillingReturnPublicAppUrl") &&
-    publicAppUrl.includes('return buildPublicAppUrl("/campaigns")') &&
+    publicAppUrl.includes('return buildPublicAppUrl("/settings/billing")') &&
     publicAppUrl.includes("export function getCurrentPublicAppUrl") &&
     publicAppUrl.includes("window.location.origin") &&
     publicAppUrl.includes("const currentPath = `${window.location.pathname}${window.location.search}`") &&
     !publicAppUrl.includes("window.location.hash") &&
-    createSessionPanel.includes('import { buildPublicClaimUrl } from "@/lib/publicAppUrl"') &&
-    createSessionPanel.includes("const shareUrl = sharePath ? buildPublicClaimUrl(sharePath) : sharePath") &&
-    createSessionPanel.includes("const buildShareUrl = (path: string) => buildPublicClaimUrl(path)") &&
-    !createSessionPanel.includes("buildPublicAppUrl(sharePath)") &&
-    !createSessionPanel.includes("window.location.origin") &&
-    campaignBillingActionsHook.includes('import { getBillingReturnPublicAppUrl, getPublicAppOrigin } from "@/lib/publicAppUrl"') &&
-    campaignBillingActionsHook.includes("origin: getPublicAppOrigin()") &&
-    campaignBillingActionsHook.includes("const billingReturnUrl = getBillingReturnPublicAppUrl()") &&
-    campaignBillingActionsHook.includes("successUrl: billingReturnUrl") &&
-    campaignBillingActionsHook.includes("returnUrl: getBillingReturnPublicAppUrl()") &&
-    !campaignBillingActionsHook.includes("successUrl: currentPublicUrl") &&
-    !campaignBillingActionsHook.includes("returnUrl: getCurrentPublicAppUrl()") &&
-    !campaignBillingActionsHook.includes("window.location.origin") &&
-    !campaignBillingActionsHook.includes("window.location.href"),
+    operatorFeature.includes('import { buildPublicPlayUrl } from "@/lib/publicAppUrl"') &&
+    distributionFeature.includes('import { buildPublicPlayUrl } from "@/lib/publicAppUrl"') &&
+    operatorFeature.includes("buildPublicPlayUrl(session.publicPlayPath ?? session.sharePath)") &&
+    distributionFeature.includes("buildPublicPlayUrl(session.publicPlayPath ?? session.sharePath)") &&
+    !operatorFeature.includes("window.location.origin") &&
+    !distributionFeature.includes("window.location.origin") &&
+    read("convex/billing.ts").includes("assertTrustedBillingOrigin") &&
+    read("convex/billing.ts").includes("assertTrustedBillingUrl"),
   "frontend public share links and Polar return URLs must use VITE_SITE_URL through canonical public app URL helpers"
 );
 assert(
-  draw.includes("pendingLinkSessions") &&
+    draw.includes("pendingLinkSessions") &&
     draw.includes("isPendingLinkSession(session)") &&
     draw.includes("const publicCode = session.publicCode ? normalizePublicCode(session.publicCode) : null") &&
-    draw.includes("sharePath: `/claim/${publicCode}`") &&
+    draw.includes("publicPlayPathForCode(publicCode)") &&
+    draw.includes("sharePath: publicPlayPathForCode(publicCode)") &&
+    read("convex/playSessions.ts").includes("return `/play/${publicCode}`") &&
     !draw.includes("sharePath: `/claim/${session.publicCode}`") &&
     draw.includes(".slice(0, 12)") &&
     draw.includes("campaignNameSnapshot"),
-  "station state must expose recent pending public link sessions for host lifecycle management without malformed public claim share paths"
+  "station state must expose recent pending public link sessions for host lifecycle management without malformed public play paths"
 );
 assert(
-  createSessionPanel.includes("pendingLinkSessions") &&
-    createSessionPanel.includes("Link đang chờ") &&
-    createSessionPanel.includes("shareExpiresAt") &&
-    createSessionPanel.includes("Hết hạn") &&
-    createSessionPanel.includes("onCancelLinkSession") &&
-    drawRoute.includes("cancelSession") &&
-    drawRoute.includes("handleCancelLinkSession") &&
-    !drawRoute.includes("holdHostForShare"),
-  "host draw UI must list and cancel pending link sessions without reusing station guest mode"
+  operatorFeature.includes("pendingLinkSessions") &&
+    operatorFeature.includes("Liên kết đang chờ") &&
+    operatorFeature.includes("cancelSession") &&
+    operatorFeature.includes('to: "/station/$campaignGameId"') &&
+    !operatorFeature.includes("holdHostForShare") &&
+    !stationFeature.includes("cancelSession"),
+  "operator console must own pending-link lifecycle while station remains a participant-only surface"
 );
 
 const fortuneStage = read("app/draw/FortuneStage.tsx");
-const publicClaimRoute = read("app/claim/$publicCode.tsx");
+const publicClaimRoute =
+  read("app/play/-features/PublicPlayFeature.tsx") +
+  read("app/play/$publicCode.tsx") +
+  read("app/claim/$publicCode.tsx");
 const resultModal = read("app/draw/fortune/ResultModal.tsx");
 const schemaForClaimCopy = read("convex/schema.ts");
 assert(
   fortuneStage.includes("sessionKey: string | null") &&
     !fortuneStage.includes("sessionId: string | null") &&
-    publicClaimRoute.includes("normalizePublicClaimCode(publicCode)") &&
+    publicClaimRoute.includes("normalizePublicPlayCode(publicCode)") &&
     publicClaimRoute.includes('normalizedPublicCode ? { publicCode: normalizedPublicCode } : "skip"') &&
     publicClaimRoute.includes("publicCode: normalizedPublicCode") &&
+    publicClaimRoute.includes("recordPublicPlayOpen") &&
     publicClaimRoute.includes("sessionKey={normalizedPublicCode}") &&
-    publicClaimRoute.includes("Link không hợp lệ") &&
+    publicClaimRoute.includes("Liên kết chơi không hợp lệ") &&
+    !publicClaimRoute.includes("Play link không hợp lệ") &&
     !publicClaimRoute.includes("sessionKey={publicCode}") &&
     !publicClaimRoute.includes("sessionId={publicCode}") &&
     publicClaimRoute.includes("redeemPublicSession"),
-  "public claim stage must normalize publicCode before querying/redeeming and use publicCode as the session key"
+  "public play compatibility stage must normalize publicCode before querying/redeeming and use publicCode as the session key"
 );
 assert(
   publicClaimRoute.includes("ctaLabel={visibleSession.campaign?.claimCtaLabel ?? undefined}") &&
     publicClaimRoute.includes("collectLabel={visibleSession.campaign?.claimCollectLabel ?? undefined}") &&
-    drawRoute.includes("collectLabel={guestCampaign?.claimCollectLabel ?? undefined}") &&
+    stationFeature.includes("collectLabel={campaign?.claimCollectLabel ?? undefined}") &&
     fortuneStage.includes("collectLabel?: string") &&
     fortuneStage.includes("collectLabel={collectLabel}") &&
     resultModal.includes("collectLabel?: string") &&
@@ -1902,17 +1916,16 @@ assert(
   "public claim collect CTA must use separate campaign result copy with a generic prize fallback"
 );
 assert(
-  drawRoute.includes("stationGuestWaiting") &&
-    drawRoute.includes("setStationGuestWaiting(true)") &&
-    drawRoute.includes("setGuestMode(true)") &&
-    drawRoute.includes("Đang chờ lượt rút tiếp theo") &&
+  stationFeature.includes("setCollected(true)") &&
+    stationFeature.includes("Trạm đang chờ lượt chơi tiếp theo") &&
+    stationFeature.includes("Đang chờ lượt chơi tiếp theo") &&
     fortuneStage.includes("canExitToHost") &&
     publicClaimRoute.includes("sessionSnapshot") &&
     publicClaimRoute.includes("claimCompleted") &&
     publicClaimRoute.includes("Đã ghi nhận phần thưởng") &&
     !publicClaimRoute.includes('onCollect={() => void navigate({ to: "/" })') &&
     !publicClaimRoute.includes("useNavigate"),
-  "Collect must keep station guests on the waiting hero and close public claims without routing guests to host auth"
+  "Collect must return station guests to the waiting hero and close public play sessions without routing participants to host auth"
 );
 
 const assets = read("convex/assets.ts");
@@ -1927,24 +1940,13 @@ const assetRenderHelperSection = section(
 );
 const assetUrlQuerySection = tailSection(assets, "export const getAssetUrl = query");
 assert(
-  campaignsRoute.includes("selectedCampaignId") &&
-    campaignsRoute.includes("handleSelectCampaign") &&
-    campaignsRoute.includes("handleNewCampaign") &&
-    campaignsRoute.includes("AdminPageShell") &&
-    read("app/components/AdminPageShell.tsx").includes('{ href: "/draw", label: "Draw Station" }') &&
-    campaignsRoute.includes("workspace.campaigns.map") &&
-    campaignsRoute.includes("Tạo campaign") &&
-    campaignsRoute.includes("Chưa lưu vào Convex") &&
-    campaignsRoute.includes("createDraftCampaignForm") &&
-    campaignsRoute.includes("formFromCampaign") &&
-    campaignsRoute.includes("isSavedSelectionWaitingForQuery") &&
-    campaignsRoute.includes("form.id === selectedCampaignId") &&
-    campaignsRoute.includes("selectedWorkspaceCampaignId") &&
-    campaignsRoute.includes("{ selectedCampaignId: selectedWorkspaceCampaignId }") &&
-    campaignsRoute.includes("selectableRecentAssets") &&
-    campaignsRoute.includes("asset.campaignId === form.id") &&
-    campaignsRoute.includes("selectedCampaign?.heroAsset?.url"),
-  "Campaign Studio must expose multi-campaign selection, draft creation, and an explicit draw-session entry point instead of editing only activeCampaign"
+  campaignIndexFeature.includes("workspace.campaigns.map") &&
+    campaignIndexFeature.includes('to="/campaigns/$campaignId"') &&
+    campaignCreateFeature.includes('to: "/campaigns/$campaignId/games/$campaignGameId"') &&
+    campaignGameEditor.includes("template.ConfigEditor") &&
+    !campaignIndexFeature.includes("selectedCampaignId") &&
+    !campaignIndexFeature.includes("useState<CampaignSelection>"),
+  "Campaign Studio must use URL-addressed list, creation, overview, and template-editor surfaces"
 );
 assert(
   campaignsBackend.includes("getPreferredActiveCampaignForOwner(ctx, ownerId)") &&
@@ -2106,9 +2108,9 @@ assert(
     assets.includes("Upload asset chưa ở trạng thái được khai báo hợp lệ") &&
     assets.includes("Asset không ở trạng thái được đồng bộ metadata") &&
     assets.includes("Upload asset chưa được khai báo trước khi gửi lên R2") &&
-    campaignAssetUploadHook.includes("generateUploadUrl = useMutation(api.assets.generateUploadUrl)") &&
-    campaignAssetUploadHook.includes("uploadFileWithProgress") &&
-    campaignAssetUploadHook.includes("syncUploadedAssetMetadata({ key })"),
+    campaignAssetsPanel.includes("generateUploadUrl = useMutation(api.assets.generateUploadUrl)") &&
+    campaignAssetsPanel.includes("uploadFile(upload.url, file") &&
+    campaignAssetsPanel.includes("syncMetadata({ key: upload.key })"),
   "R2 upload signed URLs must require campaign-scoped declared metadata and a reserved asset row before the browser can upload"
 );
 assert(
@@ -2176,10 +2178,9 @@ assert(
     read("convex/campaigns.ts").includes("!actualMetadata?.contentType || actualMetadata.size === undefined") &&
     read("convex/campaigns.ts").includes("Chưa đọc được metadata R2") &&
     read("convex/campaigns.ts").includes('metadataSource: "r2"') &&
-    campaignAssetUploadHook.includes("pendingUploadedAsset") &&
-    campaignAssetUploadHook.includes("handleRetryAttachUploadedAsset") &&
-    campaignAssetsPanel.includes("Thử gắn lại") &&
-    read("docs/admin-design-system.md").includes("Asset retry state") &&
+    campaignAssetsPanel.includes("for (let attempt = 0; attempt < 4") &&
+    campaignAssetsPanel.includes("attachUploadedAsset") &&
+    campaignAssetsPanel.includes("metadata R2") &&
     draw.includes("getRenderableCampaignAssetUrl") &&
     draw.includes("isRenderableCampaignAsset") &&
     draw.includes("campaignHeroAssetCandidate.campaignId === campaign._id") &&
@@ -2376,16 +2377,13 @@ assert(
     stationState.includes("getPayableBudgetItems(") &&
     stationState.includes("campaign: pendingSessionCampaign") &&
     stationState.includes("rewardPool: pendingSessionRewardPool") &&
-    drawRoute.includes("activePendingSession") &&
-    drawRoute.includes("guestCampaign") &&
-    drawRoute.includes("guestRewardPool") &&
-    drawRoute.includes("guestRewardPoolReady") &&
-    drawRoute.includes("pendingSession.campaign") &&
-    drawRoute.includes("pendingSession.rewardPool") &&
-    drawRoute.includes("canStart={guestRewardPoolReady}") &&
-    drawRoute.includes("disabled={loading || !guestRewardPoolReady}") &&
-    !drawRoute.includes("stationState.budgetItems.map((item) =>") &&
-    !drawRoute.includes("stationState.activeCampaign?.claimHeadline"),
+    stationFeature.includes("pendingSession?.campaign") &&
+    stationFeature.includes("pendingSession?.rewardPool") &&
+    stationFeature.includes("const canStart = Boolean(pendingSession && rewardPool.length > 0)") &&
+    stationFeature.includes("canStart={canStart}") &&
+    stationFeature.includes("disabled={revealing || !canStart}") &&
+    !stationFeature.includes("station.budgetItems.map((item) =>") &&
+    !stationFeature.includes("station.activeCampaign?.claimHeadline"),
   "station guest mode must render only active owned campaign pending sessions, using session campaign snapshots and session-scoped reward pool instead of mutable activeCampaign"
 );
 const leaderboard = read("convex/leaderboard.ts");
@@ -2514,8 +2512,12 @@ assert(
     campaignAnalyticsBackfill.includes("sessionCountersWouldBackfill") &&
     campaignAnalyticsBackfill.includes("sessionCounterEventsWouldBackfill") &&
     campaignAnalyticsBackfill.includes("sessionCounterIncrementsWouldBackfill") &&
-    campaignAnalyticsBackfill.includes("wouldRecordAnalyticsCounterEvent") &&
-    campaignAnalyticsBackfill.includes("counterEstimate.eventWouldBackfill") &&
+    campaignAnalyticsBackfill.includes("estimateAnalyticsCounterTargets") &&
+    campaignAnalyticsBackfill.includes("recordAnalyticsCounterTargets") &&
+    campaignAnalyticsBackfill.includes("redemptionCounterBackfillTargets(redemption._id, args.campaignId)") &&
+    campaignAnalyticsBackfill.includes("redemptionCounterBackfillTargets(targetRedemption._id, args.campaignId)") &&
+    campaignAnalyticsBackfill.includes("sessionCounterBackfillTargets(session._id)") &&
+    campaignAnalyticsBackfill.includes("counterEstimate.countersWouldBackfill") &&
     campaignAnalyticsBackfill.includes("counterEstimate.counterIncrementsWouldBackfill") &&
     campaignAnalyticsBackfill.includes("campaignRedemptions.length + legacyOwnerRedemptions.length") &&
     !section(
@@ -2543,8 +2545,11 @@ assert(
     ownerAnalyticsBackfill.includes("sessionCountersWouldBackfill") &&
     ownerAnalyticsBackfill.includes("sessionCounterEventsWouldBackfill") &&
     ownerAnalyticsBackfill.includes("sessionCounterIncrementsWouldBackfill") &&
-    ownerAnalyticsBackfill.includes("wouldRecordAnalyticsCounterEvent") &&
-    ownerAnalyticsBackfill.includes("counterEstimate.eventWouldBackfill") &&
+    ownerAnalyticsBackfill.includes("estimateAnalyticsCounterTargets") &&
+    ownerAnalyticsBackfill.includes("recordAnalyticsCounterTargets") &&
+    ownerAnalyticsBackfill.includes("redemptionCounterBackfillTargets(redemption._id, ownedCampaignId)") &&
+    ownerAnalyticsBackfill.includes("sessionCounterBackfillTargets(session._id)") &&
+    ownerAnalyticsBackfill.includes("counterEstimate.countersWouldBackfill") &&
     ownerAnalyticsBackfill.includes("counterEstimate.counterIncrementsWouldBackfill") &&
     analytics.includes("async function ownedCampaignIdOrUndefined") &&
     analytics.includes("campaign?.ownerId === ownerId ? campaign._id : undefined") &&
@@ -2556,9 +2561,7 @@ assert(
     ownerAnalyticsBackfill.includes("campaignId: ownedCampaignId") &&
     ownerAnalyticsBackfill.includes("redemptionCountersBackfilled") &&
     ownerAnalyticsBackfill.includes("sessionCountersBackfilled") &&
-    ownerAnalyticsBackfill.includes("recordAnalyticsCounterEvent") &&
-    ownerAnalyticsBackfill.includes("redemptionCounterEventKey(redemption._id)") &&
-    ownerAnalyticsBackfill.includes("sessionCounterEventKey(session._id)") &&
+    ownerAnalyticsBackfill.includes("recordAnalyticsCounterTargets") &&
     ownerAnalyticsBackfill.includes('source: "backfill"'),
   "owner analytics backfill must repair owner and owned-campaign Aggregate totals plus idempotent Sharded Counter events without writing campaign state for foreign campaign references"
 );
@@ -2569,7 +2572,14 @@ assert(
 );
 assert(
   read("convex/schema.ts").includes("analyticsCounterEvents") &&
-    read("convex/schema.ts").includes('metric: v.union(v.literal("session_created"), v.literal("redemption_created"))') &&
+    read("convex/schema.ts").includes('v.literal("session_created")') &&
+    read("convex/schema.ts").includes('v.literal("redemption_created")') &&
+    read("convex/schema.ts").includes('v.literal("game_open")') &&
+    read("convex/schema.ts").includes('v.literal("game_start")') &&
+    read("convex/schema.ts").includes('v.literal("game_completion")') &&
+    read("convex/schema.ts").includes('v.literal("reward_outcome")') &&
+    read("convex/schema.ts").includes('v.literal("reward_claim")') &&
+    read("convex/schema.ts").includes('v.literal("public_play_link_open")') &&
     analytics.includes("recordAnalyticsCounterEvent") &&
     analytics.includes("analyticsCounterEvents") &&
     analytics.includes('withIndex("by_eventKey"') &&
@@ -2597,13 +2607,26 @@ assert(
     analytics.includes("await ownerCounters.inc(ctx, campaignMetricKey(args.campaignId!, args.metric))") &&
     analytics.includes("sessionCounterEventKey") &&
     analytics.includes("redemptionCounterEventKey") &&
+    analytics.includes("playSessionCounterEventKey") &&
+    analytics.includes("rewardCounterEventKey") &&
+    analytics.includes("recordPublicPlayLinkOpen") &&
+    analytics.includes('metric: "game_open"') &&
+    analytics.includes('metric: "game_start"') &&
+    analytics.includes('metric: "game_completion"') &&
+    analytics.includes('metric: "reward_outcome"') &&
+    analytics.includes('metric: "reward_claim"') &&
+    analytics.includes('metric: "public_play_link_open"') &&
+    analytics.includes("estimateAnalyticsCounterTargets") &&
+    analytics.includes("recordAnalyticsCounterTargets") &&
     analyticsPolicy.includes("export function sessionCounterEventKey") &&
     analyticsPolicy.includes("export function redemptionCounterEventKey") &&
+    analyticsPolicy.includes("export function playSessionCounterEventKey") &&
+    analyticsPolicy.includes("export function rewardCounterEventKey") &&
     analytics.includes('source: "live"') &&
     analytics.includes('source: "backfill"') &&
     analytics.includes("redemptionCountersBackfilled") &&
     analytics.includes("sessionCountersBackfilled"),
-  "analytics sharded-counter events must be idempotently marked and backfilled for campaign sessions/redemptions"
+  "analytics sharded-counter events must be idempotently marked and backfilled for campaign sessions, play starts, redemptions, and reward outcomes"
 );
 
 const migrations = read("convex/migrations.ts");
@@ -3175,16 +3198,12 @@ assert(
   "route smoke coverage must provide deterministic Vite public env without preserving dead frontend legacy auth flags"
 );
 assert(
-  campaignsRoute.includes("api.ops.getHostSaaSReadiness") &&
-    !campaignsRoute.includes("api.ops.getSaaSReadiness") &&
-    campaignsRoute.includes("runtimeReadinessRows") &&
-    campaignsRoute.includes("readinessEndpointRows") &&
-    campaignsRoute.includes("allRequiredReady") &&
-    campaignReadinessPanel.includes("missingRuntimeRequired") &&
-    campaignsRoute.includes("googleCallbackUrl") &&
-    campaignsRoute.includes("polarWebhookUrl") &&
-    campaignsRoute.includes("missingRequired.map((requirement) => requirement.label)"),
-  "Campaign Studio readiness panel must use the redacted host readiness query with runtime checks and public setup endpoints"
+  integrationsSettings.includes("api.ops.getHostSaaSReadiness") &&
+    !integrationsSettings.includes("api.ops.getSaaSReadiness") &&
+    integrationsSettings.includes("readiness.runtimeChecks") &&
+    integrationsSettings.includes("readiness.endpoints") &&
+    integrationsSettings.includes("allRequiredReady"),
+  "integration settings must use the redacted host readiness query with runtime checks and public endpoints"
 );
 
 const entitlements = read("convex/entitlements.ts");
@@ -3303,12 +3322,14 @@ assert(
 );
 assert(
   setup.includes("Không tìm thấy tài khoản host") &&
-    setup.includes("Cần thiết lập PIN host trước khi lưu ngân sách") &&
+    !setup.includes("Cần thiết lập PIN host trước khi lưu ngân sách") &&
+    read("app/_workspace/-features/OperationsSettingsFeature.tsx").includes("api.auth.setHostPin") &&
+    !read("app/_workspace/-features/RewardsSetupFeature.tsx").includes("api.auth.setHostPin") &&
     budgetScope.includes("Host chưa hoàn tất cấu hình ngân sách") &&
     !setup.includes("Không tìm thấy tài khoản chủ ví") &&
     !setup.includes("Cần thiết lập PIN chủ ví trước khi lưu ngân sách") &&
     !budgetScope.includes("Chủ ví chưa hoàn tất cấu hình ngân sách"),
-  "backend setup and budget-scope host errors must not leak wallet-era wording"
+  "reward setup must use host language while keeping account-level Host PIN mutations in operations settings"
 );
 assert(
   setup.includes("assertBudgetItemCount(ctx, ownerId, normalized.length, existingItems.length)"),
@@ -3385,6 +3406,7 @@ assert(
 for (const docsFile of [
   "AGENTS.md",
   "design_system.md",
+  "docs/product-direction.md",
   "docs/saas-standardization.md",
   "docs/production-evidence-template.md",
 ]) {
@@ -3394,14 +3416,15 @@ assertFileExists("docs/production-verification-runbook.md");
 
 const agentsDoc = read("AGENTS.md");
 assert(
-  agentsDoc.includes("SaaS prize-draw platform") &&
+  agentsDoc.includes("marketing game campaign platform") &&
     agentsDoc.includes("Google OAuth") &&
     agentsDoc.includes("Campaign Studio") &&
-    agentsDoc.includes("station draw session") &&
-    agentsDoc.includes("public claim link") &&
+    agentsDoc.includes("game template") &&
+    agentsDoc.includes("play session") &&
+    agentsDoc.includes("public play link") &&
     agentsDoc.includes("VITE_") &&
     agentsDoc.includes("NEXT_PUBLIC_"),
-  "AGENTS.md must describe the SaaS application flow, Google OAuth path, public claim links, and Vite env boundary"
+  "AGENTS.md must describe the marketing game platform flow, Google OAuth path, public play links, and Vite env boundary"
 );
 
 const readme = read("README.md");
@@ -3409,24 +3432,27 @@ const saasStandardization = read("docs/saas-standardization.md");
 const productionVerificationRunbook = read("docs/production-verification-runbook.md");
 const productionEvidenceTemplate = read("docs/production-evidence-template.md");
 assert(
-  readme.includes("SaaS prize-draw platform cho branded lucky campaigns") &&
-    readme.includes("default campaign skin") &&
+  readme.includes("Marketing game campaign platform cho brand") &&
+    readme.includes("game template đầu tiên") &&
+    readme.includes("docs/product-direction.md") &&
     readme.includes("Host đăng nhập bằng Google OAuth") &&
     readme.includes("Campaign Studio") &&
-    readme.includes("public claim link") &&
+    readme.includes("public play link") &&
     readme.includes("PIN host vẫn là lớp xác nhận") &&
     !readme.includes("Ứng dụng rút lì xì theo flow thực tế") &&
     !readme.includes("Chủ ví đăng ký/đăng nhập") &&
     !readme.includes("leaderboard theo từng chủ ví"),
-  "README intro must position the product as a SaaS prize-draw platform with Tet as the default campaign skin"
+  "README intro must position the product as a marketing game campaign platform with li xi as the first game template"
 );
 assert(
   readme.includes("docs/production-verification-runbook.md") &&
     readme.includes("docs/production-evidence-template.md") &&
+    readme.includes("docs/product-direction.md") &&
     saasStandardization.includes("production-verification-runbook.md") &&
     saasStandardization.includes("production-evidence-template.md") &&
+    saasStandardization.includes("product-direction.md") &&
     productionVerificationRunbook.includes("production-evidence-template.md"),
-  "README, runbook, and SaaS standardization docs must link the live/staging production verification runbook and evidence template"
+  "README, runbook, and platform standardization docs must link product direction, live/staging production verification runbook, and evidence template"
 );
 assert(
   saasStandardization.includes("official Next.js App Router migration guide") &&
@@ -3436,7 +3462,7 @@ assert(
     saasStandardization.includes("routeTree") &&
     saasStandardization.includes("$publicCode") &&
     saasStandardization.includes("Runtime TypeScript modules under `convex/` and `lib/` avoid `.ts` import specifiers"),
-  "SaaS standardization docs must record the TanStack Start migration shape checked against the official Next.js App Router migration guide"
+  "platform standardization docs must record the TanStack Start migration shape checked against the official Next.js App Router migration guide"
 );
 assert(
     saasStandardization.includes("`requireResolvedOwner` has no legacy bridge opt-in") &&
@@ -3448,36 +3474,38 @@ assert(
     !readme.includes("only helper that may honor the temporary legacy bridge") &&
     saasStandardization.includes("migration-token resolver") &&
     saasStandardization.includes("CLI owner-ID backfills require `LI_XI_MIGRATION_TOKEN` / `LIXI_MIGRATION_TOKEN`") &&
-    saasStandardization.includes("Campaign Studio is the host control surface after setup") &&
-    saasStandardization.includes("explicit `Trạm rút` CTA from Campaign Studio into `/draw`") &&
+    saasStandardization.includes("The pathless authenticated workspace is the host control surface") &&
+    saasStandardization.includes("campaign-game operation is a contextual link to `/operate/$campaignGameId`") &&
     saasStandardization.includes("no larger than the 8 MB upload cap") &&
     saasStandardization.includes("R2 upload and metadata callbacks canonicalize the object key") &&
     saasStandardization.includes("no IPv4-literal bucket names") &&
-    saasStandardization.includes("Public claim lookup and redemption also fail closed") &&
+    (saasStandardization.includes("Public claim lookup and redemption also fail closed") ||
+      saasStandardization.includes("Public play lookup and redemption also fail closed")) &&
     saasStandardization.includes("no longer active") &&
     saasStandardization.includes("The live station session is only exposed when its campaign still exists") &&
     saasStandardization.includes("malformed legacy station sessions with missing, foreign, or inactive campaigns") &&
     saasStandardization.includes("host display identity") &&
     saasStandardization.includes("Guest-facing branding comes from campaign snapshots") &&
-    saasStandardization.includes("Public claim previews, station pending-session reward pools, and redemption selection all use the same capacity-preserving prize filter") &&
+    (saasStandardization.includes("Public claim previews, station pending-session reward pools, and redemption selection all use the same capacity-preserving prize filter") ||
+      saasStandardization.includes("Public play previews, station pending-session reward pools, and redemption selection all use the same capacity-preserving prize filter")) &&
     saasStandardization.includes("repairs owned-campaign Aggregate/counter state") &&
     saasStandardization.includes("campaign Aggregate/counter state for redemption rows whose `campaignId` belongs to the owner") &&
     readme.includes("không ghi campaign counter hoặc campaign Aggregate cho campaign lạ") &&
     readme.includes("owner Aggregate/counter và Aggregate/counter của campaign thuộc owner") &&
     saasStandardization.includes("raw IPv4/IPv6 literals"),
-  "SaaS standardization docs must record OAuth-only host auth, R2 render cap, inactive-campaign public claim guards, and capacity-preserving prize previews"
+  "platform standardization docs must record OAuth-only host auth, R2 render cap, inactive-campaign public claim guards, and capacity-preserving prize previews"
 );
 assert(
   productionVerificationRunbook.includes("# Production Verification Runbook") &&
     productionVerificationRunbook.includes("allRequiredReady: true") &&
     productionVerificationRunbook.includes("Google OAuth Host Flow") &&
-    productionVerificationRunbook.includes("Campaign And Public Claim Flow") &&
+    productionVerificationRunbook.includes("Current Li Xi Public Play/Claim Flow") &&
     productionVerificationRunbook.includes("Cloudflare R2 Campaign Assets") &&
     productionVerificationRunbook.includes("Polar Billing Flow") &&
     productionVerificationRunbook.includes("checkout return origin") &&
     productionVerificationRunbook.includes("full return URL") &&
     productionVerificationRunbook.includes("customer portal return origin") &&
-    productionVerificationRunbook.includes("returns to `/campaigns`") &&
+    productionVerificationRunbook.includes("returns to `/settings/billing`") &&
     productionVerificationRunbook.includes("Analytics And Backfill") &&
     productionVerificationRunbook.includes("npm run verify:production -- --evidence-out /tmp/li-xi-production-readiness.json") &&
     productionVerificationRunbook.includes("npm run verify:evidence -- /tmp/li-xi-production-readiness.json") &&
@@ -3573,12 +3601,12 @@ assert(
 	    productionEvidenceTemplate.includes("exact `/api/auth/callback/google` path") &&
 	    productionEvidenceTemplate.includes("`Host profile row id` must be a concrete observed host profile row id or alias") &&
 	    productionEvidenceTemplate.includes("`Redirect target after sign-in` must be a root-relative host app route") &&
-	    productionEvidenceTemplate.includes("`/setup` or `/campaigns`") &&
+	    productionEvidenceTemplate.includes("`/onboarding` or `/campaigns`") &&
 	    productionEvidenceTemplate.includes("query string") &&
-	    productionVerificationRunbook.includes("Confirm redirect to setup or Campaign Studio") &&
-	    productionVerificationRunbook.includes("draw route") &&
+	    productionVerificationRunbook.includes("Confirm redirect to onboarding or Campaign Studio") &&
+	    productionVerificationRunbook.includes("station route") &&
 	    productionVerificationRunbook.includes("Record the final redirect target as a root-relative route only") &&
-	    productionEvidenceReportValidator.includes('const allowedGoogleOAuthRedirectPaths = new Set(["/setup", "/campaigns"])') &&
+	    productionEvidenceReportValidator.includes('const allowedGoogleOAuthRedirectPaths = new Set(["/onboarding", "/campaigns"])') &&
 	    productionEvidenceReportValidator.includes("function assertAllowedRootRelativeRoute") &&
 	    productionEvidenceReportValidator.includes("must not include a query string") &&
 	    productionEvidenceReportValidator.includes("Google OAuth.Redirect target after sign-in") &&
@@ -3598,7 +3626,7 @@ assert(
 	    productionEvidenceTemplate.includes("guest-facing claim APIs did not expose") &&
 	    productionEvidenceTemplate.includes("do not reuse one generic") &&
 	    productionVerificationRunbook.includes("Verify an expired public-code row fails closed") &&
-	    productionVerificationRunbook.includes("Verify a public claim link for an inactive campaign fails closed") &&
+	    productionVerificationRunbook.includes("Verify a public play/claim link for an inactive campaign fails closed") &&
 	    productionVerificationRunbook.includes("inactive-campaign closed state") &&
 	    productionEvidenceTemplate.includes("The Polar webhook URL must use `Deployment.Convex HTTP Actions origin`") &&
     productionEvidenceTemplate.includes("exact `/polar/events` path") &&
@@ -3608,7 +3636,7 @@ assert(
     productionEvidenceTemplate.includes("The Polar checkout and customer portal return origins must match") &&
     productionEvidenceTemplate.includes("Polar customer id, subscription id, and product alias/id evidence must be the") &&
     productionEvidenceTemplate.includes("concrete observed values") &&
-    productionEvidenceReportValidator.includes("const billingReturnPath = \"/campaigns\"") &&
+    productionEvidenceReportValidator.includes("const billingReturnPath = \"/settings/billing\"") &&
     productionEvidenceReportValidator.includes("function assertPublicAppUrl") &&
     productionEvidenceReportValidator.includes("Polar.Checkout return URL") &&
     productionEvidenceReportValidator.includes("Polar.Customer portal return URL") &&
@@ -3665,7 +3693,7 @@ assert(
     productionEvidenceTemplate.includes("Customer portal return origin") &&
     productionEvidenceTemplate.includes("Customer portal return URL") &&
     productionVerificationRunbook.includes("full return URL") &&
-    productionVerificationRunbook.includes("returns to `/campaigns`") &&
+    productionVerificationRunbook.includes("returns to `/settings/billing`") &&
     productionEvidenceTemplate.includes("Polar webhook URL") &&
 	    productionEvidenceTemplate.includes("## Analytics And Backfill") &&
 	    productionEvidenceTemplate.includes("Analytics `Owner id` and `Campaign id` must be concrete observed ids or aliases") &&
@@ -3682,11 +3710,11 @@ assert(
 );
 
 if (failures.length > 0) {
-  console.error("SaaS contract checks failed:");
+  console.error("Platform contract checks failed:");
   for (const failure of failures) {
     console.error(`- ${failure}`);
   }
   process.exit(1);
 }
 
-console.log("SaaS contract checks passed");
+console.log("Platform contract checks passed");

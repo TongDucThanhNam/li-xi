@@ -1,4 +1,17 @@
-export type AnalyticsMetric = "session_created" | "redemption_created";
+export type AnalyticsMetric =
+  | "session_created"
+  | "redemption_created"
+  | "game_open"
+  | "game_start"
+  | "game_completion"
+  | "reward_outcome"
+  | "reward_claim"
+  | "public_play_link_open";
+
+export type GameFunnelMetric = Exclude<
+  AnalyticsMetric,
+  "session_created" | "redemption_created"
+>;
 
 export type ExistingAnalyticsCounterEvent = {
   ownerId: string;
@@ -56,6 +69,19 @@ export function sessionCounterEventKey(sessionId: string) {
 export function redemptionCounterEventKey(redemptionId: string) {
   assertNonEmptyAnalyticsId(redemptionId, "redemptionId");
   return `redemption:${redemptionId}:redemption_created`;
+}
+
+export function playSessionCounterEventKey(sessionId: string, metric: GameFunnelMetric) {
+  assertNonEmptyAnalyticsId(sessionId, "sessionId");
+  return `play-session:${sessionId}:${metric}`;
+}
+
+export function rewardCounterEventKey(
+  redemptionId: string,
+  metric: "reward_outcome" | "reward_claim" | "game_completion"
+) {
+  assertNonEmptyAnalyticsId(redemptionId, "redemptionId");
+  return `reward:${redemptionId}:${metric}`;
 }
 
 export function estimateAnalyticsCounterEventWrite(args: {

@@ -5,6 +5,7 @@ import { useQuery } from "convex/react";
 import { useEffect } from "react";
 import { ShieldCheck } from "lucide-react";
 import { AdminRouteStatus } from "@/app/components/AdminPageShell";
+import { StandaloneAdminRouteError } from "@/app/-auth/StandaloneAdminRouteError";
 import { api } from "@/convex/_generated/api";
 import { requireHostRouteAuth } from "@/lib/hostRouteGuard";
 import { useOwnerSession } from "@/lib/useOwnerSession";
@@ -14,7 +15,15 @@ export const Route = createFileRoute("/")({
 	beforeLoad: requireHostRouteAuth,
 	head: () => ({
 		links: [{ rel: "stylesheet", href: adminCss }],
+		meta: [
+			{ title: "Đang mở | Campaign Game Studio" },
+			{
+				name: "description",
+				content: "Kiểm tra phiên host và mở đúng trạng thái của không gian làm việc.",
+			},
+		],
 	}),
+	errorComponent: StandaloneAdminRouteError,
 	component: HomePage,
 });
 
@@ -37,17 +46,17 @@ function HomePage() {
 		}
 
 		void navigate({
-			to: setupState.hasSetup ? "/campaigns" : "/setup",
+			to: setupState.hasSetup ? "/campaigns" : "/onboarding",
 			replace: true,
 		});
 	}, [navigate, owner, setupState]);
 
 	return (
 		<AdminRouteStatus
-			description="Đang kiểm tra phiên host và ngân sách chiến dịch."
+			description="Đang kiểm tra phiên host và mức độ sẵn sàng của không gian làm việc."
 			icon={<ShieldCheck aria-hidden="true" size={22} strokeWidth={2} />}
-			status="Checking"
-			title="Đang mở trạm"
+			status="Đang kiểm tra"
+			title="Đang mở không gian làm việc"
 		/>
 	);
 }

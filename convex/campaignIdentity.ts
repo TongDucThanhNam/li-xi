@@ -4,9 +4,9 @@ import { getHostProfileForOwner } from "./hostProfiles";
 
 type ConvexCtx = QueryCtx | MutationCtx;
 
-export const DEFAULT_CAMPAIGN_NAME = "Lunar Fortune";
-export const DEFAULT_CAMPAIGN_BRAND = "Lì Xì Station";
-export const DEFAULT_CAMPAIGN_DESCRIPTION = "Chiến dịch rút phong bao may mắn mặc định.";
+export const DEFAULT_CAMPAIGN_NAME = "Customer Thank You";
+export const DEFAULT_CAMPAIGN_BRAND = "Campaign Game Studio";
+export const DEFAULT_CAMPAIGN_DESCRIPTION = "A branded customer appreciation game experience.";
 export const visibleCampaignStatuses = ["active", "draft"] as const;
 
 export function slugifyCampaign(value: string) {
@@ -27,7 +27,7 @@ export function slugifyCampaign(value: string) {
 }
 
 export function defaultCampaignSlugBase(ownerId: Id<"users">) {
-  return `lunar-${ownerId.slice(-6).toLowerCase()}`;
+  return `campaign-${ownerId.slice(-6).toLowerCase()}`;
 }
 
 function campaignOwnerSlugToken(ownerId: Id<"users">) {

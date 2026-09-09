@@ -1,0 +1,8 @@
+{
+  "mcp": {
+    "heroui-native-pro": {
+      "type": "http",
+      "url": "https://native-mcp.heroui.pro/mcp"
+    }
+  }
+}

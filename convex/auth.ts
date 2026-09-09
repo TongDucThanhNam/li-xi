@@ -267,3 +267,24 @@ export const setHostPin = mutation({
     };
   },
 });
+
+export const verifyHostPin = mutation({
+  args: {
+    pin: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Cần đăng nhập để xác minh PIN host");
+    }
+    const user = await ctx.db.get(userId);
+    if (!user || !hasHashedPin(user)) {
+      throw new Error("Host chưa thiết lập PIN");
+    }
+    const pin = validatePin(args.pin);
+    if (!(await verifyPinHash(pin, user.pinSalt, user.pinHash))) {
+      throw new Error("PIN host không đúng");
+    }
+    return { verified: true };
+  },
+});

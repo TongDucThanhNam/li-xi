@@ -1,0 +1,174 @@
+[CampaignsPage] app/campaigns.tsx
+  [line 74] useState<CampaignSelection>(null);
+  [line 95] const [form, setForm] = useState<CampaignForm>(emptyForm);
+  [line 99] const [contextExpandedKeys, setContextExpandedKeys] = useState<Set<string | number>>(
+  [line 114] if (owner === null) {
+  [line 120] if (!workspace) {
+  [line 124] if (selectedCampaignId === "new") {
+  [line 131] if (
+  [line 143] if (!workspace || selectedCampaignId === "new") {
+  [line 147] return (
+  [line 155] if (!selectedCampaign) {
+  [line 239] const updateForm = <K extends keyof CampaignForm>(key: K, value: CampaignForm[K]) => {
+  [line 249] if (resource.limit === null || resource.limit === 0) {
+  [line 261] if (!owner) return;
+  [line 287] if (planState?.resources.campaigns.isFull) {
+  [line 301] if (!owner || !canSave) return;
+  [line 354] if (!owner || workspace === undefined) {
+  [line 355] return (
+  [line 356] <AdminRouteStatus
+  [line 375] return {
+  [line 539] <Widget className="h-fit">
+  [line 540] <Widget.Header>
+  [line 541] <Widget.Title>Preview</Widget.Title>
+  [line 542] <Widget.Description>Guest-facing play stage preview.</Widget.Description>
+  [line 544] <Widget.Content>
+  [line 565] <p className="admin-draw-preview__brand">
+  [line 568] <h3 className="admin-draw-preview__title">
+  [line 571] <p className="admin-draw-preview__copy">
+  [line 594] <BillingPanel
+  [line 605] <ReadinessPanel
+  [line 623] <Chip
+  [line 629] <Chip.Label className="truncate">
+  [line 633] <Button
+  [line 640] <MonitorPlay aria-hidden="true" size={16} strokeWidth={2} />
+  [line 643] <Button
+  [line 651] <Save aria-hidden="true" size={16} strokeWidth={2} />
+  [line 659] return (
+  [line 660] <AdminPageShell
+  [line 669] <KPIGroup className="admin-kpi-strip">
+  [line 670] <KPI>
+  [line 671] <KPI.Header>
+  [line 672] <KPI.Icon status="success">
+  [line 673] <FileText aria-hidden="true" size={16} strokeWidth={2} />
+  [line 675] <KPI.Title>Campaigns</KPI.Title>
+  [line 676] <KPI.Trend trend="neutral">{activeCampaignCount} active</KPI.Trend>
+  [line 678] <KPI.Content>
+  [line 679] <KPI.Value maximumFractionDigits={0} value={workspace.campaigns.length} />
+  [line 682] <KPIGroup.Separator />
+  [line 683] <KPI>
+  [line 684] <KPI.Header>
+  [line 685] <KPI.Icon status={form.status === "active" ? "success" : "warning"}>
+  [line 686] <RadioTower aria-hidden="true" size={16} strokeWidth={2} />
+  [line 688] <KPI.Title>Selected</KPI.Title>
+  [line 690] <KPI.Content>
+  [line 692] <p className="truncate text-xl font-semibold text-foreground">
+  [line 695] <p className="mt-1 text-xs text-muted">Editing in Studio</p>
+  [line 699] <KPIGroup.Separator />
+  [line 700] <KPI>
+  [line 701] <KPI.Header>
+  [line 702] <KPI.Icon status={planState?.source === "polar" ? "success" : "warning"}>
+  [line 703] <ServerCog aria-hidden="true" size={16} strokeWidth={2} />
+  [line 705] <KPI.Title>Plan</KPI.Title>
+  [line 706] <KPI.Trend trend={planState?.source === "polar" ? "up" : "neutral"}>
+  [line 710] <KPI.Content>
+  [line 712] <p className="truncate text-xl font-semibold text-foreground">
+  [line 715] <p className="mt-1 text-xs text-muted">Workspace limits</p>
+  [line 719] <KPIGroup.Separator />
+  [line 720] <KPI>
+  [line 721] <KPI.Header>
+  [line 722] <KPI.Icon status="success">
+  [line 723] <BadgeCheck aria-hidden="true" size={16} strokeWidth={2} />
+  [line 725] <KPI.Title>Claimed</KPI.Title>
+  [line 727] <KPI.Content>
+  [line 728] <KPI.Value
+  [line 739] <Alert status={error ? "danger" : "success"}>
+  [line 740] <Alert.Indicator />
+  [line 741] <Alert.Content>
+  [line 742] <Alert.Title>{workspaceFeedback}</Alert.Title>
+  [line 743] <Alert.Description>
+  [line 752] <Widget>
+  [line 753] <Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
+  [line 755] <Widget.Title>Launch console</Widget.Title>
+  [line 756] <Widget.Description>
+  [line 761] <Chip color={form.status === "active" ? "success" : "default"} variant="soft">
+  [line 764] <Chip variant="soft">
+  [line 767] <Chip variant="soft">{form.theme === "lunar" ? "Lunar" : "Brand"}</Chip>
+  [line 770] <Widget.Content className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+  [line 773] <p className="truncate text-2xl font-semibold text-foreground">
+  [line 776] <p className="mt-2 line-clamp-2 max-w-3xl text-sm leading-6 text-muted">
+  [line 782] <ItemCardGroup
+  [line 788] <ItemCard className="items-start" key={row.title} variant="secondary">
+  [line 789] <ItemCard.Icon
+  [line 806] <ItemCard.Content>
+  [line 807] <ItemCard.Title>{row.title}</ItemCard.Title>
+  [line 808] <ItemCard.Description className="line-clamp-2 whitespace-normal">
+  [line 812] <ItemCard.Action>
+  [line 813] <Chip color={row.color} size="sm" variant="soft">
+  [line 823] <ProgressCircle
+  [line 828] <ProgressCircle.Track>
+  [line 829] <ProgressCircle.TrackCircle />
+  [line 830] <ProgressCircle.FillCircle />
+  [line 835] <NumberValue
+  [line 840] <NumberValue.Suffix>
+  [line 844] <Chip
+  [line 852] <p className="mt-1 text-xs leading-5 text-muted">
+  [line 858] <p className="admin-command-summary__note-label">
+  [line 862] <p className="admin-command-summary__note-title">
+  [line 865] <Chip color={nextWorkflowRow.color} size="sm" variant="soft">
+  [line 869] <p className="admin-command-summary__note-copy line-clamp-2">
+  [line 874] <p className="text-xs font-medium text-muted">Current public play route</p>
+  [line 875] <p className="break-all font-mono text-xs text-foreground">
+  [line 885] <Widget className="h-fit">
+  [line 886] <Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
+  [line 888] <Widget.Title>Campaign list</Widget.Title>
+  [line 889] <Widget.Description>
+  [line 894] <Chip size="sm" variant="soft">
+  [line 897] <Button
+  [line 903] <Plus aria-hidden="true" size={16} strokeWidth={2} />
+  [line 908] <Widget.Content className="gap-4">
+  [line 909] <ScrollShadow className="max-h-[320px] pr-1">
+  [line 912] <ItemCardGroup variant="secondary">
+  [line 913] <ItemCard variant="secondary">
+  [line 914] <ItemCard.Icon className="text-success">
+  [line 915] <RadioTower aria-hidden="true" size={18} strokeWidth={2} />
+  [line 917] <ItemCard.Content>
+  [line 918] <ItemCard.Description>Active</ItemCard.Description>
+  [line 919] <ItemCard.Title>
+  [line 920] <NumberValue
+  [line 927] <ItemCard variant="secondary">
+  [line 928] <ItemCard.Icon className="text-muted">
+  [line 929] <FileText aria-hidden="true" size={18} strokeWidth={2} />
+  [line 931] <ItemCard.Content>
+  [line 932] <ItemCard.Description>Draft</ItemCard.Description>
+  [line 933] <ItemCard.Title>
+  [line 934] <NumberValue
+  [line 943] <ListView
+  [line 957] <ListView.Item id={campaign.id} textValue={campaign.name}>
+  [line 958] <ListView.ItemContent>
+  [line 959] <FileText
+  [line 965] <ListView.Title>{campaign.name}</ListView.Title>
+  [line 966] <ListView.Description>/{campaign.slug}</ListView.Description>
+  [line 969] <ListView.ItemAction>
+  [line 970] <Chip
+  [line 982] <ItemCard variant="secondary">
+  [line 983] <ItemCard.Content>
+  [line 984] <ItemCard.Title>New campaign</ItemCard.Title>
+  [line 985] <ItemCard.Description>Not saved yet</ItemCard.Description>
+  [line 987] <ItemCard.Action>
+  [line 988] <Chip size="sm" variant="soft">
+  [line 997] <EmptyState size="sm">
+  [line 998] <EmptyState.Header>
+  [line 999] <EmptyState.Media variant="icon">
+  [line 1000] <FileText aria-hidden="true" size={20} strokeWidth={2} />
+  [line 1002] <EmptyState.Title>No campaigns yet</EmptyState.Title>
+  [line 1003] <EmptyState.Description>
+  [line 1008] <EmptyState.Content>
+  [line 1009] <Button type="button" onPress={handleEnsureDefault}>
+  [line 1010] <Plus aria-hidden="true" size={16} strokeWidth={2} />
+  [line 1023] <CampaignEditor
+  [line 1043] <Widget>
+  [line 1044] <Widget.Content className="min-h-[360px] items-center justify-center">
+  [line 1045] <EmptyState>
+  [line 1046] <EmptyState.Header>
+  [line 1047] <EmptyState.Media variant="icon">
+  [line 1048] <FileText aria-hidden="true" size={24} strokeWidth={2} />
+  [line 1050] <EmptyState.Title>Select a campaign to edit</EmptyState.Title>
+  [line 1051] <EmptyState.Description className="max-w-sm text-pretty">
+  [line 1056] <EmptyState.Content className="flex-row flex-wrap justify-center gap-2">
+  [line 1058] <Button
+  [line 1063] <FileText aria-hidden="true" size={16} strokeWidth={2} />
+  [line 1067] <Button type="button" onPress={handleEnsureDefault}>
+  [line 1068] <Plus aria-hidden="true" size={16} strokeWidth={2} />
+  [line 1072] <Button
+  [line 1078] <Plus aria-hidden="true" size={16} strokeWidth={2} />

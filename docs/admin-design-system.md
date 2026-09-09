@@ -1,8 +1,8 @@
 # Admin Design System
 
 Admin surfaces use HeroUI Pro for management workflows: Campaign Studio,
-setup, leaderboard, billing, analytics, ops readiness, and future SaaS
-workspace screens.
+game configuration, reward inventory, billing, analytics, ops readiness, and
+future platform workspace screens.
 
 ## Scope
 
@@ -11,9 +11,10 @@ workspace screens.
 - Use `@heroui/react` for base controls such as `Button`, `Card`, `Input`,
   `Table`, `Alert`, `Chip`, `Label`, and `ProgressBar`.
 - Do not use the Lunar Fortune red/gold theme for admin screens except inside a
-  draw-preview surface that intentionally previews the guest experience.
-- Keep `/draw` station mode and `/claim/$publicCode` on the custom draw
-  template style system.
+  game-preview surface that intentionally previews the guest experience.
+- Keep canonical `/station/$campaignGameId` and `/play/$publicCode` on the
+  custom game-template style system. `/draw` and `/claim/$publicCode` remain
+  compatibility entries and must not own a second visual implementation.
 
 ## Styling
 
@@ -32,9 +33,9 @@ workspace screens.
 - Put app branding in the sidebar, not repeated in every page header.
 - Page content should use constrained width, generous top padding, and clear
   header/action grouping.
-- Contextual tooling such as campaign preview, billing usage, readiness, recent
-  assets, and route metadata should live in an `AppLayout` aside panel instead
-  of competing with the main editor as another page column.
+- Contextual tooling such as campaign/game preview, billing usage, readiness,
+  recent assets, and route metadata should live in an `AppLayout` aside panel
+  instead of competing with the main editor as another page column.
 - When an aside is present, expose the built-in aside trigger from the navbar and
   allow the panel to become a sheet on tablet/mobile viewports.
 - Tables, cards, alerts, and progress indicators should come from HeroUI rather
@@ -43,11 +44,13 @@ workspace screens.
   area, use HeroUI feedback/actions, and avoid creating a separate decorative
   panel or toast.
 
-## Current Migration State
+## Current Route State
 
-- `/`, `/auth`, `/setup`, `/campaigns`, and `/leaderboard` load
-  `app/styles/admin.css` and use the HeroUI Pro admin direction.
-- `/draw` and `/claim/$publicCode` load the Lunar Fortune draw template CSS via
-  the draw-template registry.
+- The pathless authenticated workspace loads `app/styles/admin.css` once and
+  owns campaign routes, `/analytics`, `/settings/*`, and `/operate/$campaignGameId`.
+- `/station/$campaignGameId` and `/play/$publicCode` resolve CSS, fonts, stage,
+  editor, and preview through the generalized game-template registry.
+- `/setup`, `/draw`, `/leaderboard`, and `/claim/$publicCode` are compatibility
+  routes that redirect or reuse canonical features.
 - Shared components used by both admin and draw surfaces must expose explicit
   variants rather than relying on the Lunar Fortune theme globally.

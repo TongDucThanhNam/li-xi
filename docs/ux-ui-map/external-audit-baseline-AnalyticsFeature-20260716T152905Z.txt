@@ -1,0 +1,197 @@
+[AnalyticsFeature] app/_workspace/-features/AnalyticsFeature.tsx
+  [line 31] return {
+  [line 45] const variants: Record<Rarity, "default" | "danger" | "warning"> = {
+  [line 54] const colors: Record<Rarity, string> = {
+  [line 71] if (owner === null) {
+  [line 118] if (
+  [line 139] if (
+  [line 147] return (
+  [line 148] <AdminRouteStatus
+  [line 166] return {
+  [line 223] const leaderboardColumns: DataGridColumn<LeaderboardRow>[] = [
+  [line 243] <Chip color={getRarityStatus(item.rarity)} size="sm" variant="soft">
+  [line 255] <NumberValue
+  [line 273] return (
+  [line 286] const historyColumns: DataGridColumn<HistoryRow>[] = [
+  [line 305] <Chip className="w-fit" size="sm" variant="soft">
+  [line 317] <Chip color={getRarityStatus(item.rarity)} size="sm" variant="soft">
+  [line 329] <NumberValue
+  [line 347] return (
+  [line 362] <Widget>
+  [line 363] <Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
+  [line 365] <Widget.Title>Phạm vi chiến dịch</Widget.Title>
+  [line 366] <Widget.Description>
+  [line 370] <Chip className="max-w-full" variant="soft">
+  [line 371] <Chip.Label className="truncate">{selectedScopeLabel}</Chip.Label>
+  [line 374] <Widget.Content className="gap-4">
+  [line 375] <NativeSelect fullWidth variant="secondary">
+  [line 376] <Label>Chiến dịch</Label>
+  [line 377] <NativeSelect.Trigger
+  [line 391] <NativeSelect.Option value="all">Tất cả chiến dịch</NativeSelect.Option>
+  [line 393] <NativeSelect.Option key={campaign.id} value={campaign.id}>
+  [line 397] <NativeSelect.Indicator />
+  [line 399] <Description>
+  [line 403] <ItemCardGroup aria-label="Phạm vi phân tích" variant="secondary">
+  [line 404] <ItemCard variant="secondary">
+  [line 405] <ItemCard.Content>
+  [line 406] <ItemCard.Title>{selectedScopeLabel}</ItemCard.Title>
+  [line 407] <ItemCard.Description>
+  [line 413] <ItemCard.Action>
+  [line 414] <Chip size="sm" variant="soft">
+  [line 423] <Widget>
+  [line 424] <Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
+  [line 426] <Widget.Title>Cơ cấu phần thưởng</Widget.Title>
+  [line 427] <Widget.Description>
+  [line 431] <Widget.Legend>
+  [line 432] <Widget.LegendItem color="var(--chart-3)">
+  [line 438] <Widget.Content className="gap-5">
+  [line 439] <BarChart data={rarityBreakdown} height={200}>
+  [line 440] <BarChart.Grid vertical={false} />
+  [line 441] <BarChart.XAxis dataKey="label" tickMargin={8} />
+  [line 442] <BarChart.YAxis width={36} />
+  [line 443] <BarChart.Bar
+  [line 450] <BarChart.Tooltip
+  [line 452] <BarChart.TooltipContent
+  [line 460] <ItemCardGroup aria-label="Cơ cấu phần thưởng theo độ hiếm" variant="secondary">
+  [line 462] <ItemCard className="items-start" key={item.rarity} variant="secondary">
+  [line 463] <ItemCard.Content className="gap-2">
+  [line 465] <ItemCard.Title>{item.label}</ItemCard.Title>
+  [line 471] <NumberValue
+  [line 476] <NumberValue.Suffix>
+  [line 482] <NumberValue
+  [line 496] <Widget.Content>
+  [line 497] <EmptyState size="sm">
+  [line 498] <EmptyState.Header>
+  [line 499] <EmptyState.Media variant="icon">
+  [line 500] <BarChart3 aria-hidden="true" size={22} strokeWidth={2} />
+  [line 502] <EmptyState.Title>Chưa có dữ liệu cơ cấu phần thưởng</EmptyState.Title>
+  [line 503] <EmptyState.Description>
+  [line 514] return (
+  [line 515] <AdminPageShell
+  [line 527] <Tabs
+  [line 533] <Tabs.ListContainer className="overflow-x-auto"><Tabs.List aria-label="Góc nhìn phân tích" className="w-fit"><Tabs.Tab id="overview">Tổng quan<Tabs.Indicator /></Tabs.Tab><Tabs.Tab id="games">Trò chơi<Tabs.Indicator /></Tabs.Tab><Tabs.Tab i
+  [line 535] <Widget>
+  [line 536] <Widget.Header>
+  [line 538] <Widget.Title>{viewCopy.title}</Widget.Title>
+  [line 539] <Widget.Description>{viewCopy.description}</Widget.Description>
+  [line 542] <Widget.Content>
+  [line 544] <ItemCardGroup aria-label="Chỉ số hiệu quả trò chơi" className="admin-card-grid--three" layout="grid" variant="secondary">
+  [line 545] <ItemCard variant="secondary"><ItemCard.Icon><Gamepad2 aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Lượt mở trò chơi</ItemCard.Title><ItemCard.Description>{analytics.gameMetrics.opens.toLocaleString("vi-VN")} lượt<
+  [line 546] <ItemCard variant="secondary"><ItemCard.Icon><MonitorPlay aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Lượt bắt đầu</ItemCard.Title><ItemCard.Description>{analytics.gameMetrics.starts.toLocaleString("vi-VN")} lượt<
+  [line 547] <ItemCard variant="secondary"><ItemCard.Icon><Trophy aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Lượt hoàn tất</ItemCard.Title><ItemCard.Description>{analytics.gameMetrics.completions.toLocaleString("vi-VN")} lượt
+  [line 550] <ItemCardGroup aria-label="Chỉ số hiệu quả kênh chia sẻ" className="admin-card-grid--three" layout="grid" variant="secondary">
+  [line 551] <ItemCard variant="secondary"><ItemCard.Icon><Link2 aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Lượt mở liên kết công khai</ItemCard.Title><ItemCard.Description>{analytics.gameMetrics.channelSharePerformance.publi
+  [line 552] <ItemCard variant="secondary"><ItemCard.Icon><Trophy aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Lượt nhận thưởng</ItemCard.Title><ItemCard.Description>{analytics.gameMetrics.claims.toLocaleString("vi-VN")} lượt</
+  [line 553] <ItemCard variant="secondary"><ItemCard.Icon><BarChart3 aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Tỷ lệ chuyển đổi</ItemCard.Title><ItemCard.Description>{conversionPercent === null ? "Chưa đủ dữ liệu" : `${conve
+  [line 556] <ItemCardGroup aria-label="Chỉ số hiệu quả phần thưởng" className="admin-card-grid--three" layout="grid" variant="secondary">
+  [line 557] <ItemCard variant="secondary"><ItemCard.Icon><Trophy aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Kết quả phần thưởng</ItemCard.Title><ItemCard.Description>{analytics.gameMetrics.rewardOutcomes.toLocaleString("vi-V
+  [line 558] <ItemCard variant="secondary"><ItemCard.Icon><History aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Lượt nhận thưởng</ItemCard.Title><ItemCard.Description>{analytics.gameMetrics.claims.toLocaleString("vi-VN")} lượt<
+  [line 559] <ItemCard variant="secondary"><ItemCard.Icon><BarChart3 aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Tỷ lệ nhận thưởng</ItemCard.Title><ItemCard.Description>{conversionPercent === null ? "Chưa đủ dữ liệu" : `${conv
+  [line 562] <p className="text-sm text-muted">Dữ liệu tổng quan bên dưới kết hợp hiệu quả trò chơi, phần thưởng và phân phối trong {selectedScopeLabel.toLocaleLowerCase()}.</p>
+  [line 566] <KPIGroup className="admin-kpi-strip">
+  [line 567] <KPI>
+  [line 568] <KPI.Header>
+  [line 569] <KPI.Title>Lượt trao thưởng</KPI.Title>
+  [line 571] <KPI.Content>
+  [line 572] <KPI.Value maximumFractionDigits={0} value={history.length} />
+  [line 575] <KPIGroup.Separator />
+  [line 576] <KPI>
+  [line 577] <KPI.Header>
+  [line 578] <KPI.Title>Giá trị đã trao</KPI.Title>
+  [line 580] <KPI.Content>
+  [line 581] <KPI.Value
+  [line 589] <KPIGroup.Separator />
+  [line 590] <KPI>
+  [line 591] <KPI.Header>
+  [line 592] <KPI.Title>Phần thưởng huyền thoại</KPI.Title>
+  [line 593] <KPI.Trend trend={legendCount > 0 ? "up" : "neutral"}>
+  [line 597] <KPI.Content>
+  [line 598] <KPI.Value maximumFractionDigits={0} value={legendCount} />
+  [line 601] <KPIGroup.Separator />
+  [line 602] <KPI>
+  [line 603] <KPI.Header>
+  [line 604] <KPI.Title>Chiến dịch</KPI.Title>
+  [line 606] <KPI.Content>
+  [line 607] <KPI.Value maximumFractionDigits={0} value={workspace.campaigns.length} />
+  [line 612] <Widget>
+  [line 613] <Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
+  [line 615] <Widget.Title>Tóm tắt phân tích</Widget.Title>
+  [line 616] <Widget.Description>
+  [line 620] <Chip color={analyticsReadyCount === 3 ? "success" : "default"} variant="soft">
+  [line 624] <Widget.Content className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+  [line 625] <ItemCardGroup
+  [line 631] <ItemCard className="items-start" variant="secondary">
+  [line 632] <ItemCard.Icon className="text-accent">
+  [line 633] <FileText aria-hidden="true" size={18} strokeWidth={2} />
+  [line 635] <ItemCard.Content>
+  [line 636] <ItemCard.Title>Phạm vi</ItemCard.Title>
+  [line 637] <ItemCard.Description className="whitespace-normal">
+  [line 641] <ItemCard.Action>
+  [line 642] <Chip size="sm" variant="soft">
+  [line 647] <ItemCard className="items-start" variant="secondary">
+  [line 648] <ItemCard.Icon className={topReward ? "text-success" : "text-muted"}>
+  [line 649] <Trophy aria-hidden="true" size={18} strokeWidth={2} />
+  [line 651] <ItemCard.Content>
+  [line 652] <ItemCard.Title>Phần thưởng cao nhất</ItemCard.Title>
+  [line 653] <ItemCard.Description className="whitespace-normal">
+  [line 657] <ItemCard.Action>
+  [line 659] <NumberValue
+  [line 667] <Chip size="sm" variant="soft">
+  [line 673] <ItemCard className="items-start" variant="secondary">
+  [line 674] <ItemCard.Icon className={hasRarityBreakdown ? "text-success" : "text-muted"}>
+  [line 675] <BarChart3 aria-hidden="true" size={18} strokeWidth={2} />
+  [line 677] <ItemCard.Content>
+  [line 678] <ItemCard.Title>Cơ cấu phần thưởng</ItemCard.Title>
+  [line 679] <ItemCard.Description className="whitespace-normal">
+  [line 685] <ItemCard.Action>
+  [line 686] <Chip
+  [line 698] <ProgressCircle
+  [line 703] <ProgressCircle.Track>
+  [line 704] <ProgressCircle.TrackCircle />
+  [line 705] <ProgressCircle.FillCircle />
+  [line 710] <NumberValue
+  [line 715] <NumberValue.Suffix>
+  [line 719] <Chip
+  [line 727] <p className="mt-1 text-xs leading-5 text-muted">
+  [line 735] <NumberValue
+  [line 742] <NumberValue
+  [line 749] <NumberValue
+  [line 759] <Chip
+  [line 769] <p className="admin-command-summary__note-label">Lượt trao thưởng mới nhất</p>
+  [line 771] <p className="admin-command-summary__note-title">
+  [line 777] <NumberValue
+  [line 785] <Chip size="sm" variant="soft">
+  [line 790] <p className="admin-command-summary__note-copy line-clamp-2">
+  [line 799] <Button
+  [line 804] <FileText aria-hidden="true" size={16} strokeWidth={2} />
+  [line 807] <Button
+  [line 812] <MonitorPlay aria-hidden="true" size={16} strokeWidth={2} />
+  [line 820] <Widget>
+  [line 821] <Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
+  [line 823] <Widget.Title>Dữ liệu trao thưởng</Widget.Title>
+  [line 824] <Widget.Description>
+  [line 828] <Tabs
+  [line 833] <Tabs.ListContainer className="overflow-x-auto">
+  [line 834] <Tabs.List aria-label="Cách xem dữ liệu trao thưởng" className="w-fit">
+  [line 835] <Tabs.Tab id="leaderboard">
+  [line 837] <Tabs.Indicator />
+  [line 839] <Tabs.Tab id="history">
+  [line 841] <Tabs.Indicator />
+  [line 849] <Widget.Content>
+  [line 850] <EmptyState size="sm">
+  [line 851] <EmptyState.Header>
+  [line 852] <EmptyState.Media variant="icon">
+  [line 853] <Trophy aria-hidden="true" size={22} strokeWidth={2} />
+  [line 855] <EmptyState.Title>Chưa có lượt nhận thưởng nào.</EmptyState.Title>
+  [line 856] <EmptyState.Description>
+  [line 863] <Widget.Content className="p-0">
+  [line 864] <DataGrid
+  [line 878] <Widget.Content>
+  [line 879] <EmptyState size="sm">
+  [line 880] <EmptyState.Header>
+  [line 881] <EmptyState.Media variant="icon">
+  [line 882] <History aria-hidden="true" size={22} strokeWidth={2} />
+  [line 884] <EmptyState.Title>Chưa có lịch sử trao thưởng</EmptyState.Title>
+  [line 885] <EmptyState.Description>
+  [line 892] <Widget.Content className="p-0">
+  [line 893] <DataGrid

@@ -18,8 +18,8 @@ const campaignAssetAllowedContentTypes = new Set([
   "image/avif",
 ]);
 const convexDeploymentLabelPattern = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i;
-const billingReturnPath = "/campaigns";
-const allowedGoogleOAuthRedirectPaths = new Set(["/setup", "/campaigns"]);
+const billingReturnPath = "/settings/billing";
+const allowedGoogleOAuthRedirectPaths = new Set(["/onboarding", "/campaigns"]);
 
 const requiredSections = [
   "Deployment",
@@ -933,9 +933,9 @@ function validFixture() {
 - Plan change result: pass
 - Customer portal result: pass
 - Checkout return origin: https://app.example.com
-- Checkout return URL: https://app.example.com/campaigns?checkout=success
+- Checkout return URL: https://app.example.com/settings/billing?checkout=success
 - Customer portal return origin: https://app.example.com
-- Customer portal return URL: https://app.example.com/campaigns
+- Customer portal return URL: https://app.example.com/settings/billing
 - Polar webhook URL: https://prod-a.convex.site/polar/events
 - Webhook receipt time: 2026-05-22T00:00:00.000Z
 - Convex billing state: active
@@ -1080,14 +1080,14 @@ function runSelfTests() {
     ["mismatched checkout return origin", validFixture().replace("- Checkout return origin: https://app.example.com", "- Checkout return origin: https://billing.example.com")],
     ["raw checkout return origin", validFixture().replace("- Checkout return origin: https://app.example.com", "- Checkout return origin: https://8.8.8.8")],
     ["checkout return origin with default port", validFixture().replace("- Checkout return origin: https://app.example.com", "- Checkout return origin: https://app.example.com:443")],
-    ["missing checkout return url", validFixture().replace("- Checkout return URL: https://app.example.com/campaigns?checkout=success", "- Checkout return URL:")],
-    ["wrong checkout return path", validFixture().replace("- Checkout return URL: https://app.example.com/campaigns?checkout=success", "- Checkout return URL: https://app.example.com/draw?checkout=success")],
-    ["unexpected checkout return query", validFixture().replace("- Checkout return URL: https://app.example.com/campaigns?checkout=success", "- Checkout return URL: https://app.example.com/campaigns?next=/draw")],
-    ["checkout return url with hash", validFixture().replace("- Checkout return URL: https://app.example.com/campaigns?checkout=success", "- Checkout return URL: https://app.example.com/campaigns?checkout=success#done")],
+    ["missing checkout return url", validFixture().replace("- Checkout return URL: https://app.example.com/settings/billing?checkout=success", "- Checkout return URL:")],
+    ["wrong checkout return path", validFixture().replace("- Checkout return URL: https://app.example.com/settings/billing?checkout=success", "- Checkout return URL: https://app.example.com/draw?checkout=success")],
+    ["unexpected checkout return query", validFixture().replace("- Checkout return URL: https://app.example.com/settings/billing?checkout=success", "- Checkout return URL: https://app.example.com/settings/billing?next=/draw")],
+    ["checkout return url with hash", validFixture().replace("- Checkout return URL: https://app.example.com/settings/billing?checkout=success", "- Checkout return URL: https://app.example.com/settings/billing?checkout=success#done")],
     ["mismatched customer portal return origin", validFixture().replace("- Customer portal return origin: https://app.example.com", "- Customer portal return origin: https://portal.example.com")],
     ["raw customer portal return origin", validFixture().replace("- Customer portal return origin: https://app.example.com", "- Customer portal return origin: https://[2606:4700:4700::1111]")],
-    ["wrong customer portal return path", validFixture().replace("- Customer portal return URL: https://app.example.com/campaigns", "- Customer portal return URL: https://app.example.com/leaderboard")],
-    ["unexpected customer portal return query", validFixture().replace("- Customer portal return URL: https://app.example.com/campaigns", "- Customer portal return URL: https://app.example.com/campaigns?checkout=success")],
+    ["wrong customer portal return path", validFixture().replace("- Customer portal return URL: https://app.example.com/settings/billing", "- Customer portal return URL: https://app.example.com/leaderboard")],
+    ["unexpected customer portal return query", validFixture().replace("- Customer portal return URL: https://app.example.com/settings/billing", "- Customer portal return URL: https://app.example.com/settings/billing?checkout=success")],
     ["failed polar checkout result", validFixture().replace("- Checkout result: pass", "- Checkout result: fail")],
     ["failed polar plan change result", validFixture().replace("- Plan change result: pass", "- Plan change result: fail")],
     ["failed polar customer portal result", validFixture().replace("- Customer portal result: pass", "- Customer portal result: fail")],

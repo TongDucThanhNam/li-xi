@@ -42,7 +42,7 @@ export function displayNameFromUser(user: Doc<"users">) {
   if (user.email) {
     return user.email.split("@")[0] || user.email;
   }
-  return "Lì Xì Station";
+  return "Campaign Game Studio";
 }
 
 async function getProfilesBySlug(ctx: QueryCtx | MutationCtx, slug: string) {

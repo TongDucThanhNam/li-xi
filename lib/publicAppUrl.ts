@@ -1,5 +1,6 @@
 import {
 	assertPublicClaimPath,
+	assertPublicPlayPath,
 	buildPublicAppUrlFromOrigin,
 	parseCleanPublicAppOrigin,
 } from "./publicAppUrlPolicy";
@@ -22,12 +23,16 @@ export function buildPublicAppUrl(path: string) {
 	return buildPublicAppUrlFromOrigin(path, origin);
 }
 
+export function buildPublicPlayUrl(path: string) {
+	return buildPublicAppUrl(assertPublicPlayPath(path));
+}
+
 export function buildPublicClaimUrl(path: string) {
 	return buildPublicAppUrl(assertPublicClaimPath(path));
 }
 
 export function getBillingReturnPublicAppUrl() {
-	return buildPublicAppUrl("/campaigns");
+	return buildPublicAppUrl("/settings/billing");
 }
 
 export function getCurrentPublicAppUrl() {

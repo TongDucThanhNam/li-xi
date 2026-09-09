@@ -13,8 +13,9 @@ function isLocalNetworkHostname(hostname: string) {
 	return isLocalOrPrivateHostname(hostname);
 }
 
+const publicPlayPathPattern = /^\/play\/[a-f0-9]{24}$/;
 const publicClaimPathPattern = /^\/claim\/[a-f0-9]{24}$/;
-const publicClaimCodePattern = /^[a-f0-9]{24}$/;
+const publicPlayCodePattern = /^[a-f0-9]{24}$/;
 
 export function parseCleanPublicAppOrigin(value: string | undefined) {
 	const trimmedValue = value?.trim();
@@ -65,6 +66,13 @@ export function buildPublicAppUrlFromOrigin(path: string, origin: string) {
 	return new URL(path, origin).toString();
 }
 
+export function assertPublicPlayPath(path: string) {
+	if (!publicPlayPathPattern.test(path)) {
+		throw new Error("Public play URL path must be /play/<24-character lowercase hex code>");
+	}
+	return path;
+}
+
 export function assertPublicClaimPath(path: string) {
 	if (!publicClaimPathPattern.test(path)) {
 		throw new Error("Public claim URL path must be /claim/<24-character lowercase hex code>");
@@ -72,7 +80,7 @@ export function assertPublicClaimPath(path: string) {
 	return path;
 }
 
-export function normalizePublicClaimCode(value: string) {
+export function normalizePublicPlayCode(value: string) {
 	const publicCode = value.trim().toLowerCase();
-	return publicClaimCodePattern.test(publicCode) ? publicCode : null;
+	return publicPlayCodePattern.test(publicCode) ? publicCode : null;
 }

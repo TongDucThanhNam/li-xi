@@ -1,10 +1,15 @@
 import { v } from "convex/values";
 import { mutation, MutationCtx, query, QueryCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
-import { recordRedemptionCreated, recordSessionCreated } from "./analytics";
+import {
+  recordPublicPlayLinkOpen,
+  recordRedemptionCreated,
+  recordSessionCreated,
+} from "./analytics";
 import { getRenderableCampaignAssetUrl, isRenderableCampaignAsset } from "./assets";
 import { requireResolvedOwner } from "./authorization";
 import { getCompletedOwnerBudgetForScope } from "./budgetScope";
+import { ensureDefaultCampaignGame } from "./campaignGameConfig";
 import {
   DEFAULT_CAMPAIGN_BRAND,
   DEFAULT_CAMPAIGN_DESCRIPTION,
@@ -27,6 +32,11 @@ import {
   displayNameFromUser,
   ensureHostProfileForOwner,
 } from "./hostProfiles";
+import {
+  liXiPlaySessionIdentity,
+  liXiPublicPlaySession,
+  publicPlayPathForCode,
+} from "./playSessions";
 import {
   PUBLIC_CODE_BYTES,
   getPublicLinkExpiresAt,
@@ -361,6 +371,11 @@ async function getCampaignForSession(
     createdAt: now,
     updatedAt: now,
   });
+  const campaign = await ctx.db.get(campaignId);
+  if (!campaign) {
+    throw new Error("Không thể tạo chiến dịch mặc định");
+  }
+  await ensureDefaultCampaignGame(ctx, campaign);
   await ensureHostProfileForOwner(ctx, owner, { defaultCampaignId: campaignId });
   return campaignId;
 }
@@ -548,14 +563,24 @@ async function stationSessionCampaignView(
 }
 
 export const getStationState = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    campaignId: v.optional(v.id("campaigns")),
+  },
+  handler: async (ctx, args) => {
     const { ownerId } = await requireResolvedOwner(ctx, undefined, {
       notFoundMessage: "Không tìm thấy host",
       forbiddenMessage: "Bạn không có quyền truy cập trạm rút này",
     });
 
-    const activeCampaign = await getPreferredActiveCampaignForOwner(ctx, ownerId);
+    const requestedCampaign = args.campaignId ? await ctx.db.get(args.campaignId) : null;
+    if (
+      args.campaignId &&
+      (!requestedCampaign || requestedCampaign.ownerId !== ownerId)
+    ) {
+      throw new Error("Chiến dịch không hợp lệ");
+    }
+    const activeCampaign =
+      requestedCampaign ?? (await getPreferredActiveCampaignForOwner(ctx, ownerId));
     const activeHeroAssetCandidate =
       activeCampaign?.heroAssetId ? await ctx.db.get(activeCampaign.heroAssetId) : null;
     const activeHeroAsset =
@@ -564,7 +589,9 @@ export const getStationState = query({
       activeHeroAssetCandidate.campaignId === activeCampaign._id
         ? activeHeroAssetCandidate
         : null;
-    const pendingSessions = await listPendingOwnerSessionsByDelivery(ctx, ownerId);
+    const pendingSessions = args.campaignId
+      ? await listPendingCampaignSessionsByDelivery(ctx, ownerId, args.campaignId)
+      : await listPendingOwnerSessionsByDelivery(ctx, ownerId);
     const now = Date.now();
     const pendingSessionCandidate =
       pendingSessions.find((session) => isStationSession(session) && isOpenPendingSession(session)) ??
@@ -608,11 +635,19 @@ export const getStationState = query({
       .sort((left, right) => right.session.createdAt - left.session.createdAt)
       .slice(0, 12);
 
-    const recentRedemptions = await ctx.db
-      .query("redemptions")
-      .withIndex("by_owner_createdAt", (q) => q.eq("ownerId", ownerId))
-      .order("desc")
-      .take(10);
+    const recentRedemptions = args.campaignId
+      ? await ctx.db
+          .query("redemptions")
+          .withIndex("by_campaign_owner_createdAt", (q) =>
+            q.eq("campaignId", args.campaignId).eq("ownerId", ownerId)
+          )
+          .order("desc")
+          .take(10)
+      : await ctx.db
+          .query("redemptions")
+          .withIndex("by_owner_createdAt", (q) => q.eq("ownerId", ownerId))
+          .order("desc")
+          .take(10);
 
     const availableUnits = budget ? getPayablePrizeUnitCapacity(budgetItems, budget) : 0;
     const pendingSessionBudget = pendingSession
@@ -682,9 +717,11 @@ export const getStationState = query({
       })),
       pendingSession: pendingSession
         ? {
+            ...liXiPlaySessionIdentity(pendingSession._id, pendingSession.status),
             id: pendingSession._id,
             publicCode: null,
             sharePath: null,
+            publicPlayPath: null,
             guestNameDisplay: pendingSession.guestNameDisplay,
             campaign: pendingSessionCampaign,
             rewardPool: pendingSessionRewardPool,
@@ -692,9 +729,11 @@ export const getStationState = query({
           }
         : null,
       pendingLinkSessions: pendingLinkSessions.map(({ session, publicCode }) => ({
+        ...liXiPlaySessionIdentity(session._id, session.status),
         id: session._id,
         publicCode,
-        sharePath: `/claim/${publicCode}`,
+        publicPlayPath: publicPlayPathForCode(publicCode),
+        sharePath: publicPlayPathForCode(publicCode),
         guestNameDisplay: session.guestNameDisplay,
         campaignName: session.campaignNameSnapshot ?? null,
         createdAt: session.createdAt,
@@ -822,9 +861,11 @@ export const createSession = mutation({
     await recordSessionCreated(ctx, sessionId, ownerId, campaignId);
 
     return {
+      ...liXiPlaySessionIdentity(sessionId, "pending"),
       sessionId,
       publicCode: publicCode ?? null,
-      sharePath: publicCode ? `/claim/${publicCode}` : null,
+      publicPlayPath: publicCode ? publicPlayPathForCode(publicCode) : null,
+      sharePath: publicCode ? publicPlayPathForCode(publicCode) : null,
       expiresAt: publicCodeExpiresAt ?? null,
       guestNameDisplay,
       deliveryMode,
@@ -906,6 +947,7 @@ export const getPublicSession = query({
 
     return {
       guestNameDisplay: session.guestNameDisplay,
+      ...liXiPublicPlaySession(),
       expiresAt: resolvePublicLinkExpiresAt(session),
       campaign: hasSnapshot || campaign
         ? {
@@ -940,6 +982,30 @@ export const getPublicSession = query({
           }
         : null,
       rewardPool: publicRewardPoolView(capacityPreservingItems),
+    };
+  },
+});
+
+export const recordPublicPlayOpen = mutation({
+  args: {
+    publicCode: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const publicCode = sanitizePublicCode(args.publicCode);
+    const session = publicCode
+      ? await findPendingLinkSessionByPublicCode(ctx, publicCode)
+      : null;
+
+    if (!session) {
+      return {
+        recorded: false,
+      };
+    }
+
+    await recordPublicPlayLinkOpen(ctx, session);
+    return {
+      recorded: true,
+      gameTemplateId: liXiPublicPlaySession().gameTemplateId,
     };
   },
 });
@@ -1069,7 +1135,9 @@ async function redeemPendingSession(
   });
 
   return {
+    ...liXiPlaySessionIdentity(session._id, "redeemed"),
     success: true,
+    playSessionCompleted: true,
     guestNameDisplay: session.guestNameDisplay,
     amount: selectedItem.amount,
     rarity: selectedItem.rarity,
@@ -1127,6 +1195,7 @@ export const redeemPublicSession = mutation({
 
     return {
       success: result.success,
+      playSessionCompleted: result.playSessionCompleted,
       guestNameDisplay: result.guestNameDisplay,
       amount: result.amount,
       rarity: result.rarity,

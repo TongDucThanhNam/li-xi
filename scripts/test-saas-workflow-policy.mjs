@@ -20,11 +20,19 @@ function assertMatches(source, pattern, message) {
   assert(pattern.test(source), message);
 }
 
-const authRoute = read("app/auth.tsx");
-const setupRoute = read("app/setup.tsx");
-const campaignsRoute = read("app/campaigns.tsx");
-const drawRoute = read("app/draw.tsx");
-const claimRoute = read("app/claim/$publicCode.tsx");
+const authRoute = read("app/auth.tsx") + read("app/-auth/AuthFeature.tsx");
+const rewardsSetupFeature = read("app/_workspace/-features/RewardsSetupFeature.tsx");
+const campaignIndex = read("app/_workspace/-features/CampaignIndexFeature.tsx");
+const campaignCreate = read("app/_workspace/-features/CampaignCreateFeature.tsx");
+const campaignGameEditor = read("app/_workspace/-features/CampaignGameEditorFeature.tsx");
+const billingSettings = read("app/_workspace/-features/BillingSettingsFeature.tsx");
+const integrationsSettings = read("app/_workspace/-features/IntegrationsSettingsFeature.tsx");
+const operatorFeature = read("app/_workspace/-features/OperatorConsoleFeature.tsx");
+const stationFeature = read("app/station/-features/StationPlayFeature.tsx");
+const claimRoute =
+  read("app/play/-features/PublicPlayFeature.tsx") +
+  read("app/play/$publicCode.tsx") +
+  read("app/claim/$publicCode.tsx");
 const setup = read("convex/setup.ts");
 const campaigns = read("convex/campaigns.ts");
 const draw = read("convex/draw.ts");
@@ -45,8 +53,8 @@ assertIncludes(
 );
 assertIncludes(
   authRoute,
-  'setupState.hasSetup ? "/campaigns" : "/setup"',
-  "OAuth completion must route configured hosts to Campaign Studio and new hosts to setup"
+  'setupState.hasSetup ? "/campaigns" : "/onboarding"',
+  "OAuth completion must route configured hosts to Campaign Studio and new hosts to onboarding"
 );
 assertIncludes(
   authRoute,
@@ -55,19 +63,29 @@ assertIncludes(
 );
 
 assertIncludes(
-  campaignsRoute,
-  "CampaignEditor",
-  "Campaign Studio route must delegate editing to CampaignEditor"
+  campaignIndex,
+  "workspace.campaigns.map",
+  "Campaign index must render the authorized workspace campaign list"
 );
 assertIncludes(
-  campaignsRoute,
-  "BillingPanel",
-  "Campaign Studio route must delegate billing controls to BillingPanel"
+  campaignCreate,
+  'to: "/campaigns/$campaignId/games/$campaignGameId"',
+  "Campaign creation must route directly into the created campaign game"
 );
 assertIncludes(
-  campaignsRoute,
-  "ReadinessPanel",
-  "Campaign Studio route must delegate readiness controls to ReadinessPanel"
+  campaignGameEditor,
+  "template.ConfigEditor",
+  "Campaign-game editing must resolve the registered template editor"
+);
+assertIncludes(
+  billingSettings,
+  "plan.resources",
+  "Billing settings must expose account usage and plan state"
+);
+assertIncludes(
+  integrationsSettings,
+  "readiness.runtimeChecks",
+  "Integration settings must expose host-safe production readiness"
 );
 assertIncludes(
   campaigns,
@@ -81,19 +99,28 @@ assertIncludes(
 );
 
 assertIncludes(
-  setupRoute,
-  "NativeSelect",
-  "budget setup must expose an explicit campaign selector"
+  rewardsSetupFeature,
+  "owner && campaign ? { campaignId } : \"skip\"",
+  "reward setup must scope reads from the canonical route campaign id"
 );
 assertIncludes(
-  setupRoute,
+  rewardsSetupFeature,
+  "api.campaigns.getCampaignRouteContext",
+  "reward setup must authorize the canonical campaign route before loading mutable setup state"
+);
+assertIncludes(
+  rewardsSetupFeature,
   "api.setup.getSetupState",
   "budget setup must read scoped setup state"
 );
 assertIncludes(
-  setupRoute,
-  "campaignId: selectedCampaignId ?? setupState.budgetScope.campaignId",
-  "budget setup submissions must send the selected campaign scope"
+  rewardsSetupFeature,
+  "campaignId,",
+  "reward setup submissions must send the route campaign scope"
+);
+assert(
+  !rewardsSetupFeature.includes("selectedCampaignId"),
+  "reward setup must not keep bookmarkable campaign context in local state"
 );
 assertMatches(
   setup,
@@ -122,14 +149,19 @@ assertIncludes(
 );
 
 assertIncludes(
-  drawRoute,
+  operatorFeature,
   'useState<DeliveryMode>("station")',
-  "station draw route must default to station delivery"
+  "operator console must default to station delivery"
 );
 assertIncludes(
-  drawRoute,
+  operatorFeature,
   "deliveryMode,",
-  "station draw route must pass the selected delivery mode to createSession"
+  "operator console must pass the selected delivery mode to createSession"
+);
+assertIncludes(
+  stationFeature,
+  'to: "/operate/$campaignGameId"',
+  "station mode must return to its campaign-game operator route after Host PIN verification"
 );
 assertIncludes(
   draw,
@@ -159,8 +191,8 @@ assertIncludes(
 );
 assertIncludes(
   claimRoute,
-  "normalizePublicClaimCode(publicCode)",
-  "public claim route must normalize claim tokens before querying"
+  "normalizePublicPlayCode(publicCode)",
+  "public play routes must normalize public tokens before querying"
 );
 assertIncludes(
   claimRoute,
@@ -234,4 +266,4 @@ for (const requiredField of [
   );
 }
 
-console.log("SaaS workflow policy checks passed");
+console.log("Platform workflow policy checks passed");

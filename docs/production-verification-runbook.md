@@ -1,9 +1,10 @@
 # Production Verification Runbook
 
 This runbook collects the live or staging evidence required before Li Xi
-Station can be called production-ready as a SaaS prize-draw platform. Local
-tests prove contracts and wiring. They do not prove Google OAuth, Cloudflare R2,
-Polar, deployed Convex env, or browser-hosted claim flows.
+Station can be called production-ready as a marketing game campaign platform.
+Local tests prove contracts and wiring. They do not prove Google OAuth,
+Cloudflare R2, Polar, deployed Convex env, or browser-hosted participant
+play/claim compatibility flows.
 
 Use [production-evidence-template.md](production-evidence-template.md) to record
 the result of each live/staging check in a consistent audit shape.
@@ -13,8 +14,8 @@ sections, non-`PASS` results, unresolved risks, or a missing final approval fail
 before the release is marked ready.
 
 Do not record secrets in notes, screenshots, tickets, or commits. Record only
-redacted env status, row ids needed for audit, public claim codes used for test
-flows, and external provider ids such as Polar subscription ids.
+redacted env status, row ids needed for audit, public play/claim codes used for
+test flows, and external provider ids such as Polar subscription ids.
 If an artifact is written inside the repo by mistake, `.gitignore` excludes
 `li-xi-production-readiness*.json` and `production-evidence/`; still move final
 evidence into the operational release record instead of committing it.
@@ -113,13 +114,15 @@ misfiled while the summary booleans still look ready.
 Verify in a browser against the deployed frontend:
 
 - Open `/auth` and sign in with Google.
-- Confirm redirect to setup or Campaign Studio according to account state.
-  Record the final redirect target as a root-relative route only: `/setup` or
-  `/campaigns`. A full external URL, public claim URL, draw route, or hash
+- Confirm redirect to onboarding or Campaign Studio according to account state.
+  Record the final redirect target as a root-relative route only: `/onboarding` or
+  `/campaigns`. A full external URL, public play URL, station route, or hash
   fragment is not acceptable evidence.
 - Confirm the host profile is materialized for the Convex Auth user.
 - Confirm no legacy local owner session is needed for host routes.
-- Reload `/setup`, `/draw`, `/campaigns`, and `/leaderboard`.
+- Reload canonical `/campaigns`, `/analytics`, `/settings/operations`, and one
+  owned `/operate/<campaignGameId>` route; then verify `/setup`, `/draw`, and
+  `/leaderboard` resolve to deterministic canonical destinations.
 - Return after an OAuth token refresh window, or force a fresh browser session,
   and confirm host routes still resolve through Convex Auth.
 
@@ -130,16 +133,18 @@ Evidence to keep:
 - Confirmation that legacy localStorage owner state was absent or ignored.
 - Any redirect, callback, or token refresh failure.
 
-## 4. Campaign And Public Claim Flow
+## 4. Current Li Xi Public Play/Claim Flow
 
-Verify the core draw lifecycle:
+Verify the current li xi game lifecycle. `/play/<publicCode>` is canonical; the `/claim/<publicCode>` route and
+public-claim field names are compatibility surfaces for the public play link:
 
 - Create or activate a campaign in Campaign Studio.
 - Set public claim headline, subtitle, CTA, and collect copy.
-- Configure budget and host PIN if the host needs setup.
-- Create a station draw session with guest name plus host PIN.
-- Create a public claim link with guest name plus host PIN.
-- Open `/claim/<publicCode>` in a clean browser session.
+- Configure campaign reward inventory and configure Host PIN separately in operations settings.
+- Create a station play session with guest name plus host PIN from `/operate/<campaignGameId>`.
+- Create a public play/claim link with guest name plus host PIN.
+- Open `/play/<publicCode>` in a clean browser session, then repeat the same
+  valid/closed/malformed checks through `/claim/<publicCode>`.
 - Confirm the premium campaign hero renders before envelope selection.
 - Confirm the hero start CTA and the result modal collect CTA render as two
   independent campaign copy values.
@@ -148,7 +153,7 @@ Verify the core draw lifecycle:
 - Open a malformed public code that is not 24-character hex and confirm it fails
   closed.
 - Verify an expired public-code row fails closed when safe test data exists.
-- Verify a public claim link for an inactive campaign fails closed in staging,
+- Verify a public play/claim link for an inactive campaign fails closed in staging,
   or cite local contract-test evidence if exercising it against production would
   mutate a real campaign.
 
@@ -197,12 +202,12 @@ Verify billing after product sync:
 - As a new/free host, start checkout for a configured product.
 - Complete checkout in the selected Polar environment.
 - Record the checkout return origin and full return URL; confirm the origin
-  matches the deployed app origin and the URL returns to `/campaigns`.
+  matches the deployed app origin and the URL returns to `/settings/billing`.
 - Confirm the subscription state appears in Convex and Campaign Studio.
 - From an active, trialing, or past-due subscription, change plan.
 - Open the customer portal and return to the app.
 - Record the customer portal return origin and full return URL; confirm the
-  origin matches the deployed app origin and the URL returns to `/campaigns`.
+  origin matches the deployed app origin and the URL returns to `/settings/billing`.
 - Confirm the `/polar/events` webhook updates billing state.
 
 Evidence to keep:

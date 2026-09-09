@@ -4,35 +4,39 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 
+const isWindows = process.platform === "win32";
+const npmCommand = "npm";
+const npxCommand = "npx";
+
 const steps = [
   {
     label: "Convex codegen",
-    command: "npx",
+    command: npxCommand,
     args: ["convex", "codegen"],
   },
   {
     label: "TypeScript typecheck",
-    command: "npm",
+    command: npmCommand,
     args: ["run", "typecheck"],
   },
   {
-    label: "SaaS contract tests",
-    command: "npm",
+    label: "Platform contract tests",
+    command: npmCommand,
     args: ["run", "test:contracts"],
   },
   {
     label: "ESLint",
-    command: "npm",
+    command: npmCommand,
     args: ["run", "lint"],
   },
   {
     label: "Production dependency audit",
-    command: "npm",
+    command: npmCommand,
     args: ["audit", "--omit=dev"],
   },
   {
     label: "TanStack route smoke test",
-    command: "npm",
+    command: npmCommand,
     args: ["run", "test:smoke"],
   },
 ];
@@ -40,9 +44,12 @@ const steps = [
 function runStep({ label, command, args }) {
   return new Promise((resolve, reject) => {
     console.log(`\n==> ${label}`);
-    const child = spawn(command, args, {
+    const useWindowsShell =
+      isWindows && (command === npmCommand || command === npxCommand);
+    const child = spawn(useWindowsShell ? [command, ...args].join(" ") : command, useWindowsShell ? [] : args, {
       stdio: "inherit",
       env: process.env,
+      shell: useWindowsShell,
     });
 
     child.on("error", reject);

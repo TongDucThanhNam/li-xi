@@ -20,7 +20,7 @@ export default defineConfig({
       router: {
         routesDirectory: "app",
         routeFileIgnorePattern:
-          "(^|/)(components|fortune|templates)(/|$)|(^|/)(ConvexClientProvider|CssDebugger|FortuneStage|hostUtils)(\\.|$)",
+          "(^|/)(components|fortune|game-templates|templates)(/|$)|(^|/)(ConvexClientProvider|CssDebugger|FortuneStage|hostUtils)(\\.|$)",
       },
     }),
     viteReact(),

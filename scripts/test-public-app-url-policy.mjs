@@ -3,8 +3,9 @@
 import assert from "node:assert/strict";
 import {
   assertPublicClaimPath,
+  assertPublicPlayPath,
   buildPublicAppUrlFromOrigin,
-  normalizePublicClaimCode,
+  normalizePublicPlayCode,
   parseCleanPublicAppOrigin,
 } from "../lib/publicAppUrlPolicy.ts";
 
@@ -35,36 +36,51 @@ for (const value of [
 }
 
 assert.equal(
-  buildPublicAppUrlFromOrigin("/claim/abc123", "https://app.example.com"),
-  "https://app.example.com/claim/abc123"
+  buildPublicAppUrlFromOrigin("/play/abc123", "https://app.example.com"),
+  "https://app.example.com/play/abc123"
 );
 assert.equal(
   buildPublicAppUrlFromOrigin("/campaigns?checkout=success#billing", "https://app.example.com"),
   "https://app.example.com/campaigns?checkout=success#billing"
 );
 assert.equal(
-  buildPublicAppUrlFromOrigin("/claim/abc123", ""),
-  "/claim/abc123"
+  buildPublicAppUrlFromOrigin("/play/abc123", ""),
+  "/play/abc123"
 );
 assert.throws(
-  () => buildPublicAppUrlFromOrigin("https://evil.example.com/claim/abc123", "https://app.example.com"),
+  () => buildPublicAppUrlFromOrigin("https://evil.example.com/play/abc123", "https://app.example.com"),
   /Public app URL path must be root-relative/,
   "absolute URLs must not override the trusted public app origin"
 );
 assert.throws(
-  () => buildPublicAppUrlFromOrigin("//evil.example.com/claim/abc123", "https://app.example.com"),
+  () => buildPublicAppUrlFromOrigin("//evil.example.com/play/abc123", "https://app.example.com"),
   /Public app URL path must be root-relative/,
   "scheme-relative URLs must not override the trusted public app origin"
 );
 assert.throws(
-  () => buildPublicAppUrlFromOrigin("claim/abc123", "https://app.example.com"),
+  () => buildPublicAppUrlFromOrigin("play/abc123", "https://app.example.com"),
   /Public app URL path must be root-relative/,
   "relative paths without a leading slash should be rejected to avoid ambiguous URL construction"
 );
 
+assert.equal(assertPublicPlayPath("/play/abcdefabcdefabcdefabcdef"), "/play/abcdefabcdefabcdefabcdef");
 assert.equal(assertPublicClaimPath("/claim/abcdefabcdefabcdefabcdef"), "/claim/abcdefabcdefabcdefabcdef");
-assert.equal(normalizePublicClaimCode("ABCDEFABCDEFABCDEFABCDEF"), "abcdefabcdefabcdefabcdef");
-assert.equal(normalizePublicClaimCode(" abcdefabcdefabcdefabcdef "), "abcdefabcdefabcdefabcdef");
+assert.equal(normalizePublicPlayCode("ABCDEFABCDEFABCDEFABCDEF"), "abcdefabcdefabcdefabcdef");
+assert.equal(normalizePublicPlayCode(" abcdefabcdefabcdefabcdef "), "abcdefabcdefabcdefabcdef");
+for (const value of [
+  "/play/ABCDEFABCDEFABCDEFABCDEF",
+  "/play/abcdefabcdefabcdefabcde",
+  "/play/abcdefabcdefabcdefabcdef?utm=1",
+  "/play/abcdefabcdefabcdefabcdef#result",
+  "/claim/abcdefabcdefabcdefabcdef",
+  "//evil.example.com/play/abcdefabcdefabcdefabcdef",
+]) {
+  assert.throws(
+    () => assertPublicPlayPath(value),
+    /Public play URL path must be \/play\/<24-character lowercase hex code>/,
+    `${value} should not be accepted as a public play path`
+  );
+}
 for (const value of [
   "/claim/ABCDEFABCDEFABCDEFABCDEF",
   "/claim/abcdefabcdefabcdefabcde",
@@ -85,7 +101,7 @@ for (const value of [
   "abcdefabcdefabcdefabcdef?utm=1",
   "claim-abcdefabcdefabcdefabcdef",
 ]) {
-  assert.equal(normalizePublicClaimCode(value), null, `${value} should not normalize as a public claim code`);
+  assert.equal(normalizePublicPlayCode(value), null, `${value} should not normalize as a public play code`);
 }
 
 console.log("public app URL policy regression tests passed");

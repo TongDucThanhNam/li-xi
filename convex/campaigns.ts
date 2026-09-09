@@ -13,6 +13,12 @@ import {
   r2,
 } from "./assets";
 import {
+  ensureDefaultCampaignGame,
+  normalizeCampaignGameConfig,
+  resolvePrimaryCampaignGame,
+  upsertPrimaryCampaignGame,
+} from "./campaignGameConfig";
+import {
   DEFAULT_CAMPAIGN_BRAND,
   DEFAULT_CAMPAIGN_DESCRIPTION,
   DEFAULT_CAMPAIGN_NAME,
@@ -30,9 +36,15 @@ import {
   ensureHostProfileForOwner,
   getHostProfileForOwner,
 } from "./hostProfiles";
+import {
+  campaignGameConfigValidator,
+  campaignStyleVariantValidator,
+  gameTemplateIdValidator,
+} from "./gameTemplateValues";
 import { validateCampaignAssetPolicy } from "../lib/assetPolicy";
+import { gameTemplates } from "../lib/gameTemplates";
 
-const campaignThemeValidator = v.union(v.literal("lunar"), v.literal("brand"));
+const campaignThemeValidator = campaignStyleVariantValidator;
 const campaignStatusValidator = v.union(
   v.literal("draft"),
   v.literal("active"),
@@ -92,6 +104,7 @@ async function campaignView(ctx: QueryCtx, campaignId: Id<"campaigns">) {
   if (!campaign) {
     return null;
   }
+  const campaignGame = await resolvePrimaryCampaignGame(ctx, campaign);
 
   const heroAssetCandidate = campaign.heroAssetId
     ? await ctx.db.get(campaign.heroAssetId)
@@ -117,6 +130,14 @@ async function campaignView(ctx: QueryCtx, campaignId: Id<"campaigns">) {
     claimCollectLabel: campaign.claimCollectLabel ?? "",
     claimWaitingMessage: campaign.claimWaitingMessage ?? "",
     theme: campaign.theme,
+    gameTemplateId: campaignGame.templateId,
+    gameConfig: campaignGame.config,
+    campaignGame: {
+      id: campaignGame.id,
+      templateId: campaignGame.templateId,
+      name: campaignGame.name,
+      config: campaignGame.config,
+    },
     status: campaign.status,
     heroAsset: heroAsset
       ? {
@@ -212,6 +233,125 @@ export const getWorkspace = query({
   },
 });
 
+export const getCampaignRouteContext = query({
+  args: {
+    campaignId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const { ownerId } = await requireResolvedOwner(ctx, undefined, {
+      notFoundMessage: "Không tìm thấy host",
+      forbiddenMessage: "Bạn không có quyền xem chiến dịch này",
+    });
+    const campaignId = ctx.db.normalizeId("campaigns", args.campaignId);
+    if (!campaignId) {
+      return null;
+    }
+    const campaign = await ctx.db.get(campaignId);
+    if (!campaign || campaign.ownerId !== ownerId) {
+      return null;
+    }
+    return campaignView(ctx, campaign._id);
+  },
+});
+
+export const getCampaignGameRouteContext = query({
+  args: {
+    campaignGameId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const { ownerId } = await requireResolvedOwner(ctx, undefined, {
+      notFoundMessage: "Không tìm thấy host",
+      forbiddenMessage: "Bạn không có quyền vận hành trò chơi này",
+    });
+    const campaignGameId = ctx.db.normalizeId("campaignGames", args.campaignGameId);
+    if (!campaignGameId) {
+      return null;
+    }
+    const campaignGame = await ctx.db.get(campaignGameId);
+    if (!campaignGame || campaignGame.ownerId !== ownerId) {
+      return null;
+    }
+    const campaign = await ctx.db.get(campaignGame.campaignId);
+    if (!campaign || campaign.ownerId !== ownerId) {
+      return null;
+    }
+    return {
+      campaign: await campaignView(ctx, campaign._id),
+      campaignGame: {
+        id: campaignGame._id,
+        campaignId: campaignGame.campaignId,
+        templateId: campaignGame.templateId,
+        config: normalizeCampaignGameConfig(campaignGame.config, campaign),
+        status: campaignGame.status,
+        createdAt: campaignGame.createdAt,
+        updatedAt: campaignGame.updatedAt,
+      },
+    };
+  },
+});
+
+export const getCampaignGamesRouteContext = query({
+  args: {
+    campaignId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const { ownerId } = await requireResolvedOwner(ctx, undefined, {
+      notFoundMessage: "Không tìm thấy host",
+      forbiddenMessage: "Bạn không có quyền xem trò chơi chiến dịch này",
+    });
+    const campaignId = ctx.db.normalizeId("campaigns", args.campaignId);
+    if (!campaignId) {
+      return null;
+    }
+    const campaign = await ctx.db.get(campaignId);
+    if (!campaign || campaign.ownerId !== ownerId) {
+      return null;
+    }
+    const campaignGames = await ctx.db
+      .query("campaignGames")
+      .withIndex("by_campaign", (q) => q.eq("campaignId", campaign._id))
+      .collect();
+
+    return {
+      campaign: await campaignView(ctx, campaign._id),
+      campaignGames: campaignGames
+        .filter((campaignGame) => campaignGame.ownerId === ownerId)
+        .sort((left, right) => left.createdAt - right.createdAt)
+        .map((campaignGame) => ({
+          id: campaignGame._id,
+          campaignId: campaignGame.campaignId,
+          templateId: campaignGame.templateId,
+          name: gameTemplates[campaignGame.templateId].name,
+          config: normalizeCampaignGameConfig(campaignGame.config, campaign),
+          status: campaignGame.status,
+          createdAt: campaignGame.createdAt,
+          updatedAt: campaignGame.updatedAt,
+        })),
+    };
+  },
+});
+
+export const ensureCampaignGameForRoute = mutation({
+  args: {
+    campaignId: v.id("campaigns"),
+  },
+  handler: async (ctx, args) => {
+    const { ownerId } = await requireResolvedOwner(ctx, undefined, {
+      notFoundMessage: "Không tìm thấy host",
+      forbiddenMessage: "Bạn không có quyền tạo trò chơi cho chiến dịch này",
+    });
+    const campaign = await ctx.db.get(args.campaignId);
+    if (!campaign || campaign.ownerId !== ownerId) {
+      throw new Error("Không tìm thấy chiến dịch");
+    }
+    const result = await ensureDefaultCampaignGame(ctx, campaign);
+    return {
+      campaignGameId: result.campaignGameId,
+      templateId: result.templateId,
+    };
+  },
+});
+
 export const saveCampaign = mutation({
   args: {
     campaignId: v.optional(v.id("campaigns")),
@@ -225,6 +365,8 @@ export const saveCampaign = mutation({
     claimCollectLabel: v.optional(v.string()),
     claimWaitingMessage: v.optional(v.string()),
     theme: campaignThemeValidator,
+    gameTemplateId: v.optional(gameTemplateIdValidator),
+    gameConfig: v.optional(campaignGameConfigValidator),
     status: campaignStatusValidator,
     heroAssetId: v.optional(v.id("campaignAssets")),
   },
@@ -243,6 +385,7 @@ export const saveCampaign = mutation({
     const claimCtaLabel = maybeText(args.claimCtaLabel, "Nhãn CTA claim", 28);
     const claimCollectLabel = maybeText(args.claimCollectLabel, "Nhãn nhận thưởng", 28);
     const claimWaitingMessage = maybeText(args.claimWaitingMessage, "Thông điệp chờ", 120);
+    const theme = args.gameConfig?.styleVariant ?? args.theme;
     const now = Date.now();
 
     await assertCampaignSlugAvailable(ctx, ownerId, slug, args.campaignId);
@@ -280,7 +423,7 @@ export const saveCampaign = mutation({
         claimCtaLabel,
         claimCollectLabel,
         claimWaitingMessage,
-        theme: args.theme,
+        theme,
         status: args.status as CampaignStatus,
         heroAssetId: args.heroAssetId,
         updatedAt: now,
@@ -301,13 +444,34 @@ export const saveCampaign = mutation({
         claimCtaLabel,
         claimCollectLabel,
         claimWaitingMessage,
-        theme: args.theme,
+        theme,
         status: args.status as CampaignStatus,
         heroAssetId: args.heroAssetId,
         createdAt: now,
         updatedAt: now,
       });
     }
+    if (!campaignId) {
+      throw new Error("Không thể lưu chiến dịch");
+    }
+
+    const gameConfig = normalizeCampaignGameConfig(args.gameConfig, {
+      _id: campaignId,
+      ownerId,
+      theme,
+      claimHeadline,
+      claimSubtitle,
+      claimCtaLabel,
+      claimCollectLabel,
+      claimWaitingMessage,
+    });
+    const campaignGame = await upsertPrimaryCampaignGame(ctx, {
+      ownerId,
+      campaignId,
+      templateId: args.gameTemplateId,
+      config: gameConfig,
+      status: args.status as CampaignStatus,
+    });
 
     if (args.status === "active") {
       await activateOnlyCampaign(ctx, ownerId, campaignId);
@@ -316,6 +480,8 @@ export const saveCampaign = mutation({
 
     return {
       campaignId,
+      campaignGameId: campaignGame.campaignGameId,
+      gameTemplateId: campaignGame.templateId,
       slug,
     };
   },
@@ -331,6 +497,7 @@ export const ensureDefaultCampaign = mutation({
 
     const existingActive = await getPreferredActiveCampaignForOwner(ctx, ownerId);
     if (existingActive) {
+      await ensureDefaultCampaignGame(ctx, existingActive);
       await ensureHostProfileForOwner(ctx, owner, { defaultCampaignId: existingActive._id });
       return { campaignId: existingActive._id };
     }
@@ -345,6 +512,11 @@ export const ensureDefaultCampaign = mutation({
         status: "active",
         updatedAt: Date.now(),
       });
+      const activatedCampaign = await ctx.db.get(preferredDraft._id);
+      if (!activatedCampaign) {
+        throw new Error("Không tìm thấy chiến dịch");
+      }
+      await ensureDefaultCampaignGame(ctx, activatedCampaign);
       await ensureHostProfileForOwner(ctx, owner, { defaultCampaignId: preferredDraft._id });
       return { campaignId: preferredDraft._id };
     }
@@ -358,11 +530,16 @@ export const ensureDefaultCampaign = mutation({
       slug,
       brandName: DEFAULT_CAMPAIGN_BRAND,
       description: DEFAULT_CAMPAIGN_DESCRIPTION,
-      theme: "lunar",
+      theme: "brand",
       status: "active",
       createdAt: now,
       updatedAt: now,
     });
+    const campaign = await ctx.db.get(campaignId);
+    if (!campaign) {
+      throw new Error("Không thể tạo chiến dịch mặc định");
+    }
+    await ensureDefaultCampaignGame(ctx, campaign);
     await ensureHostProfileForOwner(ctx, owner, { defaultCampaignId: campaignId });
 
     return { campaignId };

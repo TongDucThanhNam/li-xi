@@ -11,15 +11,29 @@ import {
   campaignMetricKey,
   estimateAnalyticsCounterEventWrite,
   ownerMetricKey,
+  playSessionCounterEventKey,
   redemptionCounterEventKey,
+  rewardCounterEventKey,
   sessionCounterEventKey,
+  type AnalyticsMetric,
   type AnalyticsCounterEventEstimate,
 } from "../lib/analyticsPolicy";
+import { DEFAULT_GAME_TEMPLATE_ID } from "../lib/gameTemplates";
 
 type CounterCtx = QueryCtx | MutationCtx;
-type OwnerMetric = "session_created" | "redemption_created";
-type CampaignMetric = "session_created" | "redemption_created";
+type OwnerMetric = AnalyticsMetric;
+type CampaignMetric = AnalyticsMetric;
 type CounterEventSource = "live" | "backfill";
+type AnalyticsCounterTarget = {
+  eventKey: string;
+  metric: OwnerMetric;
+};
+
+type AnalyticsCounterBackfillEstimate = {
+  countersWouldBackfill: number;
+  counterEventsWouldBackfill: number;
+  counterIncrementsWouldBackfill: number;
+};
 
 export const redemptionsByOwnerAmount = new TableAggregate<{
   Namespace: Id<"users">;
@@ -116,6 +130,107 @@ async function wouldRecordAnalyticsCounterEvent(
   });
 }
 
+function sessionCounterBackfillTargets(sessionId: Id<"drawSessions">): AnalyticsCounterTarget[] {
+  return [
+    {
+      eventKey: sessionCounterEventKey(sessionId),
+      metric: "session_created",
+    },
+    {
+      eventKey: playSessionCounterEventKey(sessionId, "game_start"),
+      metric: "game_start",
+    },
+  ];
+}
+
+function redemptionCounterBackfillTargets(
+  redemptionId: Id<"redemptions">,
+  campaignId: Id<"campaigns"> | undefined
+): AnalyticsCounterTarget[] {
+  const targets: AnalyticsCounterTarget[] = [
+    {
+      eventKey: redemptionCounterEventKey(redemptionId),
+      metric: "redemption_created",
+    },
+  ];
+  if (campaignId) {
+    targets.push(
+      {
+        eventKey: rewardCounterEventKey(redemptionId, "game_completion"),
+        metric: "game_completion",
+      },
+      {
+        eventKey: rewardCounterEventKey(redemptionId, "reward_outcome"),
+        metric: "reward_outcome",
+      },
+      {
+        eventKey: rewardCounterEventKey(redemptionId, "reward_claim"),
+        metric: "reward_claim",
+      }
+    );
+  }
+  return targets;
+}
+
+async function estimateAnalyticsCounterTargets(
+  ctx: CounterCtx,
+  args: {
+    targets: AnalyticsCounterTarget[];
+    ownerId: Id<"users">;
+    campaignId?: Id<"campaigns">;
+  }
+): Promise<AnalyticsCounterBackfillEstimate> {
+  let countersWouldBackfill = 0;
+  let counterEventsWouldBackfill = 0;
+  let counterIncrementsWouldBackfill = 0;
+  for (const target of args.targets) {
+    const counterEstimate = await wouldRecordAnalyticsCounterEvent(ctx, {
+      eventKey: target.eventKey,
+      ownerId: args.ownerId,
+      campaignId: args.campaignId,
+      metric: target.metric,
+    });
+    if (counterEstimate.eventWouldBackfill) {
+      countersWouldBackfill += 1;
+    }
+    counterEventsWouldBackfill +=
+      counterEstimate.markerWouldInsert + counterEstimate.markerWouldPatch;
+    counterIncrementsWouldBackfill += counterEstimate.counterIncrementsWouldBackfill;
+  }
+
+  return {
+    countersWouldBackfill,
+    counterEventsWouldBackfill,
+    counterIncrementsWouldBackfill,
+  };
+}
+
+async function recordAnalyticsCounterTargets(
+  ctx: MutationCtx,
+  args: {
+    targets: AnalyticsCounterTarget[];
+    ownerId: Id<"users">;
+    campaignId?: Id<"campaigns">;
+    source: CounterEventSource;
+  }
+) {
+  let countersBackfilled = 0;
+  for (const target of args.targets) {
+    if (
+      await recordAnalyticsCounterEvent(ctx, {
+        eventKey: target.eventKey,
+        ownerId: args.ownerId,
+        campaignId: args.campaignId,
+        metric: target.metric,
+        source: args.source,
+      })
+    ) {
+      countersBackfilled += 1;
+    }
+  }
+  return countersBackfilled;
+}
+
 export async function recordSessionCreated(
   ctx: MutationCtx,
   sessionId: Id<"drawSessions">,
@@ -127,6 +242,13 @@ export async function recordSessionCreated(
     ownerId,
     campaignId,
     metric: "session_created",
+    source: "live",
+  });
+  await recordAnalyticsCounterEvent(ctx, {
+    eventKey: playSessionCounterEventKey(sessionId, "game_start"),
+    ownerId,
+    campaignId,
+    metric: "game_start",
     source: "live",
   });
 }
@@ -141,6 +263,52 @@ export async function recordRedemptionCreated(ctx: MutationCtx, redemption: Doc<
     ownerId: redemption.ownerId,
     campaignId: redemption.campaignId,
     metric: "redemption_created",
+    source: "live",
+  });
+  if (redemption.campaignId) {
+    await recordAnalyticsCounterEvent(ctx, {
+      eventKey: rewardCounterEventKey(redemption._id, "game_completion"),
+      ownerId: redemption.ownerId,
+      campaignId: redemption.campaignId,
+      metric: "game_completion",
+      source: "live",
+    });
+    await recordAnalyticsCounterEvent(ctx, {
+      eventKey: rewardCounterEventKey(redemption._id, "reward_outcome"),
+      ownerId: redemption.ownerId,
+      campaignId: redemption.campaignId,
+      metric: "reward_outcome",
+      source: "live",
+    });
+    await recordAnalyticsCounterEvent(ctx, {
+      eventKey: rewardCounterEventKey(redemption._id, "reward_claim"),
+      ownerId: redemption.ownerId,
+      campaignId: redemption.campaignId,
+      metric: "reward_claim",
+      source: "live",
+    });
+  }
+}
+
+export async function recordPublicPlayLinkOpen(
+  ctx: MutationCtx,
+  session: Doc<"drawSessions">
+) {
+  if (!session.campaignId) {
+    return;
+  }
+  await recordAnalyticsCounterEvent(ctx, {
+    eventKey: playSessionCounterEventKey(session._id, "game_open"),
+    ownerId: session.ownerId,
+    campaignId: session.campaignId,
+    metric: "game_open",
+    source: "live",
+  });
+  await recordAnalyticsCounterEvent(ctx, {
+    eventKey: playSessionCounterEventKey(session._id, "public_play_link_open"),
+    ownerId: session.ownerId,
+    campaignId: session.campaignId,
+    metric: "public_play_link_open",
     source: "live",
   });
 }
@@ -233,19 +401,55 @@ export const getOwnerAnalytics = query({
       forbiddenMessage: "Bạn không có quyền xem analytics này",
     });
 
-    const [aggregatedRedemptionCount, aggregatedRedeemedAmount, sessionCreatedEvents, redemptionCreatedEvents] =
+    const [
+      aggregatedRedemptionCount,
+      aggregatedRedeemedAmount,
+      sessionCreatedEvents,
+      redemptionCreatedEvents,
+      gameOpenEvents,
+      gameStartEvents,
+      gameCompletionEvents,
+      rewardOutcomeEvents,
+      rewardClaimEvents,
+      publicPlayLinkOpenEvents,
+    ] =
       await Promise.all([
         countOwnerRedemptions(ctx, ownerId),
         redemptionsByOwnerAmount.sum(ctx, { namespace: ownerId }),
         countOwnerMetric(ctx, ownerId, "session_created"),
         countOwnerMetric(ctx, ownerId, "redemption_created"),
+        countOwnerMetric(ctx, ownerId, "game_open"),
+        countOwnerMetric(ctx, ownerId, "game_start"),
+        countOwnerMetric(ctx, ownerId, "game_completion"),
+        countOwnerMetric(ctx, ownerId, "reward_outcome"),
+        countOwnerMetric(ctx, ownerId, "reward_claim"),
+        countOwnerMetric(ctx, ownerId, "public_play_link_open"),
       ]);
+    const conversion = gameOpenEvents > 0 ? rewardClaimEvents / gameOpenEvents : null;
 
     return {
       aggregatedRedemptionCount,
       aggregatedRedeemedAmount,
       sessionCreatedEvents,
       redemptionCreatedEvents,
+      gameOpenEvents,
+      gameStartEvents,
+      gameCompletionEvents,
+      rewardOutcomeEvents,
+      rewardClaimEvents,
+      publicPlayLinkOpenEvents,
+      gameMetrics: {
+        gameTemplateId: DEFAULT_GAME_TEMPLATE_ID,
+        opens: gameOpenEvents,
+        starts: gameStartEvents,
+        completions: gameCompletionEvents,
+        rewardOutcomes: rewardOutcomeEvents,
+        claims: rewardClaimEvents,
+        conversion,
+        channelSharePerformance: {
+          publicPlayLinkOpens: publicPlayLinkOpenEvents,
+        },
+      },
     };
   },
 });
@@ -286,17 +490,13 @@ export const backfillOwnerRedemptionAggregate = mutation({
         if (ownedCampaignId) {
           campaignRedemptionAggregatesWouldBackfill += 1;
         }
-        const counterEstimate = await wouldRecordAnalyticsCounterEvent(ctx, {
-          eventKey: redemptionCounterEventKey(redemption._id),
+        const counterEstimate = await estimateAnalyticsCounterTargets(ctx, {
+          targets: redemptionCounterBackfillTargets(redemption._id, ownedCampaignId),
           ownerId,
           campaignId: ownedCampaignId,
-          metric: "redemption_created",
         });
-        if (counterEstimate.eventWouldBackfill) {
-          redemptionCountersWouldBackfill += 1;
-        }
-        redemptionCounterEventsWouldBackfill +=
-          counterEstimate.markerWouldInsert + counterEstimate.markerWouldPatch;
+        redemptionCountersWouldBackfill += counterEstimate.countersWouldBackfill;
+        redemptionCounterEventsWouldBackfill += counterEstimate.counterEventsWouldBackfill;
         redemptionCounterIncrementsWouldBackfill += counterEstimate.counterIncrementsWouldBackfill;
       } else {
         await redemptionsByOwnerAmount.insertIfDoesNotExist(ctx, redemption);
@@ -308,17 +508,12 @@ export const backfillOwnerRedemptionAggregate = mutation({
           });
           campaignRedemptionAggregatesBackfilled += 1;
         }
-        if (
-          await recordAnalyticsCounterEvent(ctx, {
-            eventKey: redemptionCounterEventKey(redemption._id),
-            ownerId,
-            campaignId: ownedCampaignId,
-            metric: "redemption_created",
-            source: "backfill",
-          })
-        ) {
-          redemptionCountersBackfilled += 1;
-        }
+        redemptionCountersBackfilled += await recordAnalyticsCounterTargets(ctx, {
+          targets: redemptionCounterBackfillTargets(redemption._id, ownedCampaignId),
+          ownerId,
+          campaignId: ownedCampaignId,
+          source: "backfill",
+        });
       }
     }
 
@@ -339,30 +534,21 @@ export const backfillOwnerRedemptionAggregate = mutation({
         session.campaignId
       );
       if (dryRun) {
-        const counterEstimate = await wouldRecordAnalyticsCounterEvent(ctx, {
-          eventKey: sessionCounterEventKey(session._id),
+        const counterEstimate = await estimateAnalyticsCounterTargets(ctx, {
+          targets: sessionCounterBackfillTargets(session._id),
           ownerId,
           campaignId: ownedCampaignId,
-          metric: "session_created",
         });
-        if (counterEstimate.eventWouldBackfill) {
-          sessionCountersWouldBackfill += 1;
-        }
-        sessionCounterEventsWouldBackfill +=
-          counterEstimate.markerWouldInsert + counterEstimate.markerWouldPatch;
+        sessionCountersWouldBackfill += counterEstimate.countersWouldBackfill;
+        sessionCounterEventsWouldBackfill += counterEstimate.counterEventsWouldBackfill;
         sessionCounterIncrementsWouldBackfill += counterEstimate.counterIncrementsWouldBackfill;
       } else {
-        if (
-          await recordAnalyticsCounterEvent(ctx, {
-            eventKey: sessionCounterEventKey(session._id),
-            ownerId,
-            campaignId: ownedCampaignId,
-            metric: "session_created",
-            source: "backfill",
-          })
-        ) {
-          sessionCountersBackfilled += 1;
-        }
+        sessionCountersBackfilled += await recordAnalyticsCounterTargets(ctx, {
+          targets: sessionCounterBackfillTargets(session._id),
+          ownerId,
+          campaignId: ownedCampaignId,
+          source: "backfill",
+        });
       }
     }
 
@@ -397,13 +583,31 @@ export const getCampaignAnalytics = query({
     });
     const campaign = await requireOwnedCampaign(ctx, ownerId, args.campaignId);
 
-    const [aggregatedRedemptionCount, aggregatedRedeemedAmount, sessionCreatedEvents, redemptionCreatedEvents] =
+    const [
+      aggregatedRedemptionCount,
+      aggregatedRedeemedAmount,
+      sessionCreatedEvents,
+      redemptionCreatedEvents,
+      gameOpenEvents,
+      gameStartEvents,
+      gameCompletionEvents,
+      rewardOutcomeEvents,
+      rewardClaimEvents,
+      publicPlayLinkOpenEvents,
+    ] =
       await Promise.all([
         redemptionsByCampaignAmount.count(ctx, { namespace: args.campaignId }),
         redemptionsByCampaignAmount.sum(ctx, { namespace: args.campaignId }),
         countCampaignMetric(ctx, args.campaignId, "session_created"),
         countCampaignMetric(ctx, args.campaignId, "redemption_created"),
+        countCampaignMetric(ctx, args.campaignId, "game_open"),
+        countCampaignMetric(ctx, args.campaignId, "game_start"),
+        countCampaignMetric(ctx, args.campaignId, "game_completion"),
+        countCampaignMetric(ctx, args.campaignId, "reward_outcome"),
+        countCampaignMetric(ctx, args.campaignId, "reward_claim"),
+        countCampaignMetric(ctx, args.campaignId, "public_play_link_open"),
       ]);
+    const conversion = gameOpenEvents > 0 ? rewardClaimEvents / gameOpenEvents : null;
 
     return {
       campaignId: campaign._id,
@@ -412,6 +616,24 @@ export const getCampaignAnalytics = query({
       aggregatedRedeemedAmount,
       sessionCreatedEvents,
       redemptionCreatedEvents,
+      gameOpenEvents,
+      gameStartEvents,
+      gameCompletionEvents,
+      rewardOutcomeEvents,
+      rewardClaimEvents,
+      publicPlayLinkOpenEvents,
+      gameMetrics: {
+        gameTemplateId: DEFAULT_GAME_TEMPLATE_ID,
+        opens: gameOpenEvents,
+        starts: gameStartEvents,
+        completions: gameCompletionEvents,
+        rewardOutcomes: rewardOutcomeEvents,
+        claims: rewardClaimEvents,
+        conversion,
+        channelSharePerformance: {
+          publicPlayLinkOpens: publicPlayLinkOpenEvents,
+        },
+      },
     };
   },
 });
@@ -459,32 +681,23 @@ export const backfillCampaignAnalytics = mutation({
     for (const redemption of campaignRedemptions) {
       if (dryRun) {
         redemptionAggregatesWouldBackfill += 1;
-        const counterEstimate = await wouldRecordAnalyticsCounterEvent(ctx, {
-          eventKey: redemptionCounterEventKey(redemption._id),
+        const counterEstimate = await estimateAnalyticsCounterTargets(ctx, {
+          targets: redemptionCounterBackfillTargets(redemption._id, args.campaignId),
           ownerId,
           campaignId: args.campaignId,
-          metric: "redemption_created",
         });
-        if (counterEstimate.eventWouldBackfill) {
-          redemptionCountersWouldBackfill += 1;
-        }
-        redemptionCounterEventsWouldBackfill +=
-          counterEstimate.markerWouldInsert + counterEstimate.markerWouldPatch;
+        redemptionCountersWouldBackfill += counterEstimate.countersWouldBackfill;
+        redemptionCounterEventsWouldBackfill += counterEstimate.counterEventsWouldBackfill;
         redemptionCounterIncrementsWouldBackfill += counterEstimate.counterIncrementsWouldBackfill;
       } else {
         await redemptionsByCampaignAmount.insertIfDoesNotExist(ctx, redemption);
         redemptionAggregatesBackfilled += 1;
-        if (
-          await recordAnalyticsCounterEvent(ctx, {
-            eventKey: redemptionCounterEventKey(redemption._id),
-            ownerId,
-            campaignId: args.campaignId,
-            metric: "redemption_created",
-            source: "backfill",
-          })
-        ) {
-          redemptionCountersBackfilled += 1;
-        }
+        redemptionCountersBackfilled += await recordAnalyticsCounterTargets(ctx, {
+          targets: redemptionCounterBackfillTargets(redemption._id, args.campaignId),
+          ownerId,
+          campaignId: args.campaignId,
+          source: "backfill",
+        });
       }
     }
 
@@ -511,34 +724,25 @@ export const backfillCampaignAnalytics = mutation({
 
       if (dryRun && targetRedemption.campaignId === args.campaignId) {
         redemptionAggregatesWouldBackfill += 1;
-        const counterEstimate = await wouldRecordAnalyticsCounterEvent(ctx, {
-          eventKey: redemptionCounterEventKey(targetRedemption._id),
+        const counterEstimate = await estimateAnalyticsCounterTargets(ctx, {
+          targets: redemptionCounterBackfillTargets(targetRedemption._id, args.campaignId),
           ownerId,
           campaignId: args.campaignId,
-          metric: "redemption_created",
         });
-        if (counterEstimate.eventWouldBackfill) {
-          redemptionCountersWouldBackfill += 1;
-        }
-        redemptionCounterEventsWouldBackfill +=
-          counterEstimate.markerWouldInsert + counterEstimate.markerWouldPatch;
+        redemptionCountersWouldBackfill += counterEstimate.countersWouldBackfill;
+        redemptionCounterEventsWouldBackfill += counterEstimate.counterEventsWouldBackfill;
         redemptionCounterIncrementsWouldBackfill += counterEstimate.counterIncrementsWouldBackfill;
       }
 
       if (!dryRun && targetRedemption.campaignId === args.campaignId) {
         await redemptionsByCampaignAmount.insertIfDoesNotExist(ctx, targetRedemption);
         redemptionAggregatesBackfilled += 1;
-        if (
-          await recordAnalyticsCounterEvent(ctx, {
-            eventKey: redemptionCounterEventKey(targetRedemption._id),
-            ownerId,
-            campaignId: args.campaignId,
-            metric: "redemption_created",
-            source: "backfill",
-          })
-        ) {
-          redemptionCountersBackfilled += 1;
-        }
+        redemptionCountersBackfilled += await recordAnalyticsCounterTargets(ctx, {
+          targets: redemptionCounterBackfillTargets(targetRedemption._id, args.campaignId),
+          ownerId,
+          campaignId: args.campaignId,
+          source: "backfill",
+        });
       }
     }
 
@@ -552,30 +756,21 @@ export const backfillCampaignAnalytics = mutation({
 
     for (const session of sessions) {
       if (dryRun) {
-        const counterEstimate = await wouldRecordAnalyticsCounterEvent(ctx, {
-          eventKey: sessionCounterEventKey(session._id),
+        const counterEstimate = await estimateAnalyticsCounterTargets(ctx, {
+          targets: sessionCounterBackfillTargets(session._id),
           ownerId,
           campaignId: args.campaignId,
-          metric: "session_created",
         });
-        if (counterEstimate.eventWouldBackfill) {
-          sessionCountersWouldBackfill += 1;
-        }
-        sessionCounterEventsWouldBackfill +=
-          counterEstimate.markerWouldInsert + counterEstimate.markerWouldPatch;
+        sessionCountersWouldBackfill += counterEstimate.countersWouldBackfill;
+        sessionCounterEventsWouldBackfill += counterEstimate.counterEventsWouldBackfill;
         sessionCounterIncrementsWouldBackfill += counterEstimate.counterIncrementsWouldBackfill;
       } else {
-        if (
-          await recordAnalyticsCounterEvent(ctx, {
-            eventKey: sessionCounterEventKey(session._id),
-            ownerId,
-            campaignId: args.campaignId,
-            metric: "session_created",
-            source: "backfill",
-          })
-        ) {
-          sessionCountersBackfilled += 1;
-        }
+        sessionCountersBackfilled += await recordAnalyticsCounterTargets(ctx, {
+          targets: sessionCounterBackfillTargets(session._id),
+          ownerId,
+          campaignId: args.campaignId,
+          source: "backfill",
+        });
       }
     }
 

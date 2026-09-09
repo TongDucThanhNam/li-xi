@@ -14,46 +14,124 @@ const smokeEnv = {
   VITE_CONVEX_URL: smokeConvexUrl,
   VITE_SITE_URL: smokeSiteUrl,
 };
+const isWindows = process.platform === "win32";
+const npmCommand = "npm";
+const workspacePending = ["Đang mở trang", "Đang chuẩn bị dữ liệu và quyền truy cập"];
 
 const checks = [
   {
     path: "/",
-    includes: ["Đang mở trạm"],
+    includes: ["Đang mở không gian làm việc"],
     excludes: ["Lunar Fortune", "Premium Gacha Experience", "Not Found"],
   },
   {
     path: "/auth",
-    includes: ["Đăng nhập host chiến dịch", "Tiếp tục với Google"],
+    includes: ["Đăng nhập dành cho host", "Tiếp tục với Google"],
     excludes: ["Tên định danh", "Legacy PIN", "Not Found"],
   },
   {
     path: "/setup",
-    includes: ["Loading setup"],
+    includes: ["Đang mở thiết lập phù hợp"],
     excludes: ["Not Found"],
   },
   {
     path: "/draw",
-    includes: ["ĐANG TẢI TRẠM RÚT"],
+    includes: ["Đang xác định trò chơi mặc định"],
     excludes: ["Not Found"],
   },
   {
     path: "/campaigns",
-    includes: ["Đang tải Campaign Studio"],
+    includes: workspacePending,
     excludes: ["Not Found"],
   },
   {
+    path: "/onboarding",
+    includes: workspacePending,
+    excludes: ["Not Found"],
+  },
+  {
+    path: "/campaigns/new",
+    includes: workspacePending,
+    excludes: ["Not Found"],
+  },
+  {
+    path: "/campaigns/abcdefabcdefabcdefabcdef",
+    includes: workspacePending,
+    excludes: ["Not Found"],
+  },
+  {
+    path: "/campaigns/abcdefabcdefabcdefabcdef/games",
+    includes: workspacePending,
+    excludes: ["Not Found"],
+  },
+  {
+    path: "/campaigns/abcdefabcdefabcdefabcdef/games/abcdefabcdefabcdefabcdef",
+    includes: workspacePending,
+    excludes: ["Not Found"],
+  },
+  {
+    path: "/campaigns/abcdefabcdefabcdefabcdef/rewards",
+    includes: workspacePending,
+    excludes: ["Not Found"],
+  },
+  {
+    path: "/campaigns/abcdefabcdefabcdefabcdef/distribution",
+    includes: workspacePending,
+    excludes: ["Not Found"],
+  },
+  {
+    path: "/analytics?view=overview",
+    includes: workspacePending,
+    excludes: ["Not Found"],
+  },
+  {
+    path: "/settings/billing",
+    includes: workspacePending,
+    excludes: ["Not Found"],
+  },
+  {
+    path: "/settings/integrations",
+    includes: workspacePending,
+    excludes: ["Not Found"],
+  },
+  {
+    path: "/settings/operations",
+    includes: workspacePending,
+    excludes: ["Not Found"],
+  },
+  {
+    path: "/operate/abcdefabcdefabcdefabcdef",
+    includes: workspacePending,
+    excludes: ["Not Found"],
+  },
+  {
+    path: "/station/abcdefabcdefabcdefabcdef",
+    includes: ["Đang tải trạm chơi"],
+    excludes: ["Not Found"],
+  },
+  {
+    path: "/play/abcdefabcdefabcdefabcdef",
+    includes: ["Đang kiểm tra liên kết chơi"],
+    excludes: ["Not Found"],
+  },
+  {
+    path: "/play/not-a-code",
+    includes: ["Liên kết chơi không hợp lệ", "Liên kết chơi này không đúng định dạng"],
+    excludes: ["Đang kiểm tra liên kết chơi", "Not Found"],
+  },
+  {
     path: "/claim/abcdefabcdefabcdefabcdef",
-    includes: ["Đang kiểm tra link rút"],
+    includes: ["Đang kiểm tra liên kết chơi"],
     excludes: ["Not Found"],
   },
   {
     path: "/claim/not-a-code",
-    includes: ["Link không hợp lệ", "Link rút này không đúng định dạng"],
-    excludes: ["Đang kiểm tra link rút", "Not Found"],
+    includes: ["Liên kết chơi không hợp lệ", "Liên kết chơi này không đúng định dạng"],
+    excludes: ["Đang kiểm tra liên kết chơi", "Not Found"],
   },
   {
     path: "/leaderboard",
-    includes: ["Loading leaderboard"],
+    includes: workspacePending,
     excludes: ["Not Found"],
   },
 ];
@@ -115,12 +193,15 @@ async function assertRoute({ path, includes, excludes }) {
 
 let child = null;
 let builtOutput = false;
+let serverDiagnostics = "";
 
 function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const childProcess = spawn(command, args, {
+    const useWindowsShell = isWindows && command === npmCommand;
+    const childProcess = spawn(useWindowsShell ? [command, ...args].join(" ") : command, useWindowsShell ? [] : args, {
       stdio: "inherit",
       env: process.env,
+      shell: useWindowsShell,
       ...options,
     });
 
@@ -143,7 +224,7 @@ function runCommand(command, args, options = {}) {
 
 try {
   if (!explicitBaseUrl) {
-    await runCommand("npm", ["run", "build"], { env: smokeEnv });
+    await runCommand(npmCommand, ["run", "build"], { env: smokeEnv });
     builtOutput = true;
 
     child = spawn(
@@ -160,7 +241,10 @@ try {
     );
 
     child.stdout.on("data", (chunk) => process.stdout.write(chunk));
-    child.stderr.on("data", (chunk) => process.stderr.write(chunk));
+    child.stderr.on("data", (chunk) => {
+      serverDiagnostics += chunk.toString();
+      process.stderr.write(chunk);
+    });
     child.on("exit", (code, signal) => {
       if (code !== null && code !== 0) {
         console.error(`dev server exited with code ${code}`);
@@ -175,6 +259,10 @@ try {
 
   for (const check of checks) {
     await assertRoute(check);
+  }
+
+  if (serverDiagnostics.includes("aria-label or aria-labelledby prop is required for accessibility")) {
+    throw new Error("Route smoke emitted an accessibility warning for an unnamed interactive collection");
   }
 
   console.log("route smoke checks passed");

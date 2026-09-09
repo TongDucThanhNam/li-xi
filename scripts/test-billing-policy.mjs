@@ -56,8 +56,8 @@ assert.throws(
   "billing origins should reject explicit default ports before sending URLs to Polar"
 );
 assert.equal(
-  assertTrustedBillingUrl("https://app.example.com/campaigns?checkout=success", "Billing successUrl", siteUrl),
-  "https://app.example.com/campaigns?checkout=success"
+  assertTrustedBillingUrl("https://app.example.com/settings/billing?checkout=success", "Billing successUrl", siteUrl),
+  "https://app.example.com/settings/billing?checkout=success"
 );
 assert.equal(
   assertTrustedPolarCheckoutUrl("https://checkout.polar.sh/checkout/session_123?customer_session=abc"),
@@ -89,26 +89,26 @@ assert.throws(
   "Polar checkout URL returned to the browser should not use raw IP hosts"
 );
 assert.throws(
-  () => assertTrustedBillingUrl("https://app.example.com/campaigns?next=/draw", "Billing successUrl", siteUrl),
+  () => assertTrustedBillingUrl("https://app.example.com/settings/billing?next=/draw", "Billing successUrl", siteUrl),
   /query billing hợp lệ/,
   "billing redirects should not carry arbitrary query params to or from Polar"
 );
 assert.throws(
-  () => assertTrustedBillingUrl("https://app.example.com/campaigns?checkout=cancelled", "Billing successUrl", siteUrl),
+  () => assertTrustedBillingUrl("https://app.example.com/settings/billing?checkout=cancelled", "Billing successUrl", siteUrl),
   /query billing hợp lệ/,
   "billing checkout result query should be constrained to known values"
 );
 assert.throws(
   () =>
     assertTrustedBillingUrl(
-      "https://app.example.com/campaigns?checkout=success&next=/draw",
+      "https://app.example.com/settings/billing?checkout=success&next=/draw",
       "Billing successUrl",
       siteUrl
     ),
   /query billing hợp lệ/,
   "billing redirects should not mix allowed checkout result with extra params"
 );
-assert.equal(getDefaultBillingReturnUrl(siteUrl), "https://app.example.com/campaigns");
+assert.equal(getDefaultBillingReturnUrl(siteUrl), "https://app.example.com/settings/billing");
 assert.throws(
   () => assertTrustedBillingUrl("https://app.example.com/draw?checkout=success", "Billing successUrl", siteUrl),
   /route billing hợp lệ/,
@@ -123,37 +123,37 @@ assert.throws(
   /không kèm path/
 );
 assert.throws(
-  () => assertTrustedBillingUrl("http://app.example.com/campaigns", "Billing returnUrl", siteUrl),
+  () => assertTrustedBillingUrl("http://app.example.com/settings/billing", "Billing returnUrl", siteUrl),
   /HTTPS public URL/
 );
 assert.throws(
-  () => assertTrustedBillingUrl("https://user:pass@app.example.com/campaigns", "Billing returnUrl", siteUrl),
+  () => assertTrustedBillingUrl("https://user:pass@app.example.com/settings/billing", "Billing returnUrl", siteUrl),
   /HTTPS public URL/
 );
 assert.throws(
-  () => assertTrustedBillingUrl("https://app.example.com:8443/campaigns", "Billing returnUrl", siteUrl),
+  () => assertTrustedBillingUrl("https://app.example.com:8443/settings/billing", "Billing returnUrl", siteUrl),
   /HTTPS public URL/
 );
 assert.throws(
-  () => assertTrustedBillingUrl("https://app.example.com:443/campaigns", "Billing returnUrl", siteUrl),
+  () => assertTrustedBillingUrl("https://app.example.com:443/settings/billing", "Billing returnUrl", siteUrl),
   /URL canonical/,
   "billing redirects should reject explicit default ports before sending URLs to Polar"
 );
 assert.throws(
-  () => assertTrustedBillingUrl("https://app.example.com/campaigns#checkout", "Billing returnUrl", siteUrl),
+  () => assertTrustedBillingUrl("https://app.example.com/settings/billing#checkout", "Billing returnUrl", siteUrl),
   /HTTPS public URL/,
   "billing redirects should reject fragments before sending URLs to Polar"
 );
 assert.throws(
-  () => assertTrustedBillingUrl("https://localhost/campaigns", "Billing returnUrl", siteUrl),
+  () => assertTrustedBillingUrl("https://localhost/settings/billing", "Billing returnUrl", siteUrl),
   /HTTPS public URL/
 );
 assert.throws(
-  () => assertTrustedBillingUrl("https://100.64.0.1/campaigns", "Billing returnUrl", siteUrl),
+  () => assertTrustedBillingUrl("https://100.64.0.1/settings/billing", "Billing returnUrl", siteUrl),
   /HTTPS public URL/
 );
 assert.throws(
-  () => assertTrustedBillingUrl("https://[fd00::1]/campaigns", "Billing returnUrl", siteUrl),
+  () => assertTrustedBillingUrl("https://[fd00::1]/settings/billing", "Billing returnUrl", siteUrl),
   /HTTPS public URL/
 );
 assert.throws(
@@ -161,7 +161,7 @@ assert.throws(
   /HTTPS public origin/
 );
 assert.throws(
-  () => assertTrustedBillingUrl("https://8.8.8.8/campaigns", "Billing returnUrl", "https://8.8.8.8"),
+  () => assertTrustedBillingUrl("https://8.8.8.8/settings/billing", "Billing returnUrl", "https://8.8.8.8"),
   /HTTPS public URL/
 );
 assert.throws(
@@ -171,7 +171,7 @@ assert.throws(
 assert.throws(
   () =>
     assertTrustedBillingUrl(
-      "https://[2606:4700:4700::1111]/campaigns",
+      "https://[2606:4700:4700::1111]/settings/billing",
       "Billing returnUrl",
       "https://[2606:4700:4700::1111]"
     ),
