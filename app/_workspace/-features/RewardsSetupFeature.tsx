@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { AdminPageShell, AdminRouteStatus } from "@/app/components/AdminPageShell";
 import { CampaignContextNav } from "@/app/_workspace/-components/CampaignContextNav";
+import { RewardInventoryPanel } from "@/app/_workspace/-features/RewardInventoryPanel";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { RARITY_LABELS, RARITY_VALUES, Rarity } from "@/lib/lixiPolicy";
@@ -798,8 +799,10 @@ export function RewardsSetupFeature({
 							Lưu cấu hình ngân sách
 						</Button>
 					) : null}
-				</Widget.Content>
-			</Widget>
+					</Widget.Content>
+				</Widget>
+
+			<RewardInventoryPanel campaignId={campaignId} />
 		</AdminPageShell>
 	);
 }

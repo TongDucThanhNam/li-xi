@@ -1,0 +1,364 @@
+/* Quiz template layer — tokens documented in docs/design-quiz.md.
+   Every class is prefixed `quiz-` so this skin never collides with draw.css,
+   the `wheel-*`, `scratch-*`, `slot-*` classes, or the admin HeroUI theme. */
+@import "./base.css";
+
+@theme {
+	--quiz-bg: #12203a;
+	--quiz-bg-deep: #0c1626;
+	--quiz-ink: #f2f7ff;
+	--quiz-ink-soft: rgba(242, 247, 255, 0.75);
+	--quiz-accent: #4f7cff;
+	--quiz-accent-deep: #2c4bbf;
+	--quiz-pass: #2ec4b6;
+	--quiz-fail: #ef476f;
+	--quiz-line: rgba(242, 247, 255, 0.16);
+}
+
+.quiz-stage {
+	position: relative;
+	min-height: 100dvh;
+	overflow: hidden;
+	background:
+		radial-gradient(circle at 50% 24%, rgba(79, 124, 255, 0.16), transparent 60%),
+		var(--quiz-bg);
+	color: var(--quiz-ink);
+	font-family: "Be Vietnam Pro", system-ui, sans-serif;
+}
+
+.quiz-stage__inner {
+	position: relative;
+	display: flex;
+	min-height: 100dvh;
+	width: 100%;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 1.25rem;
+	padding: 1.5rem;
+}
+
+.quiz-hero__eyebrow {
+	margin: 0;
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.32em;
+	text-transform: uppercase;
+	color: var(--quiz-accent);
+}
+
+.quiz-hero__title {
+	margin: 0;
+	font-family: "Baloo 2", "Be Vietnam Pro", system-ui, sans-serif;
+	font-size: clamp(1.7rem, 5vw, 2.9rem);
+	line-height: 1.12;
+	color: var(--quiz-ink);
+	overflow-wrap: anywhere;
+}
+
+.quiz-hero__subtitle {
+	margin: 0;
+	max-width: 34rem;
+	text-align: center;
+	font-size: 0.95rem;
+	color: var(--quiz-ink-soft);
+	overflow-wrap: anywhere;
+}
+
+.quiz-hero__brand {
+	margin: 0;
+	font-size: 0.85rem;
+	color: var(--quiz-ink-soft);
+}
+
+.quiz-hero__badge {
+	display: grid;
+	place-items: center;
+	width: 64px;
+	height: 64px;
+	border-radius: 999px;
+	border: 2px solid var(--quiz-accent);
+	background: rgba(79, 124, 255, 0.14);
+	color: var(--quiz-accent);
+}
+
+.quiz-card {
+	width: min(92vw, 34rem);
+	border-radius: 1.25rem;
+	border: 1px solid var(--quiz-line);
+	background: var(--quiz-bg-deep);
+	box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+	padding: 1.4rem;
+	display: grid;
+	gap: 1rem;
+}
+
+.quiz-progress {
+	display: grid;
+	gap: 0.35rem;
+}
+
+.quiz-progress__bar {
+	height: 6px;
+	border-radius: 999px;
+	background: rgba(242, 247, 255, 0.12);
+	overflow: hidden;
+}
+
+.quiz-progress__fill {
+	height: 100%;
+	border-radius: 999px;
+	background: var(--quiz-accent);
+	transition: width 240ms ease-out;
+}
+
+.quiz-progress__label {
+	margin: 0;
+	font-size: 0.8rem;
+	color: var(--quiz-ink-soft);
+	text-align: right;
+}
+
+.quiz-card__prompt {
+	margin: 0;
+	font-family: "Baloo 2", "Be Vietnam Pro", system-ui, sans-serif;
+	font-size: clamp(1.15rem, 3.4vw, 1.5rem);
+	line-height: 1.3;
+	color: var(--quiz-ink);
+	overflow-wrap: anywhere;
+}
+
+.quiz-choices {
+	display: grid;
+	gap: 0.6rem;
+}
+
+.quiz-choice {
+	display: flex;
+	align-items: center;
+	gap: 0.7rem;
+	width: 100%;
+	padding: 0.75rem 0.9rem;
+	border: 1px solid var(--quiz-line);
+	border-radius: 0.9rem;
+	background: rgba(255, 255, 255, 0.04);
+	color: var(--quiz-ink);
+	font-family: "Be Vietnam Pro", system-ui, sans-serif;
+	font-size: 0.95rem;
+	text-align: left;
+	cursor: pointer;
+	transition: border-color 160ms ease-out, background 160ms ease-out,
+		transform 160ms ease-out;
+}
+
+.quiz-choice:hover:not(:disabled) {
+	border-color: var(--quiz-accent);
+}
+
+.quiz-choice:disabled {
+	opacity: 0.6;
+	cursor: progress;
+}
+
+.quiz-choice--selected {
+	border-color: var(--quiz-accent);
+	background: rgba(79, 124, 255, 0.18);
+	transform: translateX(4px);
+}
+
+.quiz-choice__marker {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 26px;
+	height: 26px;
+	border-radius: 999px;
+	border: 1px solid var(--quiz-line);
+	background: rgba(79, 124, 255, 0.16);
+	font-size: 0.75rem;
+	font-weight: 700;
+}
+
+.quiz-choice__text {
+	overflow-wrap: anywhere;
+}
+
+.quiz-choice:focus-visible,
+.quiz-cta:focus-visible,
+.quiz-button:focus-visible {
+	outline: 2px solid var(--quiz-ink);
+	outline-offset: 2px;
+}
+
+.quiz-status {
+	margin: 0;
+	font-size: 0.9rem;
+	color: var(--quiz-ink-soft);
+}
+
+.quiz-error {
+	margin: 0;
+	max-width: 100%;
+	font-size: 0.9rem;
+	text-align: center;
+	color: #ff8fa3;
+	overflow-wrap: anywhere;
+}
+
+.quiz-cta {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	border: none;
+	border-radius: 999px;
+	padding: 0.8rem 1.6rem;
+	background: linear-gradient(120deg, var(--quiz-accent), var(--quiz-accent-deep));
+	color: var(--quiz-ink);
+	font-family: "Be Vietnam Pro", system-ui, sans-serif;
+	font-size: 0.95rem;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.quiz-cta:disabled {
+	opacity: 0.6;
+	cursor: progress;
+}
+
+.quiz-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	border: 1px solid var(--quiz-line);
+	border-radius: 999px;
+	padding: 0.7rem 1.4rem;
+	background: transparent;
+	color: var(--quiz-ink);
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+.quiz-result {
+	display: grid;
+	width: min(92vw, 34rem);
+	justify-items: center;
+	gap: 0.75rem;
+	padding: 1.4rem;
+	border-radius: 1.25rem;
+	border: 1px solid var(--quiz-line);
+	background: var(--quiz-bg-deep);
+	box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+	text-align: center;
+}
+
+.quiz-result--pass {
+	border-color: var(--quiz-pass);
+	box-shadow: 0 0 28px rgba(46, 196, 182, 0.2);
+}
+
+.quiz-result__eyebrow {
+	margin: 0;
+	font-size: 0.75rem;
+	letter-spacing: 0.28em;
+	text-transform: uppercase;
+	color: var(--quiz-accent);
+}
+
+.quiz-result__score {
+	margin: 0;
+	font-family: "Baloo 2", "Be Vietnam Pro", system-ui, sans-serif;
+	font-size: 1.05rem;
+	color: var(--quiz-pass);
+	overflow-wrap: anywhere;
+}
+
+.quiz-result__label {
+	margin: 0;
+	font-family: "Baloo 2", "Be Vietnam Pro", system-ui, sans-serif;
+	font-size: clamp(1.4rem, 4.5vw, 2.1rem);
+	line-height: 1.2;
+	color: var(--quiz-ink);
+	overflow-wrap: anywhere;
+}
+
+.quiz-result__code {
+	margin: 0.25rem 0 0;
+	max-width: 100%;
+	padding: 0.55rem 1rem;
+	border: 1px dashed var(--quiz-pass);
+	border-radius: 0.75rem;
+	background: rgba(0, 0, 0, 0.5);
+	letter-spacing: 0.08em;
+	color: var(--quiz-ink);
+	overflow-wrap: anywhere;
+}
+
+.quiz-result__instructions {
+	margin: 0.35rem 0 0;
+	max-width: 30rem;
+	font-size: 0.85rem;
+	color: var(--quiz-ink-soft);
+	overflow-wrap: anywhere;
+}
+
+.quiz-review {
+	width: 100%;
+	border-top: 1px solid var(--quiz-line);
+	padding-top: 0.75rem;
+	text-align: left;
+	display: grid;
+	gap: 0.5rem;
+}
+
+.quiz-review__title {
+	margin: 0;
+	font-size: 0.8rem;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--quiz-ink-soft);
+}
+
+.quiz-review__list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: grid;
+	gap: 0.5rem;
+}
+
+.quiz-review__item {
+	display: flex;
+	gap: 0.5rem;
+	align-items: flex-start;
+	font-size: 0.85rem;
+	color: var(--quiz-ink-soft);
+}
+
+.quiz-review__icon {
+	flex: none;
+	margin-top: 2px;
+	color: var(--quiz-pass);
+}
+
+.quiz-review__text {
+	overflow-wrap: anywhere;
+}
+
+.quiz-result__actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 0.75rem;
+	margin-top: 1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.quiz-progress__fill,
+	.quiz-choice,
+	.quiz-cta,
+	.quiz-button {
+		transition: none !important;
+		animation: none !important;
+	}
+}

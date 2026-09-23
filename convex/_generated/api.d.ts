@@ -15,6 +15,7 @@ import type * as authorization from "../authorization.js";
 import type * as billing from "../billing.js";
 import type * as budgetScope from "../budgetScope.js";
 import type * as campaignGameConfig from "../campaignGameConfig.js";
+import type * as campaignGames from "../campaignGames.js";
 import type * as campaignIdentity from "../campaignIdentity.js";
 import type * as campaigns from "../campaigns.js";
 import type * as crons from "../crons.js";
@@ -28,11 +29,17 @@ import type * as leaderboard from "../leaderboard.js";
 import type * as migrationToken from "../migrationToken.js";
 import type * as migrations from "../migrations.js";
 import type * as ops from "../ops.js";
+import type * as participants from "../participants.js";
+import type * as playEngine from "../playEngine.js";
+import type * as playMaintenance from "../playMaintenance.js";
 import type * as playSessions from "../playSessions.js";
 import type * as polarClient from "../polarClient.js";
 import type * as publicLinks from "../publicLinks.js";
+import type * as publicPlay from "../publicPlay.js";
+import type * as rewardInventory from "../rewardInventory.js";
 import type * as security from "../security.js";
 import type * as setup from "../setup.js";
+import type * as shareLinks from "../shareLinks.js";
 
 import type {
   ApiFromModules,
@@ -48,6 +55,7 @@ declare const fullApi: ApiFromModules<{
   billing: typeof billing;
   budgetScope: typeof budgetScope;
   campaignGameConfig: typeof campaignGameConfig;
+  campaignGames: typeof campaignGames;
   campaignIdentity: typeof campaignIdentity;
   campaigns: typeof campaigns;
   crons: typeof crons;
@@ -61,11 +69,17 @@ declare const fullApi: ApiFromModules<{
   migrationToken: typeof migrationToken;
   migrations: typeof migrations;
   ops: typeof ops;
+  participants: typeof participants;
+  playEngine: typeof playEngine;
+  playMaintenance: typeof playMaintenance;
   playSessions: typeof playSessions;
   polarClient: typeof polarClient;
   publicLinks: typeof publicLinks;
+  publicPlay: typeof publicPlay;
+  rewardInventory: typeof rewardInventory;
   security: typeof security;
   setup: typeof setup;
+  shareLinks: typeof shareLinks;
 }>;
 
 /**

@@ -1,0 +1,9 @@
+@import "../../../app/styles/admin.css";
+@source "../../../app";
+
+/* Deterministic rendering for headless checkpoints: no animated churn. */
+* {
+  animation: none !important;
+  transition: none !important;
+  caret-color: transparent !important;
+}

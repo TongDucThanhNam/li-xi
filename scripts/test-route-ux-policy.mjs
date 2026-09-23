@@ -21,7 +21,7 @@ const requiredRoutes = [
   "/campaigns/$campaignId/rewards", "/campaigns/$campaignId/distribution",
   "/analytics", "/settings/billing", "/settings/integrations",
   "/settings/operations", "/operate/$campaignGameId",
-  "/station/$campaignGameId", "/play/$publicCode", "/setup",
+  "/station/$campaignGameId", "/play/$publicCode", "/p/$shareCode", "/setup",
   "/leaderboard", "/draw", "/claim/$publicCode",
 ];
 const removedDrawHostComponents = [
@@ -83,6 +83,7 @@ const requiredSources = [
   "app/_workspace/operate/$campaignGameId.tsx",
   "app/station/$campaignGameId.tsx",
   "app/play/$publicCode.tsx",
+  "app/p/$shareCode.tsx",
 ];
 for (const source of requiredSources) {
   assert(existsSync(source), "Required route boundary is missing: " + source);
@@ -105,6 +106,7 @@ for (const source of [
   "app/_workspace/operate/$campaignGameId.tsx",
   "app/station/$campaignGameId.tsx",
   "app/play/$publicCode.tsx",
+  "app/p/$shareCode.tsx",
 ]) {
   const routeSource = read(source);
   assert(
@@ -282,15 +284,26 @@ assert(
   gameEditorRoute.includes("CampaignGameEditorFeature") &&
   gameEditorFeature.includes("template.ConfigEditor") &&
     templateRegistry.includes("ConfigEditor: LiXiGameConfigEditor") &&
-    templateRegistry.includes("normalizeConfig: buildLiXiGameConfig") &&
+    templateRegistry.includes("normalizeConfig: (config)") &&
+    templateRegistry.includes("isLuckyWheelGameConfig") &&
+    templateRegistry.includes('"lucky-wheel"') &&
+    templateRegistry.includes("PlayStage") &&
     templateRegistry.includes("toLegacyCampaignPresentation") &&
     templateTypes.includes("initialCampaign: CampaignGameConfig") &&
+    templateTypes.includes("GamePlayStageProps") &&
     !gameEditorFeature.includes("buildLiXiGameConfig") &&
     !campaignCreateFeature.includes("buildLiXiGameConfig") &&
     !campaignCreateFeature.includes("@/app/game-templates/registry") &&
     campaignCreateFeature.includes("initialCampaignConfig") &&
+    campaignCreateFeature.includes('useState<GameTemplateId>("li-xi")') &&
     !gameEditorFeature.includes("JSON.stringify(context.campaignGame.config, null, 2)"),
-  "Campaign-game routes must delegate editing, normalization, initial config, and legacy projection to the registered template",
+  "Campaign-game routes must delegate editing, normalization, initial config, and legacy projection to a real two-template registry with a generic play-stage contract",
+);
+assert(
+  campaignSectionFeature.includes("api.campaignGames.createCampaignGame") &&
+    campaignSectionFeature.includes("gameTemplateCatalog") &&
+    !campaignSectionFeature.includes("Sắp có"),
+  "Campaign games list must offer a working add-game flow through the template catalog instead of a placeholder",
 );
 assert(
   gameEditorFeature.includes("UnsavedChangesGuard") &&
@@ -340,6 +353,42 @@ assert(
     distributionFeature.includes("buildPublicPlayUrl") &&
     distributionFeature.includes("navigator.clipboard.writeText"),
   "Distribution must expose authorized channel state, canonical public links, QR codes, and share actions",
+);
+const shareLinksPanel = read("app/_workspace/-features/ShareLinksPanel.tsx");
+assert(
+  shareLinksPanel.includes("api.shareLinks.listShareLinks") &&
+    shareLinksPanel.includes("api.shareLinks.createShareLink") &&
+    shareLinksPanel.includes("api.shareLinks.revokeShareLink") &&
+    shareLinksPanel.includes("api.shareLinks.restoreShareLink") &&
+    shareLinksPanel.includes("buildShareEntryUrlForCode") &&
+    distributionFeature.includes("ShareLinksPanel"),
+  "Distribution must manage reusable public entry links with create, copy, QR, revoke, and restore actions",
+);
+const publicShareEntry = read("app/play/-features/PublicShareEntryFeature.tsx");
+const shareEntryRoute = read("app/p/$shareCode.tsx");
+assert(
+  !shareEntryRoute.includes("AdminPageShell") &&
+    shareEntryRoute.includes("game-templates") &&
+    shareEntryRoute.includes("PublicShareEntryFeature") &&
+    shareEntryRoute.includes('key={shareCode}') &&
+    !publicShareEntry.includes("useOwnerSession") &&
+    !publicShareEntry.includes("AdminPageShell") &&
+    publicShareEntry.includes("requireGameTemplate") &&
+    publicShareEntry.includes(".EntryHero") &&
+    publicShareEntry.includes("startPublicPlaySession") &&
+    publicShareEntry.includes("getPublicSessionOutcome") &&
+    publicShareEntry.includes("getPublicClaimDetail") &&
+    publicShareEntry.includes("playSessionAction") &&
+    publicShareEntry.includes("claimPublicReward") &&
+    publicShareEntry.includes("recordShareEntryOpen") &&
+    publicShareEntry.includes("normalizePublicShareCode") &&
+    publicShareEntry.includes("takeStartKey"),
+  "The reusable /p entry must be a public, unauthenticated, template-resolved self-serve flow: template-owned hero and stage, persisted start key and session capability, recovered outcome/claim, and open metrics on one stable key",
+);
+assert(
+  operatorFeature.includes('templateId !== "li-xi"') &&
+    stationFeature.includes('templateId !== "li-xi"'),
+  "Operator console and station must fail over with clear guidance for non-li-xi self-serve templates",
 );
 const analyticsRoute = read("app/_workspace/analytics.tsx");
 for (const view of ["overview", "games", "rewards", "channels"]) {

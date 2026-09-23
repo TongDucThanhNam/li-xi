@@ -1,15 +1,20 @@
 "use client";
 
-import { Alert, Button, Chip, Spinner } from "@heroui/react";
-import { EmptyState, ItemCard, ItemCardGroup, Widget } from "@heroui-pro/react";
+import { Alert, Button, Chip, Input, Label, Spinner } from "@heroui/react";
+import { EmptyState, ItemCard, ItemCardGroup, NativeSelect, Widget } from "@heroui-pro/react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
-import { FileQuestion, Gamepad2, Layers3, Plus, RefreshCw } from "lucide-react";
+import { FileQuestion, Gamepad2, Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { CampaignContextNav } from "@/app/_workspace/-components/CampaignContextNav";
 import { AdminPageShell } from "@/app/components/AdminPageShell";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import {
+	gameTemplates as gameTemplateCatalog,
+	type CampaignGameConfig,
+	type GameTemplateId,
+} from "@/lib/gameTemplates";
 
 const statusLabels = {
 	active: "Đang chạy",
@@ -22,9 +27,15 @@ export function CampaignSectionFeature({ campaignId }: { campaignId: string }) {
 		campaignId: campaignId as Id<"campaigns">,
 	});
 	const ensureCampaignGame = useMutation(api.campaigns.ensureCampaignGameForRoute);
+	const createCampaignGame = useMutation(api.campaignGames.createCampaignGame);
 	const [attemptedCampaignId, setAttemptedCampaignId] = useState("");
 	const [materializing, setMaterializing] = useState(false);
 	const [materializeError, setMaterializeError] = useState("");
+	const [addTemplateId, setAddTemplateId] = useState<GameTemplateId>("lucky-wheel");
+	const [addName, setAddName] = useState("");
+	const [adding, setAdding] = useState(false);
+	const [addError, setAddError] = useState("");
+	const [addSuccess, setAddSuccess] = useState("");
 
 	const materializeDefaultGame = useCallback(async () => {
 		setAttemptedCampaignId(campaignId);
@@ -53,6 +64,33 @@ export function CampaignSectionFeature({ campaignId }: { campaignId: string }) {
 		}
 		void materializeDefaultGame();
 	}, [attemptedCampaignId, campaignId, context, materializeDefaultGame]);
+
+	const addGame = useCallback(async () => {
+		if (!context?.campaign) {
+			return;
+		}
+		setAdding(true);
+		setAddError("");
+		setAddSuccess("");
+		try {
+			const template = gameTemplateCatalog[addTemplateId];
+			const result = await createCampaignGame({
+				campaignId: context.campaign.id,
+				config: template.initialCampaignConfig as CampaignGameConfig,
+				name: addName || undefined,
+				status: "draft",
+				templateId: template.id,
+			});
+			setAddName("");
+			setAddSuccess(`Đã thêm "${result.name}". Hãy cấu hình và kích hoạt trò chơi.`);
+		} catch (unknownError) {
+			setAddError(
+				unknownError instanceof Error ? unknownError.message : "Không thể thêm trò chơi",
+			);
+		} finally {
+			setAdding(false);
+		}
+	}, [addName, addTemplateId, context, createCampaignGame]);
 
 	if (context === undefined) {
 		return (
@@ -146,7 +184,7 @@ export function CampaignSectionFeature({ campaignId }: { campaignId: string }) {
 								<ItemCard.Content>
 									<ItemCard.Title>{campaignGame.name}</ItemCard.Title>
 									<ItemCard.Description>
-										Trải nghiệm #{campaignGame.id.slice(-6)}
+										{gameTemplateCatalog[campaignGame.templateId].name} · Trải nghiệm #{campaignGame.id.slice(-6)}
 									</ItemCard.Description>
 								</ItemCard.Content>
 								<ItemCard.Action>
@@ -167,27 +205,55 @@ export function CampaignSectionFeature({ campaignId }: { campaignId: string }) {
 				<Widget.Header>
 					<Widget.Title>Thêm trò chơi</Widget.Title>
 					<Widget.Description>
-						Thư viện mẫu sẽ cho phép thêm các trải nghiệm khác vào cùng chiến dịch.
+						Chọn một mẫu trò chơi và thêm vào chiến dịch dưới dạng trải nghiệm độc lập.
 					</Widget.Description>
 				</Widget.Header>
-				<Widget.Content>
-					<ItemCard variant="secondary">
-						<ItemCard.Icon>
-							<Layers3 aria-hidden="true" />
-						</ItemCard.Icon>
-						<ItemCard.Content>
-							<ItemCard.Title>Thư viện mẫu trò chơi</ItemCard.Title>
-							<ItemCard.Description>
-								Mẫu vòng quay, cào thưởng, câu hỏi và các trải nghiệm mới sẽ xuất hiện tại đây.
-							</ItemCard.Description>
-						</ItemCard.Content>
-						<ItemCard.Action>
-							<Chip variant="soft">
-								<Plus aria-hidden="true" size={14} />
-								Sắp có
-							</Chip>
-						</ItemCard.Action>
-					</ItemCard>
+				<Widget.Content className="gap-4">
+					{addSuccess || addError ? (
+						<Alert status={addError ? "danger" : "success"}>
+							<Alert.Indicator />
+							<Alert.Content>
+								<Alert.Title>{addError || addSuccess}</Alert.Title>
+							</Alert.Content>
+						</Alert>
+					) : null}
+					<div className="grid gap-4 md:grid-cols-2">
+						<div className="admin-field">
+							<Label htmlFor="add-game-template">Mẫu trò chơi</Label>
+							<NativeSelect fullWidth variant="secondary">
+								<NativeSelect.Trigger
+									aria-label="Mẫu trò chơi"
+									id="add-game-template"
+									value={addTemplateId}
+									onChange={(event) => setAddTemplateId(event.currentTarget.value as GameTemplateId)}
+								>
+									{Object.values(gameTemplateCatalog).map((template) => (
+										<NativeSelect.Option key={template.id} value={template.id}>
+											{template.name}
+										</NativeSelect.Option>
+									))}
+									<NativeSelect.Indicator />
+								</NativeSelect.Trigger>
+							</NativeSelect>
+						</div>
+						<div className="admin-field">
+							<Label htmlFor="add-game-name">Tên hiển thị (tuỳ chọn)</Label>
+							<Input
+								fullWidth
+								id="add-game-name"
+								placeholder={gameTemplateCatalog[addTemplateId].name}
+								value={addName}
+								variant="secondary"
+								onChange={(event) => setAddName(event.currentTarget.value)}
+							/>
+						</div>
+					</div>
+					<div>
+						<Button isPending={adding} onPress={() => void addGame()}>
+							<Plus aria-hidden="true" size={16} />
+							Thêm trò chơi
+						</Button>
+					</div>
 				</Widget.Content>
 			</Widget>
 		</AdminPageShell>

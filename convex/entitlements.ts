@@ -1,6 +1,6 @@
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { countOwnerRedemptions } from "./analytics";
+import { countOwnerRedemptions, countRewardedGenericOutcomes } from "./analytics";
 import { requireResolvedOwner } from "./authorization";
 import { polar, polarProducts } from "./polarClient";
 import { countOpenPendingOwnerSessions } from "./drawSessionPolicy";
@@ -12,7 +12,13 @@ import {
 } from "../lib/entitlementPolicy";
 
 type ConvexCtx = QueryCtx | MutationCtx;
-type LimitKey = "campaigns" | "assets" | "openSessions" | "budgetItems" | "redemptions";
+type LimitKey =
+  | "campaigns"
+  | "assets"
+  | "openSessions"
+  | "budgetItems"
+  | "redemptions"
+  | "games";
 type LimitValue = number | null;
 type EntitlementLimits = Record<LimitKey, LimitValue>;
 type EntitlementUsage = Record<LimitKey, number>;
@@ -36,6 +42,7 @@ const PLAN_LIMITS: Record<PlanTier, EntitlementLimits> = {
     openSessions: 1,
     budgetItems: 50,
     redemptions: 100,
+    games: 5,
   },
   pro: {
     campaigns: 10,
@@ -43,6 +50,7 @@ const PLAN_LIMITS: Record<PlanTier, EntitlementLimits> = {
     openSessions: 10,
     budgetItems: 200,
     redemptions: 5000,
+    games: 25,
   },
   business: {
     campaigns: null,
@@ -50,6 +58,7 @@ const PLAN_LIMITS: Record<PlanTier, EntitlementLimits> = {
     openSessions: null,
     budgetItems: 500,
     redemptions: null,
+    games: null,
   },
 };
 
@@ -155,63 +164,89 @@ async function countOpenSessionsForQuota(ctx: ConvexCtx, ownerId: Id<"users">) {
   return countOpenPendingOwnerSessions(ctx, ownerId);
 }
 
-async function getUsage(ctx: ConvexCtx, ownerId: Id<"users">): Promise<EntitlementUsage> {
-  const [campaigns, assets, openSessions, budgetItems, redemptions] = await Promise.all([
-    countCampaignsForQuota(ctx, ownerId),
-    countAssetsForQuota(ctx, ownerId),
-    countOpenSessionsForQuota(ctx, ownerId),
-    ctx.db
-      .query("budgetItems")
-      .withIndex("by_owner_amount", (q) => q.eq("ownerId", ownerId))
-      .collect(),
-    countOwnerRedemptions(ctx, ownerId),
-  ]);
+const REWARDED_TYPES = ["cash", "voucher", "physical", "points"] as const;
 
-  return {
-    campaigns,
-    assets,
-    openSessions,
-    budgetItems: budgetItems.length,
-    redemptions,
-  };
+/**
+ * Bounded indexed existence check for actually rewarded outcomes. Four
+ * direct index probes (owner + rewardType), each O(1) and fully independent
+ * of how many engagement (none) outcomes the owner holds.
+ */
+async function ownerHasRewardedOutcome(
+  ctx: ConvexCtx,
+  ownerId: Id<"users">
+): Promise<boolean> {
+  for (const rewardType of REWARDED_TYPES) {
+    const rows = await ctx.db
+      .query("rewardOutcomes")
+      .withIndex("by_owner_rewardType", (q) =>
+        q.eq("ownerId", ownerId).eq("rewardType", rewardType)
+      )
+      .take(1);
+    if (rows.length > 0) {
+      return true;
+    }
+  }
+  return false;
 }
 
-async function getEntitlementSnapshot(ctx: ConvexCtx, ownerId: Id<"users">) {
-  const billingPlan = await resolveBillingPlan(ctx, ownerId);
-  const tier = billingPlan.tier;
-  const limits = PLAN_LIMITS[tier];
-  const usage = await getUsage(ctx, ownerId);
-
-  return {
-    tier,
-    label: PLAN_LABELS[tier],
-    source: billingPlan.source,
-    billingConfigured: isBillingPlanMappingConfigured(process.env, polarProducts),
-    subscription: billingPlan.subscription,
-    billingError: billingPlan.billingError,
-    limits,
-    usage,
-    resources: {
-      campaigns: limitState(usage.campaigns, limits.campaigns),
-      assets: limitState(usage.assets, limits.assets),
-      openSessions: limitState(usage.openSessions, limits.openSessions),
-      budgetItems: limitState(usage.budgetItems, limits.budgetItems),
-      redemptions: limitState(usage.redemptions, limits.redemptions),
-    },
-  };
+/**
+ * Rewarded generic outcomes are accounted exactly once the owner's reward
+ * aggregate is provably exact. Owners whose rewarded outcomes predate the
+ * aggregate must run the bounded reward backfill
+ * (playMaintenance:backfillRewardAccountingPage) before new reward
+ * allocation; owners with no rewarded outcomes at all (fresh accounts and
+ * engagement-only histories, regardless of none-outcome volume)
+ * auto-initialize here. An empty game — whatever its template, mode or
+ * accounting version — never invents reward history.
+ */
+async function getRewardedAccountingState(
+  ctx: ConvexCtx,
+  ownerId: Id<"users">
+): Promise<{ ready: boolean; hasLegacyRewardedOutcomes: boolean }> {
+  const state = await ctx.db
+    .query("accountingStates")
+    .withIndex("by_owner", (q) => q.eq("ownerId", ownerId))
+    .first();
+  if (state && state.rewardedOutcomesVersion >= 1) {
+    return { ready: true, hasLegacyRewardedOutcomes: true };
+  }
+  const hasRewarded = await ownerHasRewardedOutcome(ctx, ownerId);
+  return { ready: false, hasLegacyRewardedOutcomes: hasRewarded };
 }
 
-async function assertBelowLimit(
+export async function ensureRewardAccountingReady(
+  ctx: MutationCtx,
+  ownerId: Id<"users">
+): Promise<void> {
+  const state = await getRewardedAccountingState(ctx, ownerId);
+  if (state.ready) {
+    return;
+  }
+  if (state.hasLegacyRewardedOutcomes) {
+    throw new Error(
+      "Tài khoản cần khởi tạo số liệu thưởng (playMaintenance:backfillRewardAccountingPage) trước khi nhận thưởng mới"
+    );
+  }
+  await ctx.db.insert("accountingStates", {
+    ownerId,
+    rewardedOutcomesVersion: 1,
+    updatedAt: Date.now(),
+  });
+}
+
+function assertBelowLimit(
   ctx: ConvexCtx,
   ownerId: Id<"users">,
   key: LimitKey,
   message: string
 ) {
-  const snapshot = await getEntitlementSnapshot(ctx, ownerId);
-  const limit = snapshot.limits[key];
-  if (limit !== null && snapshot.usage[key] >= limit) {
-    throw new Error(`${message} Gói ${snapshot.label} giới hạn ${formatLimit(limit)}.`);
-  }
+  return (async () => {
+    const snapshot = await getEntitlementSnapshot(ctx, ownerId);
+    const limit = snapshot.limits[key];
+    if (limit !== null && snapshot.usage[key] >= limit) {
+      throw new Error(`${message} Gói ${snapshot.label} giới hạn ${formatLimit(limit)}.`);
+    }
+  })();
 }
 
 export async function assertCanCreateCampaign(ctx: ConvexCtx, ownerId: Id<"users">) {
@@ -220,6 +255,16 @@ export async function assertCanCreateCampaign(ctx: ConvexCtx, ownerId: Id<"users
     ownerId,
     "campaigns",
     "Đã đạt giới hạn số chiến dịch có thể tạo."
+  );
+}
+
+/** Campaign-game instances are limited independently from campaign count. */
+export async function assertCanCreateGame(ctx: ConvexCtx, ownerId: Id<"users">) {
+  await assertBelowLimit(
+    ctx,
+    ownerId,
+    "games",
+    "Đã đạt giới hạn số trò chơi có thể tạo."
   );
 }
 
@@ -271,6 +316,64 @@ export async function assertBudgetItemCount(
       `Gói ${snapshot.label} giới hạn ${formatLimit(limit)} mệnh giá trên toàn tài khoản.`
     );
   }
+}
+
+async function getUsage(ctx: ConvexCtx, ownerId: Id<"users">): Promise<EntitlementUsage> {
+  // Reward usage counts legacy redemptions AND rewarded generic outcomes
+  // exactly once per award, so both routes share one account quota.
+  const [campaigns, assets, openSessions, budgetItems, redemptions, genericRewardedOutcomes, gameRows] =
+    await Promise.all([
+      countCampaignsForQuota(ctx, ownerId),
+      countAssetsForQuota(ctx, ownerId),
+      countOpenSessionsForQuota(ctx, ownerId),
+      ctx.db
+        .query("budgetItems")
+        .withIndex("by_owner_amount", (q) => q.eq("ownerId", ownerId))
+        .collect(),
+      countOwnerRedemptions(ctx, ownerId),
+      countRewardedGenericOutcomes(ctx, ownerId),
+      ctx.db
+        .query("campaignGames")
+        .withIndex("by_owner", (q) => q.eq("ownerId", ownerId))
+        .collect(),
+    ]);
+
+  return {
+    campaigns,
+    assets,
+    openSessions,
+    budgetItems: budgetItems.length,
+    redemptions: redemptions + genericRewardedOutcomes,
+    games: gameRows.length,
+  };
+}
+
+async function getEntitlementSnapshot(ctx: ConvexCtx, ownerId: Id<"users">) {
+  const billingPlan = await resolveBillingPlan(ctx, ownerId);
+  const tier = billingPlan.tier;
+  const limits = PLAN_LIMITS[tier];
+  const usage = await getUsage(ctx, ownerId);
+  const rewardAccounting = await getRewardedAccountingState(ctx, ownerId);
+
+  return {
+    tier,
+    label: PLAN_LABELS[tier],
+    source: billingPlan.source,
+    billingConfigured: isBillingPlanMappingConfigured(process.env, polarProducts),
+    subscription: billingPlan.subscription,
+    billingError: billingPlan.billingError,
+    rewardAccountingReady: rewardAccounting.ready || !rewardAccounting.hasLegacyRewardedOutcomes,
+    limits,
+    usage,
+    resources: {
+      campaigns: limitState(usage.campaigns, limits.campaigns),
+      assets: limitState(usage.assets, limits.assets),
+      openSessions: limitState(usage.openSessions, limits.openSessions),
+      budgetItems: limitState(usage.budgetItems, limits.budgetItems),
+      redemptions: limitState(usage.redemptions, limits.redemptions),
+      games: limitState(usage.games, limits.games),
+    },
+  };
 }
 
 export async function getOwnerPlanState(ctx: ConvexCtx, ownerId: Id<"users">) {

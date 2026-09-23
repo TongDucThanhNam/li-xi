@@ -1,0 +1,8 @@
+/* Operator fixture styles: same processing as the inventory fixture —
+   import the real template/admin stylesheets AND scan the app directory so
+   every Tailwind utility used by the mounted features is generated. */
+@import "../../../app/styles/admin.css";
+@import "../../../app/styles/draw.css";
+@import "../../../app/styles/lucky-wheel.css";
+@import "../../../app/styles/scratch-card.css";
+@source "../../../app";

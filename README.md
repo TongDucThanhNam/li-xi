@@ -61,6 +61,20 @@ Truy cập:
 Các đường `/setup`, `/draw`, `/leaderboard` và `/claim/<publicCode>` được giữ làm
 bề mặt tương thích và chuyển vào ngữ cảnh canonical tương ứng.
 
+## Testing
+
+```bash
+npm run test:once       # Vitest: unit/behavior + real Convex handlers (convex-test)
+npm run test:ui         # Playwright (headless Chromium): UI integration/visual specs
+npm run test:ui:update  # deliberately regenerate reviewed screenshot baselines
+npm run test:report     # open the last Playwright HTML report
+npm run test:contracts  # platform contract checks
+npm run test:route-policy && npm run test:smoke  # route policy + SSR smoke
+```
+
+Chi tiết các lớp kiểm thử, artifact paths (screenshots/JSON/trace), baseline
+policy và phạm vi: `docs/testing.md`.
+
 ## Verification
 
 ```bash
@@ -501,9 +515,10 @@ npx convex env set LI_XI_ENABLE_PAID_PLAN_FALLBACK true
 
 ## Quy tắc nghiệp vụ hiện tại
 
-Phần này mô tả implementation đang có, phần lớn vẫn là game template lì xì/rút
-phong bao. Khi phát triển game mới, dùng hướng domain trong
-`docs/product-direction.md` thay vì nhân rộng thuật ngữ draw/claim/redemption.
+Phần này mô tả implementation đang có: game template lì xì/rút phong bao là
+template đầu tiên, đã kèm nền tảng chơi tự phục vụ generic (liên kết dùng chung
+`/p/<shareCode>`, kho phần thưởng đa loại, vòng quay may mắn) ở stage 1. Khi phát triển game mới, dùng hướng domain trong `docs/product-direction.md` thay vì nhân
+rộng thuật ngữ draw/claim/redemption.
 
 - PIN luôn 6 chữ số.
 - Google OAuth là account login mặc định; PIN host vẫn là lớp xác nhận thao tác station/public play quan trọng.
@@ -520,7 +535,17 @@ phong bao. Khi phát triển game mới, dùng hướng domain trong
 - Host profile lookup fail-closed nếu một owner có nhiều profile row; sửa bằng `migrations:repairDuplicateHostProfiles` trước khi cho host tiếp tục vận hành.
 - Default campaign trong host profile chỉ được trỏ tới campaign active/draft thuộc owner; campaign đã archive không thể được lưu làm default. Dữ liệu cũ có default campaign archived/missing/foreign có thể sửa bằng `migrations:repairHostProfileDefaultCampaign`.
 - Campaign slug là unique trong từng host; campaign mặc định cũng dùng helper tạo slug unique thay vì reuse slug cố định, và mọi fallback theo owner id đều phải kiểm tra `by_owner_slug` trước khi trả về.
-- `lib/gameTemplates.ts` là catalog game-template dùng chung; `app/game-templates/registry.ts` bind template `li-xi` vào stage component, CSS URL, fonts, config schema/defaults, editor/preview metadata, reward/result UI và analytics labels. `app/draw/templates/*` chỉ là compatibility wrapper cho template li xi hiện tại; `brand` là style variant trong config, không phải game template riêng.
+- `lib/gameTemplates.ts` là catalog game-template dùng chung; `app/game-templates/registry.ts` bind template vào stage component, CSS URL, fonts, config schema/defaults, editor/preview metadata, reward/result UI và analytics labels. Catalog hiện có hai template: `li-xi` (Lunar Fortune) và `lucky-wheel` (Vòng quay may mắn, tokens riêng trong `docs/design-lucky-wheel.md`, CSS class prefix `wheel-`). `app/draw/templates/*` chỉ là compatibility wrapper cho template li xi hiện tại; `brand` là style variant trong config, không phải game template riêng. Cấu hình campaign game là union phân biệt theo `rewardStrategy` (`campaign-budget` cho li xì legacy, `campaign-inventory` cho wheel); route generic dùng `requireGameTemplateId` và fail rõ ràng với template lạ thay vì fallback li xì.
+- Nền tảng chơi tự phục vụ (stage 1): bảng generic `participants`, `playSessions`, `rewardInventory`, `rewardOutcomes`, `rewardClaims`, `publicPlayLinks`. Bảng draw-era (`drawSessions`, `redemptions`, `budgetItems`, `ownerBudgets`) vẫn là boundary li xì legacy và không trộn kho với kho generic.
+- Cấu hình game (config v2) dùng discriminant `templateId` tường minh; `rewardSource` (`campaign-budget` hoặc `campaign-inventory`) là lựa chọn độc lập với cơ chế template, kèm `rewardPoolTag` để game tự chọn nhóm kho phần thưởng của mình và `noRewardWeight` cho chế độ không trúng có chủ ý. Các row cũ (không có `templateId`) vẫn đọc được qua biến thể legacy của union.
+- Vào chơi tự phục vụ chỉ dành cho game `campaign-inventory`; game li xì `campaign-budget` tiếp tục chạy luồng trạm/`/play` legacy. Entry hero trước phiên chơi do từng template registry cung cấp (`EntryHero`), chỉ có một nút Start; thông điệp chờ không bao giờ thay nút Start.
+- Liên kết chơi dùng chung `/p/<shareCode>` (22 ký tự lowercase) gắn với một campaign game + kênh, không gắn với lượt chơi tạo sẵn: nhiều khách tự vào, tự bắt đầu phiên (`publicPlay:startPublicPlaySession`), server tự chọn kết quả (`playSessionAction`), và lượt của một người không đóng link cho người khác. Link có thể thu hồi/mở lại (`revokeShareLink`/`restoreShareLink`); trạng thái invalid/revoked/closed hiển thị thân thiện.
+- Mọi write public xác thực bằng session capability (token ngẫu nhiên 32 ký tự trả về lúc start); không dựa vào id client. Trước lần start đầu, client lưu một start key ngẫu nhiên (32 hex) và gửi kèm: nếu response đầu bị mất, start lại với cùng start key trả về đúng phiên cũ thay vì tạo phiên trùng (kể cả khi phiên đó chiếm slot cuối của `maxTotalSessions` — resume luôn chạy trước gate dung lượng cho phiên mới). Người tham gia ẩn danh dùng token thiết bị lưu localStorage (best-effort, không phải định danh xác thực); token do client gửi phải đúng định dạng mới được lưu; tên tự khai (tuỳ chọn) chỉ để tiện vận hành, không bao giờ dùng để tra hay khớp người chơi. Session capability + kết quả/claim hoàn tất được lưu client-side và khôi phục qua `getPublicSessionOutcome`/`getPublicClaimDetail` khi refresh. Dung lượng theo game đếm bằng admission counter O(1) thay vì scan mọi phiên.
+- Mỗi game chọn độc lập `rewardMode`: "có thưởng" (phân bổ từ nguồn thưởng) hoặc "tương tác không thưởng" — chế độ cam kết hoàn thành không bao giờ trừ kho, không tiêu quota thưởng, không ghi nhận claim, kể cả khi kho còn hàng; kết quả hiển thị nhãn cảm ơn đã cấu hình (không dùng copy "hết phần thưởng"). `noRewardWeight` chỉ là tỉ lệ không trúng ở chế độ có thưởng. Chế độ không thưởng chỉ hỗ trợ nguồn kho tự phục vụ (không dùng với ngân sách lì xì cổ điển).
+- Session generic đóng băng luật chơi lúc admission (`rulesSnapshot`: template, nguồn thưởng, chế độ, nhóm kho, trọng số, copy, các ô vòng quay) — owner chỉnh cấu hình sau đó không đổi luật của phiên đã admitted; phiên mới dùng luật mới. Gate an toàn: không thể thay kho phần thưởng khi còn lượt đang chơi hoặc đã có thưởng tiêu thụ.
+- "Kho phần thưởng generic hỗ trợ cash, voucher/mã, quà tặng, điểm và kết quả không trúng (`noRewardWeight` cấu hình được cho từng game ở chế độ có thưởng, hoặc hết kho → kết quả no-reward rõ ràng "Phần thưởng đã hết"). Phân bổ atomic server-side theo weighted selection có kiểm tra tồn kho theo nhóm kho của game; khi lưu lại kho, các row đã có người trúng được giữ nguyên (không xóa lịch sử), và outcome giữ snapshot mã bí mật nên claim luôn trả mã gốc. Mã voucher chỉ trả về cho một session capability sau transition claim riêng biệt; claim idempotent, không trúng thì không claim được. Metric opens/starts/completions/outcomes/claims ghi idempotent với scope owner + campaign + campaign game + kênh/liên kết.
+- Chỉ định quota: lượt thưởng generic được cấp (award) tính đúng một lần vào `usage.redemptions` chung với lượt legacy qua Aggregate; claim/replay không cộng thêm. Hoàn thành không trúng (cả chance lẫn engagement) là play tương tác, không tiêu và không bị chặn bởi quota thưởng.
+- Capacity/quota đếm bằng Aggregate chính xác (namespace riêng `game-sessions:`/`rewarded:`), hỗ trợ mọi cap cấu hình (mặc định 20.000, tối đa 200.000) mà không scan từng row mỗi request. Game/tài khoản có dữ liệu lịch sử trước correction phải chạy backfill maintenance một lần theo `docs/play-accounting-runbook.md`; trong khi chưa init, runtime fail-closed (game có lịch sử chặn lượt mới, tài khoản có kết quả có thưởng lịch sử chặn nhận thưởng mới) thay vì đếm thiếu. Game rỗng tự init ở lượt admission đầu; tài khoản không có kết quả có thưởng tự init ở lần thưởng đầu; hoàn thành engagement không cần accounting thưởng.
 - Convex lưu campaign game instance trong bảng `campaignGames` với `templateId`, `config`, `status`, `ownerId` và `campaignId`. Campaign Studio gửi `gameTemplateId` và `gameConfig`, còn backend normalize qua helper campaign-game để các chiến dịch mới có boundary campaign/game thay vì mở rộng draw-specific config.
 - Current draw sessions được bọc bằng play-session identity trong `convex/playSessions.ts`: `gameTemplateId`, `legacyDrawSessionId`, `playSessionId`, trạng thái play session và `publicPlayPath`. Đường `/claim/<publicCode>` vẫn tồn tại như public play compatibility route cho template li xi.
 - Plan limit ưu tiên Polar subscription có product ID đã cấu hình, sau đó mới fallback theo `LI_XI_DEFAULT_PLAN`; `billingConfigured` trong plan state chỉ true khi có Polar organization token và Pro/Business product IDs đầy đủ, khác nhau.

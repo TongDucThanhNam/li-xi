@@ -8,6 +8,7 @@ import { mutation, MutationCtx, query, QueryCtx } from "./_generated/server";
 import { requireResolvedOwner } from "./authorization";
 import { isValidMigrationToken, migrationTokenEnvNames } from "./migrationToken";
 import {
+  campaignGameMetricKey,
   campaignMetricKey,
   estimateAnalyticsCounterEventWrite,
   ownerMetricKey,
@@ -46,6 +47,34 @@ export const redemptionsByOwnerAmount = new TableAggregate<{
   sumValue: (doc) => doc.amount,
 });
 
+/**
+ * Rewarded generic outcomes share the account reward quota with legacy
+ * redemptions: counted exactly once at the award transition (never at claim),
+ * so no-reward engagement and claim replays never consume quota.
+ */
+// The Aggregate component keys storage by namespace value, so this
+// namespace is prefixed to stay disjoint from the legacy redemption
+// aggregates that use raw owner/campaign ids.
+const rewardedNamespace = (ownerId: Id<"users">) => `rewarded:${ownerId}`;
+
+export const rewardedOutcomesByOwner = new TableAggregate<{
+  Namespace: string;
+  Key: number;
+  DataModel: DataModel;
+  TableName: "rewardOutcomes";
+}>(components.aggregate, {
+  namespace: (doc) => rewardedNamespace(doc.ownerId),
+  sortKey: (doc) => doc.grantedAt,
+  sumValue: (doc) => doc.amount ?? 0,
+});
+
+export async function countRewardedGenericOutcomes(
+  ctx: CounterCtx,
+  ownerId: Id<"users">,
+) {
+  return rewardedOutcomesByOwner.count(ctx, { namespace: rewardedNamespace(ownerId) });
+}
+
 export const redemptionsByCampaignAmount = new TableAggregate<{
   Namespace: string;
   Key: number;
@@ -67,6 +96,10 @@ async function recordAnalyticsCounterEvent(
     eventKey: string;
     ownerId: Id<"users">;
     campaignId?: Id<"campaigns">;
+    campaignGameId?: Id<"campaignGames">;
+    shareLinkId?: Id<"publicPlayLinks">;
+    channel?: "public-link" | "station";
+    channelLabel?: string;
     metric: OwnerMetric;
     source: CounterEventSource;
   }
@@ -97,6 +130,10 @@ async function recordAnalyticsCounterEvent(
     eventKey: args.eventKey,
     ownerId: args.ownerId,
     campaignId: args.campaignId,
+    campaignGameId: args.campaignGameId,
+    shareLinkId: args.shareLinkId,
+    channel: args.channel,
+    channelLabel: args.channelLabel,
     metric: args.metric,
     source: args.source,
     createdAt: Date.now(),
@@ -311,6 +348,71 @@ export async function recordPublicPlayLinkOpen(
     metric: "public_play_link_open",
     source: "live",
   });
+}
+
+/**
+ * Idempotent funnel/metric event for the generic play foundation. Counter
+ * scope: owner + campaign + optional campaign game. The eventKey must be
+ * stable per real-world transition (session id, outcome id, or a client
+ * generated open key for page views) so replays never double count.
+ */
+export async function recordGenericPlayMetric(
+  ctx: MutationCtx,
+  args: {
+    eventKey: string;
+    ownerId: Id<"users">;
+    campaignId: Id<"campaigns">;
+    campaignGameId?: Id<"campaignGames">;
+    shareLinkId?: Id<"publicPlayLinks">;
+    channel?: "public-link" | "station";
+    channelLabel?: string;
+    metric: AnalyticsMetric;
+    source?: CounterEventSource;
+  }
+) {
+  const recorded = await recordAnalyticsCounterEvent(ctx, {
+    eventKey: args.eventKey,
+    ownerId: args.ownerId,
+    campaignId: args.campaignId,
+    campaignGameId: args.campaignGameId,
+    shareLinkId: args.shareLinkId,
+    channel: args.channel,
+    channelLabel: args.channelLabel,
+    metric: args.metric,
+    source: args.source ?? "live",
+  });
+  if (recorded && args.campaignGameId) {
+    await ownerCounters.inc(ctx, campaignGameMetricKey(args.campaignGameId, args.metric));
+  }
+  return recorded;
+}
+
+// Namespace-prefixed so the per-game session tree never collides with the
+// legacy redemption aggregates sharing the same component.
+const gameSessionsNamespace = (campaignGameId: Id<"campaignGames">) =>
+  `game-sessions:${campaignGameId}`;
+
+/**
+ * Exact O(log n) per-game admission accounting backing maxTotalSessions.
+ * Rows are inserted in the same transaction as session creation; historical
+ * rows enter through the idempotent playMaintenance backfill, gated by
+ * campaignGames.accountingVersion.
+ */
+export const playSessionsByGame = new TableAggregate<{
+  Namespace: string;
+  Key: number;
+  DataModel: DataModel;
+  TableName: "playSessions";
+}>(components.aggregate, {
+  namespace: (doc) => gameSessionsNamespace(doc.campaignGameId),
+  sortKey: (doc) => doc.startedAt,
+});
+
+export async function countGameSessionsExact(
+  ctx: CounterCtx,
+  campaignGameId: Id<"campaignGames">,
+) {
+  return playSessionsByGame.count(ctx, { namespace: gameSessionsNamespace(campaignGameId) });
 }
 
 async function countOwnerMetric(ctx: CounterCtx, ownerId: Id<"users">, metric: OwnerMetric) {

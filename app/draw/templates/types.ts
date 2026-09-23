@@ -5,7 +5,11 @@ import type {
 } from "@/app/game-templates/types";
 import type { CampaignStyleVariant, GameTemplateId } from "@/lib/gameTemplates";
 
-export type DrawTemplateKey = GameTemplateId;
+/**
+ * Draw-era compatibility boundary: only the li xi template ever resolves
+ * through this legacy registry. Generic surfaces use app/game-templates.
+ */
+export type DrawTemplateKey = Extract<GameTemplateId, "li-xi">;
 export type CampaignThemeKey = CampaignStyleVariant;
 export type DrawTemplateFontLink = GameTemplateFontLink;
 export type DrawStageProps = GameStageProps;

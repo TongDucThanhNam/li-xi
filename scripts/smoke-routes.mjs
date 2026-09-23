@@ -130,6 +130,16 @@ const checks = [
     excludes: ["Đang kiểm tra liên kết chơi", "Not Found"],
   },
   {
+    path: "/p/abcdefghjkmnpqrstuvwxy",
+    includes: ["Đang mở không gian chơi của chiến dịch"],
+    excludes: ["Not Found"],
+  },
+  {
+    path: "/p/not-a-code",
+    includes: ["Liên kết không hợp lệ", "không đúng định dạng"],
+    excludes: ["Not Found"],
+  },
+  {
     path: "/leaderboard",
     includes: workspacePending,
     excludes: ["Not Found"],

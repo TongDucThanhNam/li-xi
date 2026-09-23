@@ -17,6 +17,7 @@ import { Route as WorkspaceRouteImport } from './app/_workspace'
 import { Route as IndexRouteImport } from './app/index'
 import { Route as StationCampaignGameIdRouteImport } from './app/station/$campaignGameId'
 import { Route as PlayPublicCodeRouteImport } from './app/play/$publicCode'
+import { Route as PShareCodeRouteImport } from './app/p/$shareCode'
 import { Route as ClaimPublicCodeRouteImport } from './app/claim/$publicCode'
 import { Route as WorkspaceOnboardingRouteImport } from './app/_workspace/onboarding'
 import { Route as WorkspaceAnalyticsRouteImport } from './app/_workspace/analytics'
@@ -73,6 +74,11 @@ const StationCampaignGameIdRoute = StationCampaignGameIdRouteImport.update({
 const PlayPublicCodeRoute = PlayPublicCodeRouteImport.update({
   id: '/play/$publicCode',
   path: '/play/$publicCode',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PShareCodeRoute = PShareCodeRouteImport.update({
+  id: '/p/$shareCode',
+  path: '/p/$shareCode',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ClaimPublicCodeRoute = ClaimPublicCodeRouteImport.update({
@@ -188,6 +194,7 @@ export interface FileRoutesByFullPath {
   '/analytics': typeof WorkspaceAnalyticsRoute
   '/onboarding': typeof WorkspaceOnboardingRoute
   '/claim/$publicCode': typeof ClaimPublicCodeRoute
+  '/p/$shareCode': typeof PShareCodeRoute
   '/play/$publicCode': typeof PlayPublicCodeRoute
   '/station/$campaignGameId': typeof StationCampaignGameIdRoute
   '/campaigns/$campaignId': typeof WorkspaceCampaignsCampaignIdRouteRouteWithChildren
@@ -214,6 +221,7 @@ export interface FileRoutesByTo {
   '/analytics': typeof WorkspaceAnalyticsRoute
   '/onboarding': typeof WorkspaceOnboardingRoute
   '/claim/$publicCode': typeof ClaimPublicCodeRoute
+  '/p/$shareCode': typeof PShareCodeRoute
   '/play/$publicCode': typeof PlayPublicCodeRoute
   '/station/$campaignGameId': typeof StationCampaignGameIdRoute
   '/campaigns/new': typeof WorkspaceCampaignsNewRoute
@@ -241,6 +249,7 @@ export interface FileRoutesById {
   '/_workspace/analytics': typeof WorkspaceAnalyticsRoute
   '/_workspace/onboarding': typeof WorkspaceOnboardingRoute
   '/claim/$publicCode': typeof ClaimPublicCodeRoute
+  '/p/$shareCode': typeof PShareCodeRoute
   '/play/$publicCode': typeof PlayPublicCodeRoute
   '/station/$campaignGameId': typeof StationCampaignGameIdRoute
   '/_workspace/campaigns/$campaignId': typeof WorkspaceCampaignsCampaignIdRouteRouteWithChildren
@@ -270,6 +279,7 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/onboarding'
     | '/claim/$publicCode'
+    | '/p/$shareCode'
     | '/play/$publicCode'
     | '/station/$campaignGameId'
     | '/campaigns/$campaignId'
@@ -296,6 +306,7 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/onboarding'
     | '/claim/$publicCode'
+    | '/p/$shareCode'
     | '/play/$publicCode'
     | '/station/$campaignGameId'
     | '/campaigns/new'
@@ -322,6 +333,7 @@ export interface FileRouteTypes {
     | '/_workspace/analytics'
     | '/_workspace/onboarding'
     | '/claim/$publicCode'
+    | '/p/$shareCode'
     | '/play/$publicCode'
     | '/station/$campaignGameId'
     | '/_workspace/campaigns/$campaignId'
@@ -347,6 +359,7 @@ export interface RootRouteChildren {
   LeaderboardRoute: typeof LeaderboardRoute
   SetupRoute: typeof SetupRoute
   ClaimPublicCodeRoute: typeof ClaimPublicCodeRoute
+  PShareCodeRoute: typeof PShareCodeRoute
   PlayPublicCodeRoute: typeof PlayPublicCodeRoute
   StationCampaignGameIdRoute: typeof StationCampaignGameIdRoute
 }
@@ -407,6 +420,13 @@ declare module '@tanstack/react-router' {
       path: '/play/$publicCode'
       fullPath: '/play/$publicCode'
       preLoaderRoute: typeof PlayPublicCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/p/$shareCode': {
+      id: '/p/$shareCode'
+      path: '/p/$shareCode'
+      fullPath: '/p/$shareCode'
+      preLoaderRoute: typeof PShareCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/claim/$publicCode': {
@@ -645,6 +665,7 @@ const rootRouteChildren: RootRouteChildren = {
   LeaderboardRoute: LeaderboardRoute,
   SetupRoute: SetupRoute,
   ClaimPublicCodeRoute: ClaimPublicCodeRoute,
+  PShareCodeRoute: PShareCodeRoute,
   PlayPublicCodeRoute: PlayPublicCodeRoute,
   StationCampaignGameIdRoute: StationCampaignGameIdRoute,
 }

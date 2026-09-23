@@ -76,6 +76,22 @@ export function playSessionCounterEventKey(sessionId: string, metric: GameFunnel
   return `play-session:${sessionId}:${metric}`;
 }
 
+export function shareLinkCounterEventKey(
+  shareLinkId: string,
+  openKey: string,
+  metric: Extract<GameFunnelMetric, "game_open" | "public_play_link_open">,
+) {
+  assertNonEmptyAnalyticsId(shareLinkId, "shareLinkId");
+  assertNonEmptyAnalyticsId(openKey, "openKey");
+  return `share-open:${shareLinkId}:${openKey}:${metric}`;
+}
+
+export function campaignGameMetricKey(campaignGameId: string, metric: AnalyticsMetric) {
+  assertNonEmptyAnalyticsId(campaignGameId, "campaignGameId");
+  return `campaign-game:${campaignGameId}:${metric}`;
+}
+
+
 export function rewardCounterEventKey(
   redemptionId: string,
   metric: "reward_outcome" | "reward_claim" | "game_completion"

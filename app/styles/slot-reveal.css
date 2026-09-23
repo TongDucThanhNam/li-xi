@@ -1,0 +1,361 @@
+/* Slot-reveal template layer — tokens documented in docs/design-slot-reveal.md.
+   Every class is prefixed `slot-` so this skin never collides with the li xi
+   draw.css classes, the `wheel-*` classes, the `scratch-*` classes, or the
+   admin HeroUI theme. */
+@import "./base.css";
+
+@theme {
+	--slot-bg: #170f33;
+	--slot-bg-deep: #0f0a24;
+	--slot-ink: #fff7ec;
+	--slot-ink-soft: rgba(255, 247, 236, 0.75);
+	--slot-gold: #f2c14e;
+	--slot-gold-deep: #8a6d1f;
+	--slot-neon: #4cc9f0;
+	--slot-neon-deep: #1b2a4a;
+	--slot-festive: #ef476f;
+	--slot-festive-deep: #4d1226;
+	--slot-line: rgba(255, 247, 236, 0.16);
+	--slot-cell: clamp(64px, 20vw, 92px);
+}
+
+.slot-stage {
+	position: relative;
+	min-height: 100dvh;
+	overflow: hidden;
+	background:
+		radial-gradient(circle at 50% 24%, rgba(242, 193, 78, 0.14), transparent 60%),
+		var(--slot-bg);
+	color: var(--slot-ink);
+	font-family: "Be Vietnam Pro", system-ui, sans-serif;
+}
+
+.slot-stage__inner {
+	position: relative;
+	display: flex;
+	min-height: 100dvh;
+	width: 100%;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 1.25rem;
+	padding: 1.5rem;
+}
+
+.slot-hero__eyebrow {
+	margin: 0;
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.32em;
+	text-transform: uppercase;
+	color: var(--slot-gold);
+}
+
+.slot-hero__title {
+	margin: 0;
+	font-family: "Bungee", "Be Vietnam Pro", system-ui, sans-serif;
+	font-size: clamp(1.7rem, 5vw, 2.9rem);
+	line-height: 1.12;
+	color: var(--slot-ink);
+	overflow-wrap: anywhere;
+}
+
+.slot-hero__subtitle {
+	margin: 0;
+	max-width: 34rem;
+	text-align: center;
+	font-size: 0.95rem;
+	color: var(--slot-ink-soft);
+	overflow-wrap: anywhere;
+}
+
+.slot-hero__brand {
+	margin: 0;
+	font-size: 0.85rem;
+	color: var(--slot-ink-soft);
+}
+
+.slot-machine {
+	position: relative;
+	width: min(92vw, 30rem);
+	border-radius: 1.25rem;
+	border: 2px solid var(--slot-gold-deep);
+	background: var(--slot-bg-deep);
+	box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+	padding: 1.1rem 1.1rem 1.25rem;
+	display: grid;
+	justify-items: center;
+	gap: 1rem;
+}
+
+.slot-machine--gold {
+	border-color: var(--slot-gold-deep);
+}
+
+.slot-machine--neon {
+	border-color: var(--slot-neon);
+	box-shadow:
+		0 24px 60px rgba(0, 0, 0, 0.45),
+		0 0 32px rgba(76, 201, 240, 0.28);
+}
+
+.slot-machine--festive {
+	border-color: var(--slot-festive);
+	box-shadow:
+		0 24px 60px rgba(0, 0, 0, 0.45),
+		0 0 32px rgba(239, 71, 111, 0.24);
+}
+
+.slot-machine--mini {
+	width: min(80vw, 22rem);
+	padding: 0.8rem;
+}
+
+.slot-marquee {
+	display: flex;
+	justify-content: space-between;
+	width: 100%;
+}
+
+.slot-marquee__bulb {
+	width: 8px;
+	height: 8px;
+	border-radius: 999px;
+	background: var(--slot-gold);
+	box-shadow: 0 0 8px rgba(242, 193, 78, 0.8);
+}
+
+.slot-machine--neon .slot-marquee__bulb {
+	background: var(--slot-neon);
+	box-shadow: 0 0 8px rgba(76, 201, 240, 0.8);
+}
+
+.slot-machine--festive .slot-marquee__bulb {
+	background: var(--slot-festive);
+	box-shadow: 0 0 8px rgba(239, 71, 111, 0.8);
+}
+
+.slot-reels {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 0.6rem;
+	width: 100%;
+}
+
+.slot-reel {
+	position: relative;
+	height: var(--slot-cell);
+	border-radius: 0.85rem;
+	border: 1px solid var(--slot-line);
+	background: #241a45;
+	overflow: hidden;
+}
+
+.slot-reel__window {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	color: var(--slot-ink);
+}
+
+.slot-reel__window--settle {
+	animation: slot-settle var(--slot-settle-ms, 900ms) cubic-bezier(0.18, 1.25, 0.4, 1) both;
+}
+
+@keyframes slot-settle {
+	from {
+		transform: translateY(calc(-1 * var(--slot-cell)));
+		opacity: 0.35;
+	}
+	to {
+		transform: translateY(0);
+		opacity: 1;
+	}
+}
+
+/* In-flight loop layer: a blurred marquee of the fixed symbol set; it never
+   implies an identity — the settle layer carries the authoritative symbols. */
+.slot-reel__loop {
+	position: absolute;
+	inset: 0;
+	display: none;
+}
+
+.slot-reel--spinning .slot-reel__loop {
+	display: block;
+	filter: blur(1.5px);
+}
+
+.slot-reel--spinning .slot-reel__window {
+	visibility: hidden;
+}
+
+.slot-reel__loop-track {
+	display: grid;
+	grid-auto-rows: var(--slot-cell);
+	/* The track renders the 8-symbol set TWICE and translates exactly one
+	   full set (8 cells), so the loop restart lands on the identical frame —
+	   visually continuous. 1920ms keeps the previous per-cell speed. */
+	animation: slot-loop 1920ms linear infinite;
+}
+
+@keyframes slot-loop {
+	from {
+		transform: translateY(0);
+	}
+	to {
+		transform: translateY(calc(-8 * var(--slot-cell)));
+	}
+}
+
+.slot-reel__cell {
+	display: grid;
+	place-items: center;
+	color: var(--slot-ink-soft);
+}
+
+.slot-machine__controls {
+	display: grid;
+	justify-items: center;
+	gap: 0.4rem;
+}
+
+.slot-cta {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	border: none;
+	border-radius: 999px;
+	padding: 0.8rem 1.6rem;
+	background: linear-gradient(120deg, var(--slot-gold), var(--slot-gold-deep));
+	color: #241a45;
+	font-family: "Be Vietnam Pro", system-ui, sans-serif;
+	font-size: 0.95rem;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.slot-cta:disabled {
+	opacity: 0.6;
+	cursor: progress;
+}
+
+.slot-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	border: 1px solid var(--slot-line);
+	border-radius: 999px;
+	padding: 0.7rem 1.4rem;
+	background: transparent;
+	color: var(--slot-ink);
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+.slot-cta:focus-visible,
+.slot-button:focus-visible {
+	outline: 2px solid var(--slot-ink);
+	outline-offset: 2px;
+}
+
+.slot-status {
+	margin: 0;
+	font-size: 0.95rem;
+	color: var(--slot-ink-soft);
+}
+
+.slot-error {
+	margin: 0;
+	max-width: 100%;
+	font-size: 0.9rem;
+	text-align: center;
+	color: #ff8fa3;
+	overflow-wrap: anywhere;
+}
+
+.slot-result {
+	display: grid;
+	width: min(92vw, 30rem);
+	justify-items: center;
+	gap: 0.75rem;
+	padding: 1.25rem;
+	border-radius: 1.25rem;
+	border: 1px solid var(--slot-line);
+	background: rgba(15, 10, 36, 0.72);
+	text-align: center;
+}
+
+.slot-result--win {
+	border-color: var(--slot-gold);
+	box-shadow: 0 0 28px rgba(242, 193, 78, 0.22);
+}
+
+.slot-result__eyebrow {
+	margin: 0;
+	font-size: 0.75rem;
+	letter-spacing: 0.28em;
+	text-transform: uppercase;
+	color: var(--slot-gold);
+}
+
+.slot-result__label {
+	margin: 0;
+	font-family: "Bungee", "Be Vietnam Pro", system-ui, sans-serif;
+	font-size: clamp(1.4rem, 4.5vw, 2.2rem);
+	line-height: 1.2;
+	color: var(--slot-ink);
+	overflow-wrap: anywhere;
+}
+
+.slot-result__code {
+	margin: 0.25rem 0 0;
+	max-width: 100%;
+	padding: 0.55rem 1rem;
+	border: 1px dashed var(--slot-gold);
+	border-radius: 0.75rem;
+	background: rgba(0, 0, 0, 0.5);
+	letter-spacing: 0.08em;
+	color: var(--slot-ink);
+	overflow-wrap: anywhere;
+}
+
+.slot-result__instructions {
+	margin: 0.35rem 0 0;
+	max-width: 30rem;
+	font-size: 0.85rem;
+	color: var(--slot-ink-soft);
+	overflow-wrap: anywhere;
+}
+
+.slot-result__actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 0.75rem;
+	margin-top: 1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.slot-reel__window--settle,
+	.slot-reel__loop-track,
+	.slot-reel--spinning .slot-reel__loop,
+	.slot-cta,
+	.slot-button,
+	.slot-marquee__bulb {
+		animation: none !important;
+		transition: none !important;
+		filter: none !important;
+	}
+
+	/* Reduced motion lands the identity instantly: the loop layer never shows
+	   and the settled window is simply present. */
+	.slot-reel--spinning .slot-reel__window {
+		visibility: visible;
+	}
+
+	.slot-reel--spinning .slot-reel__loop {
+		display: none;
+	}
+}

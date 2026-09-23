@@ -1,0 +1,374 @@
+/* Lucky Wheel template layer — tokens documented in docs/design-lucky-wheel.md.
+   Every class is prefixed `wheel-` so this skin never collides with the li xi
+   draw.css classes or the admin HeroUI theme. */
+@import "./base.css";
+
+/* static: the spin easing is consumed by an inline style in
+   LuckyWheelStage (transform var(--ease-wheel-spin)) which the Tailwind
+   scanner cannot see — without `static` the variable is tree-shaken and the
+   spin transition computes to 0s. */
+@theme static {
+  --font-wheel-display: "Baloo 2", "Be Vietnam Pro", system-ui, sans-serif;
+  --font-wheel-body: "Be Vietnam Pro", system-ui, sans-serif;
+
+  --color-wheel-bg: #141433;
+  --color-wheel-bg-soft: #1e1e4d;
+  --color-wheel-cream: #fff6e8;
+  --color-wheel-amber: #f5a623;
+  --color-wheel-amber-deep: #c47f10;
+  --color-wheel-teal: #2ec4b6;
+  --color-wheel-coral: #ef476f;
+  --color-wheel-ink: #201a30;
+
+  --ease-wheel-spin: cubic-bezier(0.12, 0.8, 0.18, 1);
+}
+
+@layer base {
+  body {
+    background: var(--color-wheel-bg);
+    color: var(--color-wheel-cream);
+    font-family: var(--font-wheel-body);
+  }
+}
+
+.wheel-stage {
+  position: relative;
+  min-height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(123, 108, 246, 0.28), transparent 55%),
+    radial-gradient(circle at 85% 85%, rgba(46, 196, 182, 0.16), transparent 50%),
+    var(--color-wheel-bg);
+  color: var(--color-wheel-cream);
+  font-family: var(--font-wheel-body);
+}
+
+.wheel-stage__inner {
+  position: relative;
+  z-index: 10;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 2rem 1rem 2.5rem;
+}
+
+.wheel-hero__eyebrow {
+  font-family: var(--font-wheel-display);
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgba(255, 246, 232, 0.66);
+}
+
+.wheel-hero__title {
+  margin: 0.35rem 0 0;
+  font-family: var(--font-wheel-display);
+  font-weight: 800;
+  font-size: clamp(30px, 6vw, 54px);
+  line-height: 1.08;
+  text-align: center;
+  color: var(--color-wheel-cream);
+  text-shadow: 0 6px 28px rgba(245, 166, 35, 0.35);
+}
+
+.wheel-hero__subtitle {
+  margin: 0.6rem auto 0;
+  max-width: 34rem;
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: rgba(255, 246, 232, 0.72);
+}
+
+.wheel-cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 2px solid var(--color-wheel-amber-deep);
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--color-wheel-amber), var(--color-wheel-amber-deep));
+  color: var(--color-wheel-ink);
+  font-family: var(--font-wheel-display);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  padding: 0.85rem 2.4rem;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(245, 166, 35, 0.35);
+  transition: transform 200ms ease, box-shadow 200ms ease, filter 200ms ease;
+}
+
+.wheel-cta:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px rgba(245, 166, 35, 0.45);
+}
+
+.wheel-cta:disabled {
+  filter: saturate(0.4) brightness(0.72);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.wheel-cta:focus-visible {
+  outline: 3px solid var(--color-wheel-teal);
+  outline-offset: 2px;
+}
+
+.wheel-status {
+  font-size: 0.85rem;
+  color: rgba(255, 246, 232, 0.66);
+  text-align: center;
+  max-width: 24rem;
+}
+
+/* ── Wheel disc ─────────────────────────────────────────── */
+
+.wheel-board {
+  position: relative;
+  width: min(78vw, 420px);
+  aspect-ratio: 1;
+}
+
+.wheel-board__pointer {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: 0;
+  height: 0;
+  border-left: 14px solid transparent;
+  border-right: 14px solid transparent;
+  border-top: 26px solid var(--color-wheel-cream);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.45));
+}
+
+.wheel-disc {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 10px solid var(--color-wheel-amber);
+  box-shadow:
+    0 0 0 4px var(--color-wheel-amber-deep),
+    0 22px 60px rgba(10, 8, 40, 0.65);
+  background: var(--color-wheel-bg-soft);
+  transform: rotate(0deg);
+  will-change: transform;
+}
+
+.wheel-disc--idle {
+  animation: wheel-sway 5.5s ease-in-out infinite;
+}
+
+.wheel-disc__hub {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  width: 17%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 30%, var(--color-wheel-cream), var(--color-wheel-amber));
+  border: 4px solid var(--color-wheel-amber-deep);
+  display: grid;
+  place-items: center;
+  color: var(--color-wheel-ink);
+  font-family: var(--font-wheel-display);
+  font-weight: 800;
+  font-size: clamp(0.8rem, 2.4vw, 1.05rem);
+}
+
+.wheel-segment-label {
+  fill: var(--color-wheel-cream);
+  font-family: var(--font-wheel-body);
+  font-size: 12.5px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: rgba(32, 26, 48, 0.55);
+  stroke-width: 2.5px;
+}
+
+.wheel-segment-label--on-light {
+  fill: var(--color-wheel-ink);
+}
+
+/* ── Result panel ───────────────────────────────────────── */
+
+.wheel-result {
+  width: min(92vw, 460px);
+  border-radius: 22px;
+  border: 1px solid rgba(255, 246, 232, 0.22);
+  background: var(--color-wheel-bg-soft);
+  padding: 1.6rem 1.4rem;
+  text-align: center;
+  box-shadow: 0 18px 50px rgba(8, 6, 32, 0.6);
+}
+
+.wheel-result--win {
+  border: 2px solid var(--color-wheel-amber);
+  box-shadow: 0 18px 50px rgba(245, 166, 35, 0.28);
+}
+
+.wheel-result__eyebrow {
+  font-size: 0.72rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(255, 246, 232, 0.6);
+}
+
+.wheel-result__label {
+  margin: 0.55rem 0 0;
+  font-family: var(--font-wheel-display);
+  font-weight: 800;
+  font-size: clamp(24px, 5.4vw, 38px);
+  line-height: 1.15;
+  color: var(--color-wheel-amber);
+}
+
+.wheel-result--win .wheel-result__label {
+  text-shadow: 0 0 26px rgba(245, 166, 35, 0.45);
+}
+
+.wheel-result__message {
+  margin: 0.6rem auto 0;
+  max-width: 26rem;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: rgba(255, 246, 232, 0.75);
+}
+
+.wheel-result__code {
+  margin: 1rem auto 0;
+  display: inline-block;
+  max-width: 100%;
+  border: 1.5px dashed var(--color-wheel-teal);
+  border-radius: 12px;
+  background: rgba(46, 196, 182, 0.12);
+  color: var(--color-wheel-cream);
+  font-family: var(--font-wheel-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+  padding: 0.6rem 1rem;
+  word-break: break-all;
+}
+
+.wheel-result__instructions {
+  margin: 0.7rem auto 0;
+  font-size: 0.82rem;
+  color: rgba(255, 246, 232, 0.62);
+}
+
+.wheel-result__actions {
+  margin-top: 1.3rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.wheel-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  border: 1.5px solid rgba(255, 246, 232, 0.4);
+  background: transparent;
+  color: var(--color-wheel-cream);
+  font-family: var(--font-wheel-display);
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding: 0.6rem 1.4rem;
+  cursor: pointer;
+  transition: border-color 200ms ease, background 200ms ease;
+}
+
+.wheel-button:hover:not(:disabled) {
+  border-color: var(--color-wheel-teal);
+  background: rgba(46, 196, 182, 0.12);
+}
+
+.wheel-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.wheel-button:focus-visible {
+  outline: 3px solid var(--color-wheel-teal);
+  outline-offset: 2px;
+}
+
+/* ── Closed / status shells ─────────────────────────────── */
+
+.wheel-shell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: var(--color-wheel-bg);
+  color: var(--color-wheel-cream);
+  font-family: var(--font-wheel-body);
+}
+
+.wheel-shell__panel {
+  width: min(92vw, 430px);
+  border-radius: 22px;
+  border: 1px solid rgba(255, 246, 232, 0.2);
+  background: var(--color-wheel-bg-soft);
+  padding: 2rem 1.6rem;
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+}
+
+.wheel-shell__icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(245, 166, 35, 0.5);
+  background: rgba(245, 166, 35, 0.12);
+  color: var(--color-wheel-amber);
+  margin-bottom: 0.5rem;
+}
+
+.wheel-shell__title {
+  margin: 0;
+  font-family: var(--font-wheel-display);
+  font-weight: 700;
+  font-size: 1.45rem;
+}
+
+.wheel-shell__message {
+  margin: 0.3rem 0 0;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: rgba(255, 246, 232, 0.7);
+}
+
+/* ── Motion ─────────────────────────────────────────────── */
+
+@keyframes wheel-sway {
+  0%, 100% { transform: rotate(-1.6deg); }
+  50% { transform: rotate(1.6deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wheel-disc--idle {
+    animation: none;
+  }
+  .wheel-disc {
+    transition: none !important;
+  }
+}

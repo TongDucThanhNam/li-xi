@@ -5,8 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Link2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
-  getGameTemplate,
-  resolveCampaignGameTemplateId,
+	gameTemplates as gameTemplateRegistry,
+	resolveCampaignGameTemplateId,
 } from "@/app/game-templates/registry";
 import { api } from "@/convex/_generated/api";
 import type { Rarity } from "@/lib/lixiPolicy";
@@ -145,9 +145,24 @@ export function PublicPlayFeature({ publicCode }: { publicCode: string }) {
     );
   }
 
-  const Stage = getGameTemplate(
-    resolveCampaignGameTemplateId(visibleSession.gameTemplateId),
-  ).Stage;
+  // Legacy /play links only ever wrap li xi draw sessions; resolve the legacy
+  // Stage from the concrete li xi template entry.
+  const legacyStage =
+    resolveCampaignGameTemplateId(visibleSession.gameTemplateId) === "li-xi"
+      ? gameTemplateRegistry["li-xi"].Stage
+      : null;
+
+  if (!legacyStage) {
+    return (
+      <ClaimClosedState
+        icon={AlertTriangle}
+        tone="danger"
+        title="Trò chơi không được hỗ trợ"
+        message="Liên kết chơi cổ điển chỉ dành cho trò chơi li xi."
+      />
+    );
+  }
+  const Stage = legacyStage;
 
   return (
     <main className="h-dvh w-screen overflow-hidden bg-black-ink">

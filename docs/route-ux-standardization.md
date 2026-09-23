@@ -23,6 +23,7 @@ This is the implementation contract for the campaign-centric TanStack Start rout
 | /operate/$campaignGameId | Authenticated operator shell | HeroUI controls for one authorized campaign game |
 | /station/$campaignGameId | Template-owned stage | Full-screen station guest experience; host PIN guards operation |
 | /play/$publicCode | Public template-owned stage | Resolve public code, template, play session, optional reward |
+| /p/$shareCode | Public template-owned stage | Reusable campaign-game entry: branded hero, self-serve session start, server-validated play, optional claim. The link identifies a campaign game and channel, never a precreated participant session |
 
 The authenticated workspace is one pathless layout. It owns the host guard, admin stylesheet, one HeroUI Pro AppLayout, responsive navigation, logout, and shared route states. Campaign context is nested and must not mount another AppLayout.
 
@@ -36,6 +37,8 @@ The authenticated workspace is one pathless layout. It owns the host guard, admi
 | /claim/$publicCode | Reuse or redirect to the same feature as /play/$publicCode. Valid, malformed, missing, expired, completed, and replayed states remain identical and idempotent. |
 
 New share URLs always use /play/$publicCode. The 24-character lowercase-hex code, expiry, privacy, capacity, and idempotency policies do not change.
+
+Reusable self-serve entry links always use /p/$shareCode with a 22-character lowercase code. One link admits many independent participants; a completed or in-progress participant session never closes the link for others. Revoked links, inactive campaigns/games, and malformed codes fail closed with friendly states. Session actions are authorized server-side by an unguessable session capability; anonymous participant tokens are device-local and best-effort, and participant display names are never used as identity.
 
 The distribution page renders QR codes locally as SVG from the canonical public URL. Participant URLs are not sent to a third-party QR service.
 

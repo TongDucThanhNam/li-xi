@@ -34,7 +34,10 @@ function DrawCompatibilityRoute() {
 		isAuthenticated && owner ? {} : "skip",
 	);
 	const ensureDefaultCampaign = useMutation(api.campaigns.ensureDefaultCampaign);
-	const campaignGameId = workspace?.activeCampaign?.campaignGame.id;
+	const campaignGameId =
+		workspace?.activeCampaign?.campaignGame.templateId === "li-xi"
+			? workspace.activeCampaign.campaignGame.id
+			: undefined;
 
 	useEffect(() => {
 		if (!isLoading && !isAuthenticated) {

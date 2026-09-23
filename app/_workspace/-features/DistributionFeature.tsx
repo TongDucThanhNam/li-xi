@@ -8,6 +8,7 @@ import { Clipboard, ExternalLink, Link2, MonitorPlay, QrCode } from "lucide-reac
 import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { CampaignContextNav } from "@/app/_workspace/-components/CampaignContextNav";
+import { ShareLinksPanel } from "@/app/_workspace/-features/ShareLinksPanel";
 import { AdminPageShell } from "@/app/components/AdminPageShell";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -15,6 +16,9 @@ import { buildPublicPlayUrl } from "@/lib/publicAppUrl";
 
 export function DistributionFeature({ campaignId }: { campaignId: string }) {
 	const campaign = useQuery(api.campaigns.getCampaignRouteContext, {
+		campaignId: campaignId as Id<"campaigns">,
+	});
+	const gamesContext = useQuery(api.campaigns.getCampaignGamesRouteContext, {
 		campaignId: campaignId as Id<"campaigns">,
 	});
 	const station = useQuery(
@@ -64,13 +68,22 @@ export function DistributionFeature({ campaignId }: { campaignId: string }) {
 			title="Phân phối"
 		>
 			<CampaignContextNav campaignId={campaignId} />
+			<ShareLinksPanel
+				campaignId={campaignId}
+				games={(gamesContext?.campaignGames ?? []).map((game) => ({
+					id: game.id,
+					name: game.name,
+					templateId: game.templateId,
+					status: game.status,
+				}))}
+			/>
 			{error || feedback ? (
 				<Alert status={error ? "danger" : "success"}>
 					<Alert.Indicator />
 					<Alert.Content><Alert.Title>{error || feedback}</Alert.Title></Alert.Content>
 				</Alert>
 			) : null}
-			<div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+			<div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
 				<Widget>
 					<Widget.Header>
 						<Widget.Title>Liên kết chơi công khai</Widget.Title>

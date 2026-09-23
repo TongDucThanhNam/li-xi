@@ -3,7 +3,8 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useMemo, useRef, useState } from "react";
-import { getGameTemplate, resolveCampaignGameTemplateId } from "@/app/game-templates/registry";
+import { gameTemplates } from "@/app/game-templates/registry";
+import { configRewardSource } from "@/lib/gameTemplates";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { PIN_LENGTH, type Rarity } from "@/lib/lixiPolicy";
@@ -40,10 +41,9 @@ export function StationPlayFeature({
 		() => pendingSession?.rewardPool ?? [],
 		[pendingSession?.rewardPool],
 	);
-	const template = getGameTemplate(
-		resolveCampaignGameTemplateId(context?.campaignGame.templateId),
-	);
-	const Stage = template.Stage;
+	// Station mode is a li xi operator flow; the guard above fails closed for
+	// other templates before this concrete registry lookup.
+	const Stage = gameTemplates["li-xi"].Stage;
 	const canStart = Boolean(pendingSession && rewardPool.length > 0);
 	const heroAssetUrl = campaign
 		? "heroAssetUrl" in campaign
@@ -96,6 +96,40 @@ export function StationPlayFeature({
 						to="/campaigns/$campaignId/games/$campaignGameId"
 					>
 						Mở cấu hình trò chơi
+					</Link>
+				</section>
+			</main>
+		);
+	}
+	if (
+		context.campaignGame.templateId !== "li-xi" ||
+		configRewardSource(context.campaignGame.config) !== "campaign-budget"
+	) {
+		// Station mode is a li xi operator flow in stage 1; self-serve templates
+		// like the lucky wheel run through the reusable public link instead.
+		return (
+			<main
+				className="grid min-h-dvh place-items-center p-6"
+				style={{ background: "#141433", color: "#fff6e8", fontFamily: "'Be Vietnam Pro', system-ui, sans-serif" }}
+			>
+				<section
+					className="w-full max-w-md rounded-3xl border p-8 text-center"
+					style={{ borderColor: "rgba(255,246,232,0.2)", background: "#1e1e4d" }}
+				>
+					<h1 className="text-2xl font-bold" style={{ fontFamily: "'Baloo 2', 'Be Vietnam Pro', system-ui, sans-serif" }}>
+						Trò chơi tự phục vụ
+					</h1>
+					<p className="mt-3 text-sm leading-6" style={{ color: "rgba(255,246,232,0.7)" }}>
+						{context.campaignGame.name} dành cho khách tự vào chơi qua liên kết công khai. Hãy chia
+						se liên kết hoặc mã QR từ trang Phân phối; luồng trạm cho mẫu này sẽ ra mắt sau.
+					</p>
+					<Link
+						className="mt-6 inline-flex rounded-full border px-5 py-2 text-sm font-semibold"
+						params={{ campaignId: context.campaign.id }}
+						style={{ borderColor: "rgba(255,246,232,0.4)", color: "#fff6e8" }}
+						to="/campaigns/$campaignId/distribution"
+					>
+						Mở trang Phân phối
 					</Link>
 				</section>
 			</main>

@@ -1,6 +1,7 @@
 import {
 	assertPublicClaimPath,
 	assertPublicPlayPath,
+	assertPublicSharePath,
 	buildPublicAppUrlFromOrigin,
 	parseCleanPublicAppOrigin,
 } from "./publicAppUrlPolicy";
@@ -29,6 +30,14 @@ export function buildPublicPlayUrl(path: string) {
 
 export function buildPublicClaimUrl(path: string) {
 	return buildPublicAppUrl(assertPublicClaimPath(path));
+}
+
+export function buildPublicShareUrl(path: string) {
+	return buildPublicAppUrl(assertPublicSharePath(path));
+}
+
+export function buildShareEntryUrlForCode(shareCode: string) {
+	return buildPublicShareUrl(`/p/${shareCode}`);
 }
 
 export function getBillingReturnPublicAppUrl() {

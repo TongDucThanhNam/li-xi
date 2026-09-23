@@ -744,6 +744,8 @@ assert(
     smokeRoutes.includes('path: "/play/not-a-code"') &&
     smokeRoutes.includes('path: "/claim/abcdefabcdefabcdefabcdef"') &&
     smokeRoutes.includes('path: "/claim/not-a-code"') &&
+    smokeRoutes.includes('path: "/p/abcdefghjkmnpqrstuvwxy"') &&
+    smokeRoutes.includes('path: "/p/not-a-code"') &&
     !smokeRoutes.includes('path: "/claim/test-code"') &&
     smokeRoutes.includes('path: "/leaderboard"') &&
     smokeRoutes.includes("Đang mở không gian làm việc") &&
@@ -751,9 +753,10 @@ assert(
     smokeRoutes.includes("Đang xác định trò chơi mặc định") &&
     smokeRoutes.includes('const workspacePending = ["Đang mở trang", "Đang chuẩn bị dữ liệu và quyền truy cập"]') &&
     smokeRoutes.includes("Đang tải trạm chơi") &&
-    smokeRoutes.includes("Đang kiểm tra play link") &&
-    smokeRoutes.includes("Play link không hợp lệ"),
-  "route smoke coverage must include canonical workspace, operator, station, play, compatibility, and analytics shells"
+    smokeRoutes.includes("Đang kiểm tra liên kết chơi") &&
+    smokeRoutes.includes("Liên kết chơi không hợp lệ") &&
+    smokeRoutes.includes("Đang mở không gian chơi của chiến dịch"),
+  "route smoke coverage must include canonical workspace, operator, station, play, reusable share entry, compatibility, and analytics shells"
 );
 
 for (const removedNextFile of [
@@ -1976,10 +1979,12 @@ assert(
     drawSessionPolicy.includes("isOpenPendingSession(session)") &&
     campaignsBackend.includes('campaign.status === "active"') &&
     campaignsBackend.includes('args.status !== "active"') &&
-    section(campaignsBackend, "async function activateOnlyCampaign", "async function campaignView").includes("hasOpenPendingSessionForCampaign(ctx, ownerId, campaign._id)") &&
-    section(campaignsBackend, "async function activateOnlyCampaign", "async function campaignView").includes("Không thể kích hoạt chiến dịch khác khi chiến dịch hiện tại còn lượt rút đang chờ") &&
+    campaignsBackend.includes("markCampaignAsPreferred") &&
+    campaignsBackend.includes("ensureHostProfileForOwner(ctx, owner, { defaultCampaignId: campaignId })") &&
+    !campaignsBackend.includes("async function activateOnlyCampaign") &&
+    !section(campaignsBackend, "async function markCampaignAsPreferred", "async function campaignView").includes('status: "draft"') &&
     campaignsBackend.includes("Không thể tắt chiến dịch khi còn lượt rút đang chờ"),
-  "saveCampaign must use campaign+owner+delivery pending-session indexes before explicit or implicit deactivation of active campaigns"
+  "saveCampaign supports multiple independently active campaigns: activation only moves the preferred default pointer, never demotes sibling campaigns, while explicit deactivation keeps the open pending-session guard"
 );
 assert(
   !section(campaignsBackend, "export const getWorkspace", "export const saveCampaign").includes("allowLegacyBridge") &&
@@ -3300,13 +3305,21 @@ assert(
   "open-session entitlement usage must use indexed delivery-mode buckets and exclude expired public links"
 );
 assert(
-  entitlements.includes('import { countOwnerRedemptions } from "./analytics"') &&
+  entitlements.includes('import { countOwnerRedemptions, countRewardedGenericOutcomes } from "./analytics"') &&
     entitlementUsage.includes("countOwnerRedemptions(ctx, ownerId)") &&
-    entitlementUsage.includes("redemptions,") &&
-    !entitlementUsage.includes('.query("redemptions")'),
-  "redemption entitlement usage must use the Aggregate count instead of collecting all redemption rows"
+    entitlementUsage.includes("countRewardedGenericOutcomes(ctx, ownerId)") &&
+    entitlementUsage.includes("redemptions: redemptions + genericRewardedOutcomes,") &&
+    entitlements.includes("rewardAccountingReady") &&
+    entitlements.includes('const REWARDED_TYPES = ["cash", "voucher", "physical", "points"] as const;') &&
+    entitlements.includes('.withIndex("by_owner_rewardType", (q) =>') &&
+    entitlements.includes('q.eq("ownerId", ownerId).eq("rewardType", rewardType)') &&
+    entitlements.includes("state.rewardedOutcomesVersion >= 1") &&
+    !entitlements.includes('configRewardSource(game.config) === "campaign-inventory"') &&
+    !entitlements.includes("(game.accountingVersion ?? 0) < 1") &&
+    !entitlementUsage.includes('.query("redemptions")') &&
+    !entitlementUsage.includes('.query("rewardOutcomes")'),
+  "reward entitlement usage must combine Aggregate counts for legacy redemptions and rewarded generic outcomes, with readiness derived from the independent accountingStates reward version plus four bounded by_owner_rewardType actual-award existence probes instead of game versions or history scans"
 );
-
 const setup = read("convex/setup.ts");
 assert(
   !section(setup, "export const getSetupState", "export const configureBudget").includes("allowLegacyBridge") &&

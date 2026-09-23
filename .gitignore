@@ -37,3 +37,8 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# Playwright transient artifacts (reviewed screenshot baselines under
+# tests/ui/*.snapshots/ are intentionally tracked references)
+/tests/ui/artifacts/
+/tests/ui/reports/

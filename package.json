@@ -12,6 +12,10 @@
     "test": "vitest",
     "test:once": "vitest run",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
+    "ui:fixture-server": "vite --config tests/ui/fixtures/vite.config.mts --host 127.0.0.1 --port 3210 --strictPort",
+    "test:ui": "playwright test --config tests/ui/playwright.config.ts --update-snapshots=none",
+    "test:ui:update": "playwright test --config tests/ui/playwright.config.ts --update-snapshots=all",
+    "test:report": "playwright show-report tests/ui/reports/html",
     "test:coverage": "vitest run --coverage --coverage.reporter=text",
     "test:all": "npm run test:once && npm run test:contracts && npm run test:smoke",
     "test:contracts": "node scripts/verify-saas-contracts.mjs && node scripts/verify-production-readiness.mjs --self-test && node scripts/test-production-readiness-import.mjs && node scripts/validate-production-evidence.mjs --self-test && node scripts/test-production-evidence-validator.mjs && node scripts/validate-production-evidence-report.mjs --self-test && node scripts/test-production-evidence-report-validator.mjs && node scripts/test-host-route-guard.mjs && node scripts/test-authorization-policy.mjs && node scripts/test-secret-policy.mjs && node scripts/test-migration-token-policy.mjs && node scripts/test-asset-policy.mjs && node scripts/test-network-policy.mjs && node scripts/test-billing-policy.mjs && node scripts/test-polar-server-policy.mjs && node scripts/test-entitlement-policy.mjs && node scripts/test-public-app-url-policy.mjs && node scripts/test-public-link-policy.mjs && node scripts/test-analytics-policy.mjs && node scripts/test-saas-workflow-policy.mjs",
@@ -50,6 +54,7 @@
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",
     "@eslint/js": "^9.39.2",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "^4.3.0",
     "@types/node": "^20",
     "@types/react": "^19",

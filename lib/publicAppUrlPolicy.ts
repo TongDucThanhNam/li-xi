@@ -16,6 +16,11 @@ function isLocalNetworkHostname(hostname: string) {
 const publicPlayPathPattern = /^\/play\/[a-f0-9]{24}$/;
 const publicClaimPathPattern = /^\/claim\/[a-f0-9]{24}$/;
 const publicPlayCodePattern = /^[a-f0-9]{24}$/;
+// Reusable campaign-game entry links: lowercase unguessable code, distinct
+// from the 24-hex legacy single-participant codes so the two surfaces can
+// never collide.
+const publicSharePathPattern = /^\/p\/[a-z0-9]{22}$/;
+const publicShareCodePattern = /^[a-z0-9]{22}$/;
 
 export function parseCleanPublicAppOrigin(value: string | undefined) {
 	const trimmedValue = value?.trim();
@@ -83,4 +88,16 @@ export function assertPublicClaimPath(path: string) {
 export function normalizePublicPlayCode(value: string) {
 	const publicCode = value.trim().toLowerCase();
 	return publicPlayCodePattern.test(publicCode) ? publicCode : null;
+}
+
+export function assertPublicSharePath(path: string) {
+	if (!publicSharePathPattern.test(path)) {
+		throw new Error("Public share URL path must be /p/<22-character lowercase code>");
+	}
+	return path;
+}
+
+export function normalizePublicShareCode(value: string) {
+	const shareCode = value.trim().toLowerCase();
+	return publicShareCodePattern.test(shareCode) ? shareCode : null;
 }

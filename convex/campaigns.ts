@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { Id } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
 import { MutationCtx, query, QueryCtx, mutation } from "./_generated/server";
 import { requireResolvedOwner } from "./authorization";
 import {
@@ -14,10 +14,14 @@ import {
 } from "./assets";
 import {
   ensureDefaultCampaignGame,
-  normalizeCampaignGameConfig,
+  presentCampaignGameConfig,
   resolvePrimaryCampaignGame,
   upsertPrimaryCampaignGame,
 } from "./campaignGameConfig";
+import {
+  isLiXiGameConfig,
+  normalizePlayLimits,
+} from "../lib/gameTemplates";
 import {
   DEFAULT_CAMPAIGN_BRAND,
   DEFAULT_CAMPAIGN_DESCRIPTION,
@@ -76,27 +80,20 @@ function maybeText(value: string | undefined, fieldName: string, maxLength: numb
   return clean;
 }
 
-async function activateOnlyCampaign(
-  ctx: MutationCtx,
-  ownerId: Id<"users">,
-  activeCampaignId: Id<"campaigns">
+/**
+ * Multiple campaigns may run independently and concurrently: activation no
+ * longer demotes the owner's other active campaigns. The preferred/default
+ * campaign pointer only decides which campaign legacy draw-era surfaces
+ * resolve to, and every explicit deactivation still guards open pending
+ * sessions through saveCampaign's own hasOpenPendingSessionForCampaign check.
+ */
+async function markCampaignAsPreferred(
+	ctx: MutationCtx,
+	owner: Doc<"users">,
+	ownerId: Id<"users">,
+	campaignId: Id<"campaigns">
 ) {
-  const activeCampaigns = await ctx.db
-    .query("campaigns")
-    .withIndex("by_owner_status", (q) => q.eq("ownerId", ownerId).eq("status", "active"))
-    .collect();
-
-  for (const campaign of activeCampaigns) {
-    if (campaign._id !== activeCampaignId) {
-      if (await hasOpenPendingSessionForCampaign(ctx, ownerId, campaign._id)) {
-        throw new Error("Không thể kích hoạt chiến dịch khác khi chiến dịch hiện tại còn lượt rút đang chờ");
-      }
-      await ctx.db.patch(campaign._id, {
-        status: "draft",
-        updatedAt: Date.now(),
-      });
-    }
-  }
+	await ensureHostProfileForOwner(ctx, owner, { defaultCampaignId: campaignId });
 }
 
 async function campaignView(ctx: QueryCtx, campaignId: Id<"campaigns">) {
@@ -281,7 +278,14 @@ export const getCampaignGameRouteContext = query({
         id: campaignGame._id,
         campaignId: campaignGame.campaignId,
         templateId: campaignGame.templateId,
-        config: normalizeCampaignGameConfig(campaignGame.config, campaign),
+        name:
+          campaignGame.name ?? gameTemplates[campaignGame.templateId].name,
+        config: presentCampaignGameConfig(
+          campaignGame.templateId,
+          campaignGame.config,
+          campaign
+        ),
+        playLimits: normalizePlayLimits(campaignGame.playLimits),
         status: campaignGame.status,
         createdAt: campaignGame.createdAt,
         updatedAt: campaignGame.updatedAt,
@@ -321,8 +325,13 @@ export const getCampaignGamesRouteContext = query({
           id: campaignGame._id,
           campaignId: campaignGame.campaignId,
           templateId: campaignGame.templateId,
-          name: gameTemplates[campaignGame.templateId].name,
-          config: normalizeCampaignGameConfig(campaignGame.config, campaign),
+          name:
+            campaignGame.name ?? gameTemplates[campaignGame.templateId].name,
+          config: presentCampaignGameConfig(
+            campaignGame.templateId,
+            campaignGame.config,
+            campaign
+          ),
           status: campaignGame.status,
           createdAt: campaignGame.createdAt,
           updatedAt: campaignGame.updatedAt,
@@ -385,7 +394,10 @@ export const saveCampaign = mutation({
     const claimCtaLabel = maybeText(args.claimCtaLabel, "Nhãn CTA claim", 28);
     const claimCollectLabel = maybeText(args.claimCollectLabel, "Nhãn nhận thưởng", 28);
     const claimWaitingMessage = maybeText(args.claimWaitingMessage, "Thông điệp chờ", 120);
-    const theme = args.gameConfig?.styleVariant ?? args.theme;
+    const theme =
+      args.gameConfig && isLiXiGameConfig(args.gameConfig)
+        ? args.gameConfig.styleVariant
+        : args.theme;
     const now = Date.now();
 
     await assertCampaignSlugAvailable(ctx, ownerId, slug, args.campaignId);
@@ -455,16 +467,20 @@ export const saveCampaign = mutation({
       throw new Error("Không thể lưu chiến dịch");
     }
 
-    const gameConfig = normalizeCampaignGameConfig(args.gameConfig, {
-      _id: campaignId,
-      ownerId,
-      theme,
-      claimHeadline,
-      claimSubtitle,
-      claimCtaLabel,
-      claimCollectLabel,
-      claimWaitingMessage,
-    });
+    const gameConfig = presentCampaignGameConfig(
+      args.gameTemplateId ?? "li-xi",
+      args.gameConfig,
+      {
+        _id: campaignId,
+        ownerId,
+        theme,
+        claimHeadline,
+        claimSubtitle,
+        claimCtaLabel,
+        claimCollectLabel,
+        claimWaitingMessage,
+      }
+    );
     const campaignGame = await upsertPrimaryCampaignGame(ctx, {
       ownerId,
       campaignId,
@@ -474,8 +490,7 @@ export const saveCampaign = mutation({
     });
 
     if (args.status === "active") {
-      await activateOnlyCampaign(ctx, ownerId, campaignId);
-      await ensureHostProfileForOwner(ctx, owner, { defaultCampaignId: campaignId });
+      await markCampaignAsPreferred(ctx, owner, ownerId, campaignId);
     }
 
     return {
@@ -497,7 +512,15 @@ export const ensureDefaultCampaign = mutation({
 
     const existingActive = await getPreferredActiveCampaignForOwner(ctx, ownerId);
     if (existingActive) {
-      await ensureDefaultCampaignGame(ctx, existingActive);
+      // Only bootstrap a default li xi game when the campaign has no games at
+      // all; campaigns that already own configured instances are untouched.
+      const anyGame = await ctx.db
+        .query("campaignGames")
+        .withIndex("by_campaign", (q) => q.eq("campaignId", existingActive._id))
+        .first();
+      if (!anyGame) {
+        await ensureDefaultCampaignGame(ctx, existingActive);
+      }
       await ensureHostProfileForOwner(ctx, owner, { defaultCampaignId: existingActive._id });
       return { campaignId: existingActive._id };
     }

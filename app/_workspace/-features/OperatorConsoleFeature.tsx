@@ -11,6 +11,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { PIN_LENGTH } from "@/lib/lixiPolicy";
 import { buildPublicPlayUrl } from "@/lib/publicAppUrl";
+import { configRewardSource } from "@/lib/gameTemplates";
 
 type DeliveryMode = "station" | "link";
 
@@ -90,6 +91,48 @@ export function OperatorConsoleFeature({
 						to="/campaigns/$campaignId"
 					>
 						Mở tổng quan chiến dịch
+					</Link>
+				</div>
+			</AdminPageShell>
+		);
+	}
+	if (
+		game.campaignGame.templateId !== "li-xi" ||
+		configRewardSource(game.campaignGame.config) !== "campaign-budget"
+	) {
+		// Non-li-xi templates are self-serve: participants start from the
+		// reusable public link, not from operator-created sessions.
+		return (
+			<AdminPageShell
+				breadcrumbContext={game.campaign.name}
+				description="Trò chơi tự phục vụ không cần tạo lượt từng người; chia sẻ liên kết công khai để khách tự vào chơi."
+				eyebrow={game.campaign.name}
+				title="Trò chơi tự phục vụ"
+			>
+				<Alert status="accent">
+					<Alert.Indicator />
+					<Alert.Content>
+						<Alert.Title>{game.campaignGame.name} chạy qua liên kết công khai</Alert.Title>
+						<Alert.Description>
+							Tạo liên kết dùng chung và mã QR ở trang Phân phối, sau đó khách tham gia tự bắt đầu
+							lượt chơi của mình mà không cần Host PIN.
+						</Alert.Description>
+					</Alert.Content>
+				</Alert>
+				<div className="flex flex-wrap gap-3">
+					<Link
+						className="inline-flex rounded-xl bg-accent px-4 py-2 text-sm font-medium text-accent-foreground"
+						params={{ campaignId: game.campaign.id }}
+						to="/campaigns/$campaignId/distribution"
+					>
+						Mở trang Phân phối
+					</Link>
+					<Link
+						className="inline-flex rounded-xl px-4 py-2 text-sm font-medium text-foreground"
+						params={{ campaignGameId, campaignId: game.campaign.id }}
+						to="/campaigns/$campaignId/games/$campaignGameId"
+					>
+						Mở cấu hình trò chơi
 					</Link>
 				</div>
 			</AdminPageShell>
