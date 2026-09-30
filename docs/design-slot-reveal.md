@@ -55,6 +55,16 @@ The stage renders symbol identities from lucide icon components (stable
   wheel). The combination is display-only: identity/copy always come from
   the authoritative outcome.
 
+## Asset slots
+
+**Deferred: per-symbol images are NOT adopted in this template.** Symbols are
+fixed-key lucide glyphs where "the display glyph may evolve, the KEY never
+does" — operator-provided symbol images would entrench per-key artwork into
+admitted snapshots and editor mappings, touching the frozen symbol-key
+contracts (`slotSymbolKeys`, `winningCombinations`, `SLOT_MISS_COMBINATION`).
+Revisit only as a separate contract change that keeps outcome resolution
+keyed by item id.
+
 ## Tokens (slot-reveal.css, @theme)
 
 - `--slot-bg`: #170f33 family stage backdrop; `--slot-bg-deep`: #0f0a24.

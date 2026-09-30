@@ -16,12 +16,12 @@ This is the implementation contract for the campaign-centric TanStack Start rout
 | /campaigns/$campaignId/games/$campaignGameId | Campaign context and template editor | Rules, copy, assets, preview, reward/result configuration |
 | /campaigns/$campaignId/rewards | Campaign context | Reward inventory, budget, lock states |
 | /campaigns/$campaignId/distribution | Campaign context | Public link, QR/share, station launch, channel state |
-| /analytics | Authenticated workspace | Workspace or campaign analytics from validated URL state |
+| /analytics | Authenticated workspace | Workspace or campaign analytics from validated URL state: `view` selects `overview`, `games`, `rewards`, `channels`, or `claims`; `claims` additionally validates the per-campaign claims-queue filters `claimsStatus`, `claimsChannel`, `claimsRewardType`, and `claimsCode` (exact whole-code search) |
 | /settings/billing | Authenticated workspace | Plan, subscription, usage |
 | /settings/integrations | Authenticated workspace | OAuth, R2, Polar, production readiness |
 | /settings/operations | Authenticated workspace | Account host PIN and station preferences |
 | /operate/$campaignGameId | Authenticated operator shell | HeroUI controls for one authorized campaign game |
-| /station/$campaignGameId | Template-owned stage | Full-screen station guest experience; host PIN guards operation |
+| /station/$campaignGameId | Template-owned stage | Full-screen station guest experience. The li-xi template keeps the legacy host-PIN operator flow; lucky-wheel and scratch-card games whose rewards come from campaign inventory run self-serve station sessions (waiting hero, play, claim, reset) admitted under the signed-in host; exiting to the console always verifies the host PIN. Head ships the shell-owned station.css chrome layer plus every station-capable template stylesheet in the same documented order as /p, never admin CSS. A completed-but-unresolved station result resurfaces as a recovery banner with resume and PIN-verified host-dismiss actions |
 | /play/$publicCode | Public template-owned stage | Resolve public code, template, play session, optional reward |
 | /p/$shareCode | Public template-owned stage | Reusable campaign-game entry: branded hero, self-serve session start, server-validated play, optional claim. The link identifies a campaign game and channel, never a precreated participant session |
 
@@ -46,7 +46,7 @@ The distribution page renders QR codes locally as SVG from the canonical public 
 
 - Campaign selection is the $campaignId path segment.
 - Campaign-game selection is the $campaignGameId path segment.
-- Analytics search is campaign?: string and view?: overview | games | rewards | channels. Invalid values normalize to all-campaign overview.
+- Analytics search is campaign?: string and view?: overview | games | rewards | channels | claims. Invalid values normalize to all-campaign overview.
 - Compatibility routes translate safe legacy state once; canonical routes do not keep a parallel local selection.
 - Links represent destinations and buttons represent mutations. Browser history, modifier-click, reload, direct load, focus, and scroll semantics must be preserved.
 
@@ -118,7 +118,18 @@ Independent audit baselines were recorded at:
 
 Both generated redesign plans were semantically rejected where they contradicted live route behavior or omitted the browser-proven defects. Only the evidence-backed guard and accessibility changes were implemented. This remains pre-authentication evidence; it does not verify authenticated workspace rows.
 
-### Authenticated in-app Browser Control acceptance
+### Authenticated in-app Browser Control acceptance (SUPERSEDED)
+
+> **Status: superseded on 2026-09-29.** The uncommitted campaign-based
+> refactor replaced the authenticated workspace chrome and every workspace
+> feature after these captures were taken, and the capture pass itself
+> suffered a 2×2 tiled-rendering corruption that no longer matches current
+> output. The captures are retained for provenance but must not be cited as
+> current acceptance evidence for workspace surfaces. The station, public
+> play, and claim rows they documented are covered by the newer automated
+> fixtures; re-run the interactive pass before citing them as current.
+> Current workspace acceptance evidence lives in
+> `docs/route-ux-evidence/2026-09-29/` and `tests/ui/workspace.spec.ts`.
 
 The final interactive pass on 2026-07-23 used Browser Control attached to the user's existing signed-in Codex in-app browser tab. It did not launch a separate or anonymous browser profile. The live account resolved to `Thành Nam`; the exercised fixture was campaign `Lunar Fortune`, game `Lì Xì Station`.
 
@@ -141,6 +152,53 @@ Interaction and history evidence:
 
 The browser pass discovered and closed three additional defects before verification: the games collection parent did not render its child outlet, malformed Convex route IDs reached `v.id` validation before friendly recovery, and responsive sheet/tooltip composition produced duplicate or English-only accessible controls. Route policy assertions now guard those fixes.
 
+### Real-chrome workspace fixture acceptance (2026-09-29)
+
+Slice 4d-1 moved workspace acceptance onto a repeatable harness:
+`tests/ui/fixtures/workspace.html` mounts the REAL `_workspace` chrome
+(HeroUI Pro AppLayout, sidebar, navbar, aside host, real
+`AdminPageShell` features) behind a real TanStack Router tree with the
+synthetic Convex workspace fixture (`tests/ui/fixtures/convex-mock.ts`),
+including the authenticated `useConvexAuth` bridge. It covers /campaigns
+(list and empty), /campaigns/new, campaign overview/games/rewards/
+distribution, the game editor for all five templates, analytics (all five
+URL-selected views plus claims filters), all three settings pages,
+onboarding, and the operator console for li-xi and lucky-wheel.
+
+The harness reproduced and the slice fixed, with before/after captures:
+
+- analytics tab strips wrapped their labels at 1440 and 390 because the
+  lists carried `w-fit`; lists now use the library `w-full` default with
+  `min-w-max` tabs, and deep links scroll the active tab into the strip's
+  horizontal overflow on phones;
+- the claims queue needed ~1190px of columns, so the fulfil action was
+  clipped whenever the aside was open; the grid merged to participant
+  (with game · channel subline), claimedAt, reward, code, and a combined
+  status + action column that fits ~773px of content width;
+- the aside showed the legacy "Cơ cấu phần thưởng" rarity chart on every
+  analytics view; it is now gated to overview/rewards via `rarityAsideViews`
+  while the scope picker stays on every view;
+- summary tiles truncated their titles (`item-card__title` is
+  `whitespace-normal` now), the assets panel stacked its header as flex
+  siblings and left half of the card empty, the voucher secret placeholder
+  clipped at 390, and partial KPI-strip rows leaked the separator
+  background; the last KPI now spans to the row end.
+
+Enforcement: `tests/ui/workspace.spec.ts` captures all 23 route states at
+1440×900 and 390×844, asserts zero page overflow on every state, gates on
+zero console errors, and covers the keyboard contract (analytics tabs move
+with arrow keys and update the validated search; the sidebar treegrid is
+arrow-navigable and Enter-activates; the claims grid shows the status chip
+and full fulfil action inside the visible area with the aside open).
+
+Evidence: `docs/route-ux-evidence/2026-09-29/before/` (defect reproductions
+plus measured claims-column metrics) and `docs/route-ux-evidence/2026-09-29/after/`
+(full route-state matrix captured by the spec run via
+`ROUTE_UX_EVIDENCE_DIR`). The fixture loads the same stylesheets the real
+workspace routes load (admin chrome first-authoritative; template layers
+only for editor previews), so workspace captures render the production
+admin theme.
+
 ### Static route-state and accessibility evidence
 
 The source-verifiable portion of the acceptance contract now also covers:
@@ -151,7 +209,7 @@ The source-verifiable portion of the acceptance contract now also covers:
 - template-owned initial configuration, normalization, legacy campaign projection, config editor, and public/station stage resolution;
 - one workspace logout owner, route-specific title/description metadata, and route-specific recoverable error surfaces;
 - localized integration/readiness labels and campaign/game statuses without exposing raw internal keys;
-- route entry modules capped at 350 lines, with the largest current route entry at 79 lines;
+- route entry modules capped at 350 lines, with the largest current route entry at 71 lines (`app/draw.tsx`);
 - no retained red/gold host-dashboard implementation behind `/draw`; the compatibility path only resolves into the canonical HeroUI operator console;
 - Polar checkout and customer-portal returns resolve to canonical `/settings/billing`;
 - a useful missing/forbidden station state instead of an indefinite loading screen;

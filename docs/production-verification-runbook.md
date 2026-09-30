@@ -23,6 +23,9 @@ evidence into the operational release record instead of committing it.
 ## Prerequisites
 
 - A deployed Convex backend and deployed TanStack Start frontend.
+- No new environment variables were introduced by the campaign game, station
+  self-serve, quiz, reward-claims, brand-identity, or play-window work: the
+  existing OAuth/R2/Polar/ops-token variables below remain the complete set.
 - `SITE_URL` set to the deployed HTTPS app origin.
 - `CONVEX_SITE_URL` set to `https://<deployment>.convex.site`.
 - Frontend `VITE_CONVEX_URL` set to `https://<deployment>.convex.cloud`.
@@ -60,6 +63,18 @@ Evidence to keep:
   verifier fails if `.output` still exists.
 
 ## 2. Backend Readiness
+
+Deploy the current Convex schema (including its new indexes) before live
+verification — the claims list queries and the per-game asset panel read them:
+
+- `rewardClaims` indexes `by_campaign_fulfilmentState_claimedAt`
+  (`campaignId, fulfilmentState, claimedAt`) and `by_campaign_channel_claimedAt`
+  (`campaignId, channel, claimedAt`).
+- `campaignAssets` index `by_game_usage` (`campaignGameId, usage`).
+
+```bash
+npx convex deploy
+```
 
 Run the Convex readiness query and the production verifier against the deployed
 origins:
@@ -176,10 +191,17 @@ Verify browser upload and render behavior:
   content type, positive size, and validation timestamp.
 - Confirm Campaign Studio preview renders through a signed URL.
 - Confirm the public claim and station hero render the uploaded asset.
+- Repeat one upload/attach/render pass for each non-hero asset kind:
+  **brand logo** (campaign brand identity, 2 MB ceiling) rendered in the
+  workspace, **wheel hub** (`game-wheel-hub`) rendered in the lucky wheel
+  stage, and **quiz backdrop** (`game-quiz-backdrop`) rendered in the quiz
+  hero/stage. Each `game-*` kind binds to one campaign game; confirm the
+  editor panel shows the per-game attachment and the guest stage renders the
+  live signed URL (and the documented fallback visual when detached).
 - Exercise unsupported type and too-large file checks in staging or production
-  only when safe. Exercise wrong-bucket or stale-reservation checks in staging,
-  or cite the local contract-test artifact when those cases are unsafe against
-  production.
+  only when safe; include the 2 MB brand-logo ceiling. Exercise wrong-bucket or
+  stale-reservation checks in staging, or cite the local contract-test artifact
+  when those cases are unsafe against production.
 
 Evidence to keep:
 
@@ -226,8 +248,19 @@ Verify live counter behavior:
 - Create a station session and a public claim redemption.
 - Confirm owner analytics session and redemption counters update.
 - Confirm campaign analytics session and redemption counters update.
+- Play one session through each active channel (public link, station) and
+  confirm the campaign/game channel breakdown attributes opens, starts,
+  completions, reward outcomes, and claims to the right channel and share link.
 - In staging or for a selected migrated owner, run owner analytics backfill
   dry-run, then apply.
+- Run `analytics:backfillOwnerChannelLinkCounters` per owner — `dryRun: true`
+  first, then apply, relaying `continueCursor` while `isDone` is false — so
+  event rows recorded before channel/share-link scopes existed are counted
+  exactly once. Reruns are no-ops (readiness-stamped rows are skipped);
+  `legacyRowsSkipped` counts unattributed li xi rows that surface as the
+  derived "li xi (legacy)" channel, and `skippedUnscoped` counts attributed
+  rows with no countable target id. Without this backfill, channel and
+  share-link rows undercount and the legacy remainder overstates.
 - Review owner SaaS migration/backfill skipped counts and the bounded
   `auditDecisions` sample for foreign campaign references, foreign session
   references, and invalid public-code expiry rows before applying migration
@@ -247,6 +280,77 @@ Evidence to keep:
   empty or which sampled source rows required manual repair.
 - Owner and campaign rerun summaries showing no double-count.
 - Readiness result proving migration token shutdown.
+
+## 8. Generic Game Flows: Station Self-Serve, Quiz, And Play Windows
+
+These checks cover the template-generic play surfaces (not the legacy li xi
+draw flow of section 4):
+
+Station self-serve (lucky wheel and scratch card games):
+
+- Open `/station/<campaignGameId>` in a signed-in kiosk-like browser.
+- Confirm the template waiting hero renders and Start admits exactly one
+  `channel: "station"` play session (stock decrements once).
+- Play through to the result, claim, and confirm the reward code is revealed
+  only after the participant claim action.
+- Press "Hoàn tất": the station returns to the waiting hero, no recovery
+  banner flashes, and Start is enabled again immediately for the next
+  participant.
+- Refresh mid-play: the active session recovers without a second admission
+  or a second open metric.
+- Refresh at the result screen: the completed-but-unresolved result resurfaces
+  as the recovery banner; resume re-shows the result/claim, and the host can
+  dismiss it only behind the Host PIN.
+- Confirm the session appears under the "Trạm chơi" channel in
+  `/analytics`.
+
+Quiz (public-link template):
+
+- Configure a quiz campaign game, open its `/p/<shareCode>` link, answer the
+  questions, and confirm the result plus optional claim flow completes and the
+  answer key never reaches the browser before completion.
+- Confirm the station route stays fail-closed for quiz
+  (public-self-serve template) with the operator pointer message.
+
+Play windows (schedule):
+
+- Configure `startsAt`/`endsAt` on a campaign game (game editor schedule
+  fields).
+- Before the window: public links and station Start block new admissions with
+  the localized "Chưa đến giờ" message naming the opening time.
+- Inside the window: admissions work; after `endsAt`: new admissions fail with
+  the "Đã kết thúc" message while an already-admitted in-flight session can
+  still finish under its frozen rules snapshot.
+- Confirm the operator console and distribution surfaces reflect the window
+  state.
+
+Evidence to keep:
+
+- Campaign/game ids exercised per template.
+- Redacted screenshots of the waiting hero, result/claim, and the post-collect
+  waiting round.
+- Recorded admission counts (station stock before/after) proving exactly-once.
+- Recovery/dismiss notes including whether Host PIN was required.
+- Play-window screenshots or notes for the not-started/ended copy.
+
+## 9. Reward Claims Fulfilment
+
+- Claim a reward from a generic game (station or public link) as a
+  participant.
+- Confirm the claim appears in the analytics "Hàng đợi trao thưởng" queue
+  scoped to its campaign, with the reward code masked by default.
+- Use the owner "Hiện mã" reveal action to see the code, then hide it again.
+- Mark the claim fulfilled ("Đã trao") and confirm the state chip and the
+  campaign counters update; then undo back to "Chờ trao" and confirm the undo
+  is reflected exactly once.
+- Fulfil and undo the same claim twice and confirm idempotent behavior (no
+  double counters).
+
+Evidence to keep:
+
+- Claim row id, fulfilment transitions performed, and the final state.
+- Confirmation that claim lists exposed only masked codes and that full-code
+  reads required the owner reveal action.
 
 ## Cleanup And Rollback
 

@@ -26,6 +26,15 @@ First-time setup on a fresh Windows checkout: `npm install` then
 currently generated on this Windows/Chromium environment; treat them as
 platform-specific until cross-platform baselines are deliberately added.
 
+Package management: **bun is the canonical package manager** (`bun.lock` is
+the source of truth for installs). `package-lock.json` is kept in sync for
+npm consumers only; after dependency changes regenerate it without touching
+the bun-managed `node_modules` with:
+
+```bash
+npm install --package-lock-only
+```
+
 ## What runs where
 
 - `tests/ui/fixtures/` — test-only Vite entry points (never part of the
@@ -37,16 +46,26 @@ platform-specific until cross-platform baselines are deliberately added.
     pending-release (oldest/newest), and recorded mutation calls.
   - `participant.html` mounts `PublicShareEntryFeature` (real registry
     stages, real template CSS/font order: li-xi, then wheel, then
-    scratch-card, then slot-reveal) with controls on
+    scratch-card, then slot-reveal, then quiz) with controls on
     `window.__participantFixture`: share-code scenarios
     (`wheel` / `wheel-engagement` / `lunar` / `scratch` / `scratch-high` /
-    `scratch-crimson` / `slot`), saved-session seeds
+    `scratch-crimson` / `slot` / `quiz`), saved-session seeds
     (`seed=saved-unclaimed|saved-claimed`), lost-start simulation, delayed
-    outcome/claim delivery, held-or-failing reveal-action delivery
-    (`setActionDelivery` + `deliverActions`), engagement switching, remote
+    outcome/claim delivery, held-or-failing play-action delivery (reveals
+    and quiz answers; `setActionDelivery` + `deliverActions`), engagement
+    switching, remote
     session completion (`completeSessionRemotely` — models finishing on
     another device), entry closure, counters and recorded mutation calls
     with session id/token identity.
+  - `workspace.html` mounts the REAL workspace chrome (HeroUI Pro
+    AppLayout/Sidebar/navbar via WorkspaceLayout) and the REAL feature
+    modules (onboarding, campaigns, overview, game editor, distribution,
+    operator console, settings) in a memory-history TanStack router tree,
+    deep-linked via the `?route=` URL parameter.
+  - `analytics.html` mounts the ACTUAL `AnalyticsFeature` (including
+    `RewardClaimsPanel`) under the admin shell layout; the analytics
+    search params (`campaign`, `view`) come straight from the fixture
+    page URL.
   - Controls change mock data/response timing only — never the product
     behavior under test.
   - Motion preference is per-scope: gameplay motion coverage runs under
@@ -54,6 +73,16 @@ platform-specific until cross-platform baselines are deliberately added.
     easing transition and result focus), and a separate describe runs under
     native `"reduce"` (asserting suppression). The fixture does not disable
     animations for participant specs.
+- `station.html` (station fixture) mounts the ACTUAL `StationPlayFeature`
+  (real TanStack Router tree, template CSS/font order li-xi → wheel →
+  scratch-card → slot-reveal → quiz) with a station backend on
+  `window.__stationFixture`: `?game=wheel|scratch|quiz` scenario selection,
+  sold-out and held-admission controls, collect-acknowledgment timing
+  controls (`setAckMode` `immediate`/`pending`/`failing` + `deliverAck`),
+  play-window simulation (`setScheduleState`), counters (opens, admissions,
+  stock, session status) and recorded station/publicPlay/auth calls. Station
+  session state persists in sessionStorage (`station-backend:`) so
+  refresh-recovery behaves like the real owner-authorized state query.
 - `tests/ui/*.spec.ts` — Playwright specs with semantic locators and
   assertions on actual recorded calls/state. Playwright specs are excluded
   from Vitest discovery (`vitest.config.ts` excludes `tests/**`).
@@ -96,8 +125,42 @@ Fixture scenarios are regular URLs of the test-only server, e.g.
 timing (immediate/delayed) and campaign switching are controlled
 programmatically from the specs via `window.__inventoryFixture`.
 
+## Coverage map
+
+Vitest behavior suites added with the campaign-game slice:
+
+- `convex/stationPlay.test.ts` — station self-serve backend gates
+  (authorization, template/reward-source fail-closed rules, single active
+  station session, snapshot freeze, capacity + quota, one open per openKey).
+- `convex/rewardClaims.test.ts` — claim transition, masked-code list
+  exposure, owner reveal, and idempotent fulfil/undo.
+- `convex/playSchedule.test.ts` — play-window state resolution, write-path
+  validation, admission enforcement across channels, and old rules-snapshot
+  rendering.
+- `convex/channelLinkReporting.test.ts` — channel/game/share-link breakdown
+  reads and the exactly-once `backfillOwnerChannelLinkCounters` behavior
+  (including unscoped-row handling and authorization).
+- `convex/campaignAssets.test.ts` — per-game asset slot attach/detach and
+  render URL scoping.
+- `lib/schedulePolicy.test.ts` — schedule input parsing (including the
+  calendar-rollover round-trip guard) and epoch conversion.
+- `lib/publicCopy.test.ts` — public copy normalization for game configs.
+
+Playwright specs: `station.spec.ts` (kiosk journey incl. recovery and
+ack-timing regressions), `quiz.spec.ts`, `scratch.spec.ts`, `slot.spec.ts`,
+`analytics.spec.ts` (views incl. the claims queue), `asset-slots.spec.ts`,
+plus the pre-existing `inventory.spec.ts`, `operator.spec.ts`,
+`participant.spec.ts`, and `workspace.spec.ts`.
+
 ## Scope boundaries
 
+- Station mode (slice 3) is covered on both layers: `convex/stationPlay.test.ts`
+  proves the backend gates (owner→campaign→game authorization, template and
+  reward-source fail-closed rules, single active station session per game,
+  channel/label, snapshot freeze, capacity + quota, one open per openKey),
+  while `tests/ui/station.spec.ts` proves the kiosk journey (waiting → play →
+  result → claim with code → reset, Host PIN exit dialog, 390x844 + 1440x900
+  without overflow) over the actual station shell and template stages.
 - UI specs run against synthetic Convex responses: they assert component
   behavior, emitted mutation payloads, and rendered states. They do not prove
   backend behavior — that is the Vitest + convex-test layer's job (e.g.

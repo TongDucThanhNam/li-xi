@@ -152,6 +152,34 @@ unauthenticated admin invocation (`ownerId` + `migrationToken`):
 npx convex run playMaintenance:backfillRewardAccountingPage   --deployment '<deployment>'   --identity '{"subject":"<ownerId>"}' '{}'
 ```
 
+Channel/share-link counter scopes (slice 4c) have their own one-time
+initialization for analytics event rows recorded before the scopes existed.
+Generic events already stamped `counterScopesVersion: 1` when live counting
+applied their scopes; rows without the stamp that carry `channel` or
+`shareLinkId` attribution are initialized exactly once (then stamped), and
+legacy li xi rows without attribution are skipped forever (they surface as the
+derived "li xi (legacy)" channel row instead):
+
+```bash
+# 3. Per owner, initialize channel/share-link counter scopes (preview first):
+npx convex run analytics:backfillOwnerChannelLinkCounters   --deployment '<deployment>'   --identity '{"subject":"<ownerId>"}'   '{"dryRun":true}'
+npx convex run analytics:backfillOwnerChannelLinkCounters   --deployment '<deployment>'   --identity '{"subject":"<ownerId>"}' '{}'
+```
+
+- Repeat while `isDone` is `false`, relaying `continueCursor` back as `cursor`
+  (`limit` bounds each page, default 200 / maximum 500).
+- `countersBackfilled` counts scopes initialized; `skippedAlreadyScoped` counts
+  rows already stamped live; `legacyRowsSkipped` counts unattributed li xi rows
+  that never enter the channel/link counters; `skippedUnscoped` counts rows
+  with channel/share-link attribution but no countable target id, which stay
+  unstamped so the readiness stamp is only absorbed by rows whose scopes were
+  actually applied.
+- Replays are no-ops: stamped rows are skipped, so running it twice can never
+  double count. `dryRun: true` previews with `countersWouldBackfill` and
+  writes nothing.
+- Signed-in CLI callers need no `ownerId`; passing a foreign `ownerId` (or the
+  `migrationToken` env path without a session) fails closed.
+
 Drive maintenance from the server's returned fields, not a fixed formula:
 
 - Repeat a game-bucket call while `complete` is `false`; an empty bucket

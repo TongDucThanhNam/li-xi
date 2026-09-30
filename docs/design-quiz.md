@@ -75,12 +75,58 @@ prefixed `quiz-` so this skin never collides with draw.css, `wheel-*`,
   sibling/foreign sessions can never grade or read another participant's
   quiz.
 
+## Stage presentation
+
+- Ready intro (`quiz-ready`): one card with the question count, the pass
+  rule ("cần đúng ít nhất {passCount} câu") and exactly ONE start CTA
+  labelled from `publicCopy.startCtaLabel`. Recovered sessions skip it —
+  stored progress (`answeredCount > 0`) resumes at the current question and
+  a completed capability opens the result directly.
+- Between questions the stage gives ONLY neutral feedback (selected choice
+  flashes the accent plus a textual "Đang ghi nhận câu trả lời…"
+  acknowledgment). Correctness, correct choices and explanations never
+  appear before completion — they are server-private halves.
+- The result screen states the score against the frozen threshold:
+  "Bạn đúng {score}/{total} câu" plus "— đạt yêu cầu!" on a pass or the
+  exact requirement ("cần đúng ít nhất {passCount}/{total} câu") on a fail.
+
+## Asset slots
+
+Registered campaign-game asset slots (declared in `app/game-templates/registry.ts`,
+uploaded through the generalized game-editor assets panel). Slot images are
+PRESENTATION ONLY: resolved live as renderable R2 URLs at read time (same
+trust level as the campaign hero), never frozen into `rulesSnapshot`, and
+never a grading/eligibility signal.
+
+### `game-quiz-backdrop` — backdrop image
+
+- **Purpose**: give the quiz stage (and its pre-session entry hero) the
+  campaign's own full-bleed backdrop instead of the flat `--quiz-bg` token.
+- **Aspect ratio**: 16:9 landscape (at least 1280×720 recommended); rendered
+  `background-size: cover; background-position: center`, cropped on any
+  viewport with no layout shift.
+- **Max size**: 8 MB. Types: JPG, PNG, WebP, GIF, AVIF (shared campaign asset
+  policy, `lib/assetPolicy.ts`).
+- **Placement**: the existing dimmed background layer of `QuizEntryHero` and
+  `QuizStage` (`.quiz-stage` full-bleed, `mix-blend-screen`, unchanged
+  opacity). The backdrop slot image takes precedence over the campaign hero
+  image on these two surfaces only; every other template surface is
+  untouched.
+- **Fallback**: without a backdrop slot the hero/dim layer renders exactly as
+  today (campaign hero when present, flat token background otherwise) —
+  existing guest snapshots must keep matching.
+- **Constraint**: text contrast keeps relying on the same dimming layer; the
+  image must not brighten the stage beyond the current hero treatment.
+
 ## Tokens (quiz.css, @theme)
 
 - `--quiz-bg`: #12203a stage backdrop; `--quiz-bg-deep`: #0c1626.
 - `--quiz-ink`: #f2f7ff; `--quiz-ink-soft`: rgba(242,247,255,0.75).
 - `--quiz-accent`: #4f7cff (choice/progress accent); `--quiz-accent-deep`:
   #2c4bbf; `--quiz-pass`: #2ec4b6; `--quiz-fail`: #ef476f.
+- `--quiz-fail-soft`: #ff8fa3 — lightened fail tone reserved for error text
+  (`quiz-error`) so messages stay readable on the dark stage without using
+  the full-saturation fail color as body text.
 - Choice cards: dark surface, 1px line border, focus-visible ring; selected
   answers flash the accent before advancing (skipped under reduced motion).
 - Progress: `quiz-progress__bar` fill (width %) — decorative, plus a

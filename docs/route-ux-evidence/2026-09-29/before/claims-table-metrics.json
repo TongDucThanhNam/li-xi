@@ -1,0 +1,31 @@
+{
+  "capturedAt": "2026-09-29",
+  "viewport": { "width": 1440, "height": 900 },
+  "conditions": "workspace fixture, analytics view=claims&campaign=campaign-a, AppLayout aside opened",
+  "before": {
+    "tableWidthPx": 1190,
+    "contentAreaPx": 772,
+    "contentClassName": "min-w-[1060px]",
+    "columns": [
+      { "header": "Người tham gia", "width": 180 },
+      { "header": "Thời gian nhận", "width": 130 },
+      { "header": "Trò chơi · Kênh", "width": 180 },
+      { "header": "Phần thưởng", "width": 200 },
+      { "header": "Mã thưởng", "width": 170 },
+      { "header": "Trạng thái", "width": 140 },
+      { "header": "Hành động", "width": 190 }
+    ],
+    "defect": "7 columns totalling 1190px inside a ~772px content area: the Hành động (fulfil action) column is clipped whenever the aside is open"
+  },
+  "after": {
+    "contentClassName": "min-w-[720px]",
+    "columns": [
+      { "header": "Người tham gia", "minWidth": 160, "note": "merged: game · channel subline" },
+      { "header": "Thời gian nhận", "minWidth": 104 },
+      { "header": "Phần thưởng", "minWidth": 150 },
+      { "header": "Mã thưởng", "minWidth": 124 },
+      { "header": "Trao thưởng", "minWidth": 182, "note": "merged: status chip + fulfil action + fulfilled date" }
+    ],
+    "result": "no grid horizontal scroll at 1440 with aside open; status chip and full fulfil action visible (workspace.spec claims-fits test)"
+  }
+}

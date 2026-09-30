@@ -16,7 +16,9 @@ with the li-xi `draw.css`, wheel `wheel-*`, or admin HeroUI layers.
 ## Tokens (scratch-card.css, @theme)
 
 - `--scratch-bg`: #141433 family page backdrop (brand dark ink, consistent
-  with wheel/lunar surfaces).
+  with wheel/lunar surfaces). The layer paints it on `body` scoped with
+  `body:has(.scratch-stage)` — each template layer owns its page tokens
+  instead of relying on another layer's unscoped `body` rule.
 - Cover styles (operator-selected, bounded literal): `gold` (#e9c96a →
   #d4af37 → #8a6d1f), `teal` (#7fe3d8 → #2ec4b6 → #0f5f56), `crimson`
   (#ff8fa9 → #ef476f → #8f0f31). The single source is
@@ -82,3 +84,81 @@ with the li-xi `draw.css`, wheel `wheel-*`, or admin HeroUI layers.
 - Privacy: voucher codes render only after a successful claim; public
   snapshots and outcome reads stay secret-free before that claim.
 - All classes prefixed `scratch-`; no `wheel-*`/`draw.css` reuse.
+
+## Asset slots
+
+**Deferred: a "beneath" reveal image is NOT adopted in this template yet.**
+The beneath backdrop deliberately mirrors the operator-selected cover palette
+(`.scratch-cover--*`), and the UI suite verifies the coating instruction and
+beneath teaser at ≥ 4.5:1 (WCAG normal text) against the worst-case foil
+pixel sampled beneath the chip on all three covers. An arbitrary
+operator-provided image beneath the coating cannot carry that verified
+contrast guarantee — honoring it would require an opaque scrim that changes
+the frozen cover-style presentation, and skipping it would silently drop a
+verified accessibility contract. Revisit only with a documented scrim/token
+plan that keeps the contrast suite green; the canvas foil mechanics and the
+frozen `coverStyle` snapshot contract stay untouched in the meantime.
+
+## Station mode (self-serve station, `/station/$campaignGameId`)
+
+Station mode renders the SAME template-owned surfaces as `/p` inside the
+station shell — no station-specific skin, no admin HeroUI theme on the
+guest stage:
+
+- **Waiting screen** = the template `EntryHero` (`ScratchCardEntryHero`),
+  full-screen, one large Start CTA; `canStart` false only while the game is
+  inactive/sold out. Touch targets ≥ 48px.
+- **Play** = the template `PlayStage` (`ScratchCardStage`) with `autoBegin`
+  and the frozen admission snapshot as `playContext`
+  (`coverStyle`/`revealThresholdPercent`). Shell callbacks wire
+  `onPlay` (the once-only `scratch-reveal`) and `onClaim`; the voucher code
+  reveals on the station screen after the claim.
+- **Reset** = the stage's `onCollect` ("Hoàn tất") returns the station to
+  the waiting hero and drops the capability from memory — the capability is
+  never written to localStorage/sessionStorage on a shared kiosk; refresh
+  recovery comes from the owner-authorized station-state query.
+- **Host PIN** guards station exit (same dialog semantics as li xi
+  station). Erase/reveal/claim behavior is byte-identical to `/p`; the
+  `/p` Playwright baselines must keep matching (stage changes stay
+  additive, e.g. an optional `mode: "station"` prop).
+- **Large screens (≥ 1024px)**: the card keeps its aspect ratio, centered;
+  the coated card may scale to `min(80vmin, 560px)`; no horizontal
+  overflow at 1440×900 or 390×844.
+- Analytics: one `game_open` per waiting-screen mount (stable client
+  openKey, idempotent); starts/completions/claims reuse the shared
+  per-transition event keys with `channel: "station"`. No auto-return
+  timer ships in this slice — an idle auto-return on the result screen
+  remains a documented future option.
+- **Recovery**: a completed station play whose reward was never collected
+  (or whose claim code was lost to a refresh) resurfaces as a shell-owned
+  recovery banner on the waiting screen ("Có phần thưởng chưa nhận") with a
+  resume action and a PIN-verified host-dismiss action; Start stays
+  disabled until the pending result is resolved.
+
+### Shell chrome CSS (`app/styles/station.css`)
+
+Host/operations chrome around the guest stage (exit trigger, Host PIN
+dialog, loading/missing/inactive/fail-closed screens, recovery banner) is
+owned by the shell layer `station.css` — never by the template guest stage
+and never by admin CSS. The shell reads the variables below, which this
+template's tokens drive when the shell is mounted with
+`data-template="scratch-card"` (fallbacks are the lunar defaults):
+
+| Shell variable | Scratch-card value |
+| --- | --- |
+| `--station-shell-bg` | `var(--scratch-bg, #141433)` |
+| `--station-shell-ink` | `var(--scratch-ink, #fff6e8)` |
+| `--station-shell-ink-soft` | `var(--scratch-ink-soft, rgba(255, 246, 232, 0.72))` |
+| `--station-shell-accent` | `var(--scratch-gold, #d4af37)` |
+| `--station-shell-accent-border` | `rgba(212, 175, 55, 0.5)` |
+| `--station-shell-panel` | `var(--scratch-bg-deep, #0e0e28)` |
+| `--station-shell-panel-border` | `var(--scratch-line, rgba(255, 246, 232, 0.16))` |
+| `--station-shell-font` | `"Playfair Display", "Noto Serif", system-ui, sans-serif` |
+| `--station-shell-display` | `"Cinzel Decorative", "Playfair Display", serif` |
+
+Shell classes are all prefixed `station-*` (`.station-shell`,
+`.station-exit-trigger`, `.station-overlay`, `.station-dialog`,
+`.station-status*`, `.station-recovery*`), so they never collide with
+`scratch-*` guest-stage classes. The station route ships this shell layer
+plus every station-capable template layer (same documented order as `/p`);
+the guest stage itself stays untouched.

@@ -12,7 +12,7 @@
 - Campaign identity lives in `/campaigns/$campaignId`; campaign-game identity lives in `/campaigns/$campaignId/games/$campaignGameId`, `/operate/$campaignGameId`, and `/station/$campaignGameId`.
 - Campaign index, creation, overview, game configuration, rewards, and distribution are separate route features. Editable overview/game routes warn about unsaved changes, and the game route resolves its editor and preview from the template registry.
 - Public links are generated as `/play/$publicCode`. `/claim/$publicCode` reuses the same public feature, while `/setup`, `/draw`, and `/leaderboard` are deterministic compatibility aliases.
-- Analytics persists campaign scope and the canonical `overview | games | rewards | channels` view in validated search state.
+- Analytics persists campaign scope and the canonical `overview | games | rewards | channels | claims` view in validated search state.
 - Host PIN is account-level operations configuration at `/settings/operations`; campaign reward inventory no longer creates or changes it.
 
 ## Objective
@@ -27,6 +27,25 @@ participant-facing UI, CSS/theme layer, assets, and analytics events.
 New product work should use campaign/game/play-session/reward terminology.
 Existing draw, redemption, and public claim terminology describes the current li
 xi implementation and migration surface.
+
+## Vietnamese Copy Terminology
+
+Workspace UI copy settles these terms once and applies them consistently:
+
+- **"Nhận thưởng"** (lượt nhận thưởng) is the participant-side claim metric: a
+  participant claimed a reward from their game result. All funnel columns,
+  KPIs, and conversion copy about the `claims` metric use this term.
+- **"Trao thưởng"** (lượt trao thưởng) is reserved for the operator-side
+  fulfilment act of handing a reward to the participant: the claims-queue
+  fulfil action, the legacy li xi redemption history, and the queue view
+  itself ("Hàng đợi trao thưởng").
+- The station channel is named **"Trạm chơi"** everywhere it names the
+  channel/picker (analytics channel rows, channel pickers, distribution
+  cards). "Tự phục vụ" remains only as a descriptive mode label (for example
+  the "Trạm tự phục vụ" console page title), never as the channel name.
+- The collect/acknowledge action is **"Hoàn tất"** in the guest station UI;
+  server-side acknowledge errors use the same verb ("hoàn tất kết quả").
+- The delete action is spelled **"Xóa"**.
 
 ## Current State
 
@@ -46,7 +65,7 @@ xi implementation and migration surface.
 - Public play session reads fail closed when the session's scoped budget is missing, exhausted, or has no available prize units payable by the remaining budget, so guests do not enter the envelope animation for an unpayable legacy or malformed link.
 - Public play mutable campaign fallbacks are owner-checked before copy, theme, hero, or prize preview resolution, so malformed legacy campaign references cannot expose another host's campaign state.
 - Campaign settings now exist in Convex and the canonical campaign routes: `/campaigns`, `/campaigns/new`, `/campaigns/$campaignId`, `/campaigns/$campaignId/games`, and `/campaigns/$campaignId/games/$campaignGameId`. They cover multi-campaign navigation, new draft creation, brand copy, public play headline/subtitle/start CTA/collect CTA/waiting copy, style variant, status, hero asset, R2 upload wiring, game-template selection, and `gameConfig` persistence. The current `brand` option is a li xi style variant in config, not a separate game template.
-- A real game-template registry now exists. `lib/gameTemplates.ts` owns the catalog/default config/analytics labels, and `app/game-templates/registry.ts` maps `li-xi` to its stage component, CSS URL, fonts, config schema/editor metadata, preview metadata, reward/result UI, and analytics labels. `app/draw/templates/*` remains a compatibility wrapper for the current li xi surfaces.
+- A real game-template registry now exists. `lib/gameTemplates.ts` owns the catalog/default config/analytics labels, and `app/game-templates/registry.ts` maps the five shipped templates (`li-xi`, `lucky-wheel`, `scratch-card`, `slot-reveal`, `quiz`) each to their stage component(s), CSS URL, fonts, config schema/editor metadata, per-game asset slots, preview metadata, reward/result UI, and analytics labels. `app/draw/templates/*` remains a compatibility wrapper for the current li xi surfaces.
 - Campaign-game configuration now exists through `campaignGames`, with `ownerId`, `campaignId`, `templateId`, normalized `config`, and lifecycle status. New campaign/game behavior should extend this boundary instead of adding draw-specific settings.
 - The local contract suite includes `scripts/test-saas-workflow-policy.mjs`, which guards the OAuth completion route, Campaign Studio decomposition, campaign-scoped budget setup, station/public-link draw creation, public play compatibility redemption, entitlement callsites, and the live evidence fields required before production acceptance. Full browser/database E2E still belongs in the staged production evidence pass because Google OAuth, R2, and Polar require deployed credentials.
 - Campaign workspace APIs reserve `activeCampaign` for an actual `active` campaign. Visible campaign reads use active/draft status buckets instead of scanning archived campaigns. Active campaign resolution is centralized and deterministic: it keeps the host profile's default campaign when that row is still active for the owner, otherwise it chooses the most recently updated active campaign. Campaign Studio may still select a draft for editing, but backend responses do not label drafts as active fallbacks. If a client supplies a `selectedCampaignId` outside the owner's visible workspace, the query fails closed instead of falling back to active campaign data or recent assets.
@@ -84,6 +103,7 @@ xi implementation and migration surface.
 - Budget configuration and budget sync are both locked when the scoped campaign has pending sessions or redemption history, preserving historical prize inventory integrity. Campaign redemption-history checks use `campaignId + ownerId` indexes and campaign pending-session locks use `campaignId + ownerId + status + deliveryMode` buckets before deciding the lock state, so imported foreign rows cannot lock another owner's campaign budget. Legacy owner-wide pending-session locks read station/link/missing-delivery pending buckets through `ownerId + status + deliveryMode` before expiry filtering.
 - Backend prize selection uses crypto-backed random integer selection over remaining prize units instead of `Math.random`.
 - Station state now only treats `deliveryMode: "station"` pending sessions as the live kiosk draw. Host pending-session reads use owner/status/delivery buckets for station, link, and legacy missing-delivery rows instead of scanning every pending owner session. `deliveryMode: "link"` sessions mint expiring public play URLs, appear in the host pending-link list with expiry timestamps, and can coexist with the live station flow until plan open-session limits are reached.
+- Station mode now has a second, campaign-inventory layer: `convex/stationPlay.ts` serves self-serve-station templates (lucky wheel, scratch card) at `/station/$campaignGameId` — owner→campaign→game authorization through the signed-in host (client-supplied owner ids are never trusted), template and `campaign-inventory` reward-source gates that fail closed for quiz/slot and legacy budget games, at most one active `channel: "station"` session (label `Trạm chơi`) per campaign game admitted through the shared play-session core with the same rules-snapshot/capacity/quota semantics as public links, and idempotent per-`openKey` waiting-screen opens. The `deliveryMode` kiosk flow below remains the li-xi legacy boundary.
 - Campaign open sessions are bounded by cumulative payable prize capacity: before minting another station or public-link session, the backend counts open pending sessions for that campaign through campaign+owner+status+delivery buckets and rejects creation when they already cover all remaining active prize units the current budget can actually pay for. Public play previews, station pending-session reward pools, and redemption selection all use the same capacity-preserving prize filter, so guests are not shown prize types that would have to be rejected to keep enough payable units for the campaign's other open sessions. Expired links and cancelled/redeemed sessions do not reserve units.
 - Draw session creation only accepts active campaigns. Draft campaigns can be configured in Campaign Studio, but they cannot mint station sessions or public play links until activated.
 - If a host already has visible draft campaigns but no active campaign, draw creation fails with an activation prompt instead of auto-creating another default campaign. Auto-default creation is reserved for first-run owners with no visible active/draft campaigns.
