@@ -3,6 +3,13 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { requireResolvedOwner } from "./authorization";
 
+/**
+ * Draw-era owner surface: reads legacy `redemptions` only. Generic play
+ * sessions and rewardClaims are deliberately NOT merged in (see
+ * docs/product-direction.md "Decisions (won't-do)"); cross-template
+ * reporting belongs to the analytics surfaces, not this leaderboard.
+ */
+
 function normalizeLimit(limit: number | undefined, defaultValue: number, maxValue: number) {
   if (limit === undefined) {
     return defaultValue;

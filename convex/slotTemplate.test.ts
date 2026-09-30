@@ -7,6 +7,7 @@ import shardedCounterTest from "@convex-dev/sharded-counter/test";
 import schema from "./schema";
 import { modules } from "./test.setup";
 import { api } from "./_generated/api";
+import type { FunctionReturnType } from "convex/server";
 import type { Id } from "./_generated/dataModel";
 import {
 	buildSlotRevealGameConfig,
@@ -14,6 +15,22 @@ import {
 	SLOT_MISS_COMBINATION,
 	slotSymbolKeys,
 } from "../lib/gameTemplates";
+
+type PlayActionReply = FunctionReturnType<typeof api.publicPlay.playSessionAction>;
+
+/**
+ * Narrows a play-action reply to its completed outcome, failing loudly
+ * otherwise: the mutation reply is a union where quiz step states carry no
+ * outcome, and these tests only assert completed plays.
+ */
+function expectOutcome(
+	result: PlayActionReply,
+): NonNullable<PlayActionReply["outcome"]> {
+	if (!result.outcome) {
+		throw new Error("Expected a completed play result with an outcome");
+	}
+	return result.outcome;
+}
 
 const SHARE_CODE = "slotui0000000000000000"; // 22-char lowercase
 
@@ -246,17 +263,17 @@ test("slot: frozen mapping covers every reward type and disambiguates duplicate 
 		});
 		const result = await spin(f.t, session.capability);
 		// Exact winning outcome identity for this type.
-		expect(result.outcome.kind).toBe("reward");
-		expect(result.outcome.segmentKey).toBe(targetId);
-		expect(result.outcome.rewardType).toBe(expected[index].rewardType);
+		expect(expectOutcome(result).kind).toBe("reward");
+		expect(expectOutcome(result).segmentKey).toBe(targetId);
+		expect(expectOutcome(result).rewardType).toBe(expected[index].rewardType);
 		// The duplicate-label pair shares label+amount but NEVER the identity.
 		if (lastOutcome) {
 			if (lastOutcome.label === expected[index].label && lastOutcome.amount === expected[index].amount) {
-				expect(lastOutcome.segmentKey).not.toBe(result.outcome.segmentKey);
+				expect(lastOutcome.segmentKey).not.toBe(expectOutcome(result).segmentKey);
 			}
 		}
 		lastOutcome = {
-			segmentKey: result.outcome.segmentKey,
+			segmentKey: expectOutcome(result).segmentKey,
 			label: expected[index].label,
 			amount: expected[index].amount,
 		};
@@ -278,12 +295,12 @@ test("slot: first spin allocates once; replay preserves it and the stock", async
 	const { capability } = await admit(f.t, f.shareCode, "0123456789abcdef0123456789abcdef");
 	const first = await spin(f.t, capability);
 	expect(first.outcome).toMatchObject({ kind: "reward", canClaim: true });
-	expect(["voucher", "points"]).toContain(first.outcome.rewardType);
+	expect(["voucher", "points"]).toContain(expectOutcome(first).rewardType);
 	// The winner is always a frozen candidate item (documented combination).
-	expect([f.itemIds[0], f.itemIds[1]]).toContain(first.outcome.segmentKey);
+	expect([f.itemIds[0], f.itemIds[1]]).toContain(expectOutcome(first).segmentKey);
 	const replay = await spin(f.t, capability);
 	expect(replay.outcome).toMatchObject({ kind: "reward", canClaim: true });
-	expect(replay.outcome.segmentKey).toBe(first.outcome.segmentKey);
+	expect(expectOutcome(replay).segmentKey).toBe(expectOutcome(first).segmentKey);
 	// Replay does not draw from stock again, and the winner is a frozen candidate.
 	const remaining = await f.t.run(async (ctx) => {
 		const rows = await ctx.db.query("rewardInventory").collect();
@@ -317,12 +334,12 @@ test("slot: last-unit concurrency rewards exactly one session", async () => {
 		spin(f.t, first.capability),
 		spin(f.t, second.capability),
 	]);
-	const kinds = [firstResult.outcome.kind, secondResult.outcome.kind].sort();
+	const kinds = [expectOutcome(firstResult).kind, expectOutcome(secondResult).kind].sort();
 	expect(kinds).toEqual(["no-reward", "reward"]);
 	// The loser receives the documented miss combination as its presentation
 	// and the truthful no-reward label.
-	const loser = firstResult.outcome.kind === "reward" ? secondResult : firstResult;
-	expect(loser.outcome.canClaim).toBe(false);
+	const loser = expectOutcome(firstResult).kind === "reward" ? secondResult : firstResult;
+	expect(expectOutcome(loser).canClaim).toBe(false);
 	const remaining = await f.t.run(async (ctx) => {
 		const rows = await ctx.db.query("rewardInventory").collect();
 		return rows.filter((row) => row.campaignId === f.campaignId).map((row) => row.quantityRemaining);
@@ -357,9 +374,9 @@ test("slot: config edited between admission and spin leaves the frozen mapping i
 	// The spin still rewards under the frozen rules (never the live engagement
 	// edit), and the winner is one of the frozen candidate items.
 	const result = await spin(f.t, capability);
-	expect(result.outcome.kind).toBe("reward");
-	expect(["voucher", "points"]).toContain(result.outcome.rewardType);
-	expect([f.itemIds[0], f.itemIds[1]]).toContain(result.outcome.segmentKey);
+	expect(expectOutcome(result).kind).toBe("reward");
+	expect(["voucher", "points"]).toContain(expectOutcome(result).rewardType);
+	expect([f.itemIds[0], f.itemIds[1]]).toContain(expectOutcome(result).segmentKey);
 });
 
 test("slot: pool items added after admission can never win a frozen session", async () => {
@@ -376,16 +393,16 @@ test("slot: pool items added after admission can never win a frozen session", as
 	});
 	const result = await spin(f.t, capability);
 	// Deterministic: with the newcomer excluded, the only candidate wins.
-	expect(result.outcome.kind).toBe("reward");
-	expect(result.outcome.segmentKey).toBe(f.itemIds[0]);
+	expect(expectOutcome(result).kind).toBe("reward");
+	expect(expectOutcome(result).segmentKey).toBe(f.itemIds[0]);
 });
 
 test("slot: engagement mode keeps stocked inventory untouched", async () => {
 	const f = await fixture({ itemWeights: [1, 1], stock: 5, rewardMode: "engagement" });
 	const { capability } = await admit(f.t, f.shareCode, "0123456789abcdef0123456789abcdef");
 	const result = await spin(f.t, capability);
-	expect(result.outcome.kind).toBe("no-reward");
-	expect(result.outcome.canClaim).toBe(false);
+	expect(expectOutcome(result).kind).toBe("no-reward");
+	expect(expectOutcome(result).canClaim).toBe(false);
 	const remaining = await f.t.run(async (ctx) => {
 		const rows = await ctx.db.query("rewardInventory").collect();
 		return rows.filter((row) => row.campaignId === f.campaignId).map((row) => row.quantityRemaining);
@@ -399,7 +416,7 @@ test("slot: public snapshot and outcome stay secret-free before the claim", asyn
 	const f = await fixture({ itemWeights: [1], stock: 5 });
 	const { capability } = await admit(f.t, f.shareCode, "0123456789abcdef0123456789abcdef");
 	const result = await spin(f.t, capability);
-	expect(result.outcome.canClaim).toBe(true);
+	expect(expectOutcome(result).canClaim).toBe(true);
 	const snapshot = await f.t.query(api.publicPlay.getPublicSessionSnapshot, capability);
 	expect(JSON.stringify(snapshot)).not.toContain("SLOT-SECRET-CODE");
 	const outcome = await f.t.query(api.publicPlay.getPublicSessionOutcome, capability);

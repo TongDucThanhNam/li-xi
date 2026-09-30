@@ -2,10 +2,11 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
 import {
-	campaignGameConfigValidator,
-	campaignGamePlayLimitsValidator,
-	gameTemplateIdValidator,
+  campaignGameConfigValidator,
+  campaignGamePlayLimitsValidator,
+  gameTemplateIdValidator,
 } from "./gameTemplateValues";
+import { CAMPAIGN_ASSET_USAGES } from "../lib/assetPolicy";
 
 const rewardTypeValidator = v.union(
 	v.literal("cash"),
@@ -77,6 +78,14 @@ export default defineSchema({
     slug: v.string(),
     brandName: v.optional(v.string()),
     description: v.optional(v.string()),
+    // Brand identity (workspace metadata only — never injected into guest
+    // stages; see docs/product-direction.md). Color is a validated #RGB/
+    // #RRGGBB hex string; audience tags are the closed lib set plus an
+    // optional free-text note.
+    brandColor: v.optional(v.string()),
+    logoAssetId: v.optional(v.id("campaignAssets")),
+    audienceTags: v.optional(v.array(v.string())),
+    audienceNote: v.optional(v.string()),
     claimHeadline: v.optional(v.string()),
     claimSubtitle: v.optional(v.string()),
     claimCtaLabel: v.optional(v.string()),
@@ -98,6 +107,12 @@ export default defineSchema({
     config: campaignGameConfigValidator,
     name: v.optional(v.string()),
     playLimits: v.optional(campaignGamePlayLimitsValidator),
+    // Optional play window (epoch ms, both independently optional). Enforced
+    // server-side at every new-session admission (public link resolution +
+    // the shared admission core); an admitted in-flight session may still
+    // finish after `endsAt` under its frozen snapshot.
+    startsAt: v.optional(v.number()),
+    endsAt: v.optional(v.number()),
     // Admission accounting readiness gate: 1 = the per-game session aggregate
     // is authoritative; absent/0 = historical rows require the maintenance
     // backfill before new admissions are trusted.
@@ -175,6 +190,11 @@ export default defineSchema({
           startCtaLabel: v.string(),
           collectCtaLabel: v.string(),
           waitingMessage: v.string(),
+          // Optional so snapshots frozen before the two fields existed still
+          // validate; admitted sessions keep rendering the built-in defaults
+          // when the fields are absent.
+          thankYouMessage: v.optional(v.string()),
+          claimInstructions: v.optional(v.string()),
         }),
         wheelSegments: v.optional(
           v.array(v.object({ key: v.string(), label: v.string() })),
@@ -241,6 +261,11 @@ export default defineSchema({
     ),
     status: v.union(v.literal("active"), v.literal("completed"), v.literal("cancelled")),
     outcomeId: v.optional(v.id("rewardOutcomes")),
+    // Station result handling: set when the host collects ("Hoàn tất") or
+    // PIN-dismisses a completed station session's result. Additive and
+    // optional — completed station sessions whose rewarded outcome was never
+    // handled resurface as recoverable on the owner's station page.
+    resultAcknowledgedAt: v.optional(v.number()),
     startedAt: v.number(),
     completedAt: v.optional(v.number()),
     createdAt: v.number(),
@@ -304,11 +329,18 @@ export default defineSchema({
     channel: v.union(v.literal("public-link"), v.literal("station")),
     channelLabel: v.optional(v.string()),
     fulfilmentState: v.union(v.literal("pending"), v.literal("fulfilled")),
+    // Owner fulfilment audit, written only by the workspace actions
+    // markRewardClaimFulfilled / undoRewardClaimFulfilment. Additive and
+    // optional; no reward_fulfilled analytics metric is derived from them.
+    fulfilledAt: v.optional(v.number()),
+    fulfilledBy: v.optional(v.id("users")),
     claimedAt: v.number(),
   })
     .index("by_outcome", ["outcomeId"])
     .index("by_campaign_claimedAt", ["campaignId", "claimedAt"])
-    .index("by_campaign_game_claimedAt", ["campaignId", "campaignGameId", "claimedAt"]),
+    .index("by_campaign_game_claimedAt", ["campaignId", "campaignGameId", "claimedAt"])
+    .index("by_campaign_fulfilmentState_claimedAt", ["campaignId", "fulfilmentState", "claimedAt"])
+    .index("by_campaign_channel_claimedAt", ["campaignId", "channel", "claimedAt"]),
 
   publicPlayLinks: defineTable({
     ownerId: v.id("users"),
@@ -347,7 +379,14 @@ export default defineSchema({
         v.literal("rejected")
       )
     ),
-    usage: v.optional(v.literal("hero")),
+    usage: v.optional(
+      v.union(...CAMPAIGN_ASSET_USAGES.map((usage) => v.literal(usage))),
+    ),
+    // Owning game instance for the per-game template slots (usage `game-*`).
+    // The attached (status, usage, campaignGameId) row IS the slot pointer:
+    // reads resolve the current slot image from this index, so no extra
+    // pointer column is needed. Absent for campaign-level kinds.
+    campaignGameId: v.optional(v.id("campaignGames")),
     validatedAt: v.optional(v.number()),
     createdAt: v.number(),
   })
@@ -362,6 +401,7 @@ export default defineSchema({
       "status",
       "createdAt",
     ])
+    .index("by_game_usage", ["campaignGameId", "usage"])
     .index("by_key", ["key"])
     .index("by_key_owner", ["key", "ownerId"]),
 
@@ -385,6 +425,11 @@ export default defineSchema({
       v.literal("public_play_link_open"),
     ),
     source: v.union(v.literal("live"), v.literal("backfill")),
+    // Readiness stamp for the per-game/channel/share-link counter scopes:
+    // 1 = every scope carried by this row has been incremented exactly once
+    // (live insert or channel-link backfill). Absent = pre-scope row that
+    // backfillOwnerChannelLinkCounters still needs to count.
+    counterScopesVersion: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_eventKey", ["eventKey"])

@@ -15,6 +15,7 @@ function draft(overrides: Partial<GameEditorDraft> = {}): GameEditorDraft {
 		config: wheelConfig,
 		gameStatus: "draft",
 		playLimits: { maxSessionsPerParticipant: 1, maxTotalSessions: null },
+		schedule: { startsAt: null, endsAt: null },
 		...overrides,
 	};
 }
@@ -54,6 +55,21 @@ describe("complete editor draft baseline", () => {
 				baseline,
 			),
 		).toBe(true);
+	});
+
+	test("a schedule-only change makes the editor dirty and reverting restores clean", () => {
+		const baseline = serializeEditorDraft(draft());
+		const scheduled = draft({
+			schedule: { startsAt: 1760000000000, endsAt: 1760100000000 },
+		});
+		expect(isEditorDirty(scheduled, baseline)).toBe(true);
+		// Clearing the window back to the loaded state is clean again.
+		expect(
+			isEditorDirty(
+				draft({ schedule: { startsAt: null, endsAt: null } }),
+				baseline,
+			),
+		).toBe(false);
 	});
 
 	test("a slower save never marks a newer unsaved edit clean", () => {

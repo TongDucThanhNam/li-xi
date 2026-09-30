@@ -21,7 +21,30 @@ export type GamePublicCopy = {
 	startCtaLabel: string;
 	collectCtaLabel: string;
 	waitingMessage: string;
+	/**
+	 * Shown on the Finish/completion surface. Optional so rows/snapshots
+	 * written before the field existed still read; empty/absent renders the
+	 * built-in default.
+	 */
+	thankYouMessage?: string;
+	/** Shown with a claimed voucher code. Empty/absent = built-in default. */
+	claimInstructions?: string;
 };
+
+/**
+ * Built-in guest copy for the two configurable fields. Server and guest
+ * fallbacks must keep these exact strings so existing configs that never
+ * set the fields render unchanged.
+ */
+export const DEFAULT_PUBLIC_THANK_YOU_MESSAGE = "Cảm ơn bạn đã tham gia trải nghiệm của chúng tôi!";
+export const DEFAULT_PUBLIC_CLAIM_INSTRUCTIONS =
+	"Lưu lại mã này để đổi thưởng với nhân viên chiến dịch.";
+
+/** Empty/whitespace copy falls back to the built-in default at render time. */
+export function resolvePublicCopyField(value: string | null | undefined, fallback: string): string {
+	const trimmed = value?.trim();
+	return trimmed ? trimmed : fallback;
+}
 
 /** Where a game's rewards come from — independent of the template mechanics. */
 export type GameRewardSource = "campaign-budget" | "campaign-inventory";
@@ -410,7 +433,13 @@ export type GameTemplateCatalogEntry = {
 	description: string;
 	/** Legacy station surface for li xi; public entry root for newer templates. */
 	routePath: "/draw" | "/p";
-	stationMode: "legacy-host-pin" | "public-self-serve";
+	/**
+	 * Station capability per template: li xi keeps its legacy host-PIN
+	 * operator flow; lucky-wheel and scratch-card self-admit sessions on the
+	 * owner's station page; quiz and slot stay public-link-only and fail
+	 * closed on station routes.
+	 */
+	stationMode: "legacy-host-pin" | "public-self-serve" | "self-serve-station";
 	configSchema: {
 		version: number;
 		fields: readonly string[];
@@ -454,6 +483,8 @@ export const liXiDefaultGameConfig = {
 		startCtaLabel: "",
 		collectCtaLabel: "",
 		waitingMessage: "",
+		thankYouMessage: "",
+		claimInstructions: "",
 	},
 } as const satisfies LiXiGameConfig;
 
@@ -475,6 +506,8 @@ export const luckyWheelDefaultGameConfig = {
 		startCtaLabel: "",
 		collectCtaLabel: "",
 		waitingMessage: "",
+		thankYouMessage: "",
+		claimInstructions: "",
 	},
 } as const satisfies LuckyWheelGameConfig;
 
@@ -486,6 +519,8 @@ export const luckyWheelInitialCampaignGameConfig = {
 		startCtaLabel: "Quay ngay",
 		collectCtaLabel: "Nhận quà",
 		waitingMessage: "Đang chuẩn bị vòng quay",
+		thankYouMessage: "",
+	claimInstructions: "",
 	},
 } as const satisfies LuckyWheelGameConfig;
 
@@ -503,6 +538,8 @@ export const scratchCardDefaultGameConfig = {
 		startCtaLabel: "",
 		collectCtaLabel: "",
 		waitingMessage: "",
+		thankYouMessage: "",
+		claimInstructions: "",
 	},
 } as const satisfies ScratchCardGameConfig;
 
@@ -514,6 +551,8 @@ export const scratchCardInitialCampaignGameConfig = {
 		startCtaLabel: "Bắt đầu",
 		collectCtaLabel: "Nhận quà",
 		waitingMessage: "Đang chuẩn bị thẻ cào",
+		thankYouMessage: "",
+	claimInstructions: "",
 	},
 } as const satisfies ScratchCardGameConfig;
 
@@ -530,6 +569,8 @@ export const slotRevealDefaultGameConfig = {
 		startCtaLabel: "",
 		collectCtaLabel: "",
 		waitingMessage: "",
+		thankYouMessage: "",
+		claimInstructions: "",
 	},
 } as const satisfies SlotRevealGameConfig;
 
@@ -541,6 +582,8 @@ export const slotRevealInitialCampaignGameConfig = {
 		startCtaLabel: "Quay ngay",
 		collectCtaLabel: "Nhận quà",
 		waitingMessage: "Đang chuẩn bị máy quay",
+		thankYouMessage: "",
+	claimInstructions: "",
 	},
 } as const satisfies SlotRevealGameConfig;
 
@@ -564,6 +607,8 @@ export const quizDefaultGameConfig = {
 		startCtaLabel: "",
 		collectCtaLabel: "",
 		waitingMessage: "",
+		thankYouMessage: "",
+		claimInstructions: "",
 	},
 } as const satisfies QuizGameConfig;
 
@@ -575,6 +620,8 @@ export const quizInitialCampaignGameConfig = {
 		startCtaLabel: "Bắt đầu",
 		collectCtaLabel: "Nhận quà",
 		waitingMessage: "Đang chuẩn bị câu hỏi",
+		thankYouMessage: "",
+	claimInstructions: "",
 	},
 } as const satisfies QuizGameConfig;
 
@@ -617,7 +664,7 @@ export const gameTemplates = {
 		name: "Thẻ cào may mắn",
 		description: "Thẻ cào gỡ lớp phủ với phần thưởng được máy chủ công bố một lần duy nhất.",
 		routePath: "/p",
-		stationMode: "public-self-serve",
+		stationMode: "self-serve-station",
 		configSchema: {
 			version: 2,
 			fields: [
@@ -720,7 +767,7 @@ export const gameTemplates = {
 		name: "Vòng quay may mắn",
 		description: "Vòng quay trúng thưởng nhiều ô với tỉ lệ và kho phần thưởng riêng của chiến dịch.",
 		routePath: "/p",
-		stationMode: "public-self-serve",
+		stationMode: "self-serve-station",
 		configSchema: {
 			version: 2,
 			fields: [
@@ -752,6 +799,41 @@ export const gameTemplates = {
 
 export function isGameTemplateId(value: string | null | undefined): value is GameTemplateId {
 	return gameTemplateIds.includes(value as GameTemplateId);
+}
+
+export type GameStationMode = GameTemplateCatalogEntry["stationMode"];
+
+/** Station capability is a per-template catalog fact, never client state. */
+export function stationModeForTemplate(templateId: GameTemplateId): GameStationMode {
+	return gameTemplates[templateId].stationMode;
+}
+
+/**
+ * A template may self-admit station sessions only through the catalog
+ * mode; the reward-source half of the gate (campaign-inventory) is checked
+ * separately because it is per-game config, not a template fact.
+ */
+export function supportsSelfServeStation(templateId: GameTemplateId): boolean {
+	return stationModeForTemplate(templateId) === "self-serve-station";
+}
+
+/**
+ * Row-level station gate for a concrete campaign game: template catalog
+ * mode AND per-game inventory reward source. Unknown template ids fail
+ * closed; the same rule is enforced server-side in convex/stationPlay.ts.
+ */
+export function supportsSelfServeStationGame(
+	templateId: string,
+	config: CampaignGameConfig,
+): boolean {
+	try {
+		return (
+			supportsSelfServeStation(requireGameTemplateId(templateId)) &&
+			configRewardSource(config) === "campaign-inventory"
+		);
+	} catch {
+		return false;
+	}
 }
 
 /** Legacy surfaces may fall back to li xi; generic routes must use requireGameTemplateId. */
@@ -1039,13 +1121,33 @@ export function isQuizGameConfig(
 	return configTemplateId(config) === "quiz";
 }
 
+/**
+ * Single source of the publicCopy character bounds, shared by the config
+ * normalizer and every template's editor section so the editor can never
+ * drift from what the server accepts.
+ */
+export const PUBLIC_COPY_BOUNDS = {
+	headline: 80,
+	subtitle: 140,
+	startCtaLabel: 28,
+	collectCtaLabel: 28,
+	waitingMessage: 80,
+	thankYouMessage: 80,
+	claimInstructions: 140,
+} as const;
+
 function normalizePublicCopy(copy?: Partial<GamePublicCopy>): GamePublicCopy {
 	return {
-		headline: copy?.headline?.trim().slice(0, 80) || "",
-		subtitle: copy?.subtitle?.trim().slice(0, 140) || "",
-		startCtaLabel: copy?.startCtaLabel?.trim().slice(0, 28) || "",
-		collectCtaLabel: copy?.collectCtaLabel?.trim().slice(0, 28) || "",
-		waitingMessage: copy?.waitingMessage?.trim().slice(0, 80) || "",
+		headline: copy?.headline?.trim().slice(0, PUBLIC_COPY_BOUNDS.headline) || "",
+		subtitle: copy?.subtitle?.trim().slice(0, PUBLIC_COPY_BOUNDS.subtitle) || "",
+		startCtaLabel: copy?.startCtaLabel?.trim().slice(0, PUBLIC_COPY_BOUNDS.startCtaLabel) || "",
+		collectCtaLabel: copy?.collectCtaLabel?.trim().slice(0, PUBLIC_COPY_BOUNDS.collectCtaLabel) || "",
+		waitingMessage: copy?.waitingMessage?.trim().slice(0, PUBLIC_COPY_BOUNDS.waitingMessage) || "",
+		// Message-class bound (matches waitingMessage); instruction sentences
+		// use the subtitle-class bound. Existing rows without the fields
+		// normalize to "" and keep rendering the built-in defaults.
+		thankYouMessage: copy?.thankYouMessage?.trim().slice(0, PUBLIC_COPY_BOUNDS.thankYouMessage) || "",
+		claimInstructions: copy?.claimInstructions?.trim().slice(0, PUBLIC_COPY_BOUNDS.claimInstructions) || "",
 	};
 }
 

@@ -11,6 +11,61 @@ export const CAMPAIGN_ASSET_ALLOWED_CONTENT_TYPES = [
 
 export const CAMPAIGN_ASSET_ALLOWED_TYPES_LABEL = "JPG, PNG, WebP, GIF hoặc AVIF";
 
+/**
+ * Declared campaign-asset usages. `"hero"` is the campaign-level hero the
+ * draw-era flow already consumes; `"brand-logo"` is campaign brand identity
+ * (workspace metadata); the `game-*` kinds are per-game template slots, each
+ * owned by exactly one campaign game. Adding a kind is additive: schema,
+ * policy limits and the game-editor panel read this table.
+ */
+export const CAMPAIGN_ASSET_USAGES = [
+  "hero",
+  "brand-logo",
+  "game-wheel-hub",
+  "game-quiz-backdrop",
+] as const;
+
+export type CampaignAssetUsage = (typeof CAMPAIGN_ASSET_USAGES)[number];
+
+/** Per-game kinds: every `game-*` usage binds its asset row to one game. */
+export const CAMPAIGN_GAME_ASSET_USAGES: readonly CampaignAssetUsage[] =
+  CAMPAIGN_ASSET_USAGES.filter((usage) => usage.startsWith("game-"));
+
+export function isCampaignAssetUsage(value: string | null | undefined): value is CampaignAssetUsage {
+  return (CAMPAIGN_ASSET_USAGES as readonly string[]).includes(value ?? "");
+}
+
+export function isCampaignGameAssetUsage(
+  value: string | null | undefined,
+): value is Exclude<CampaignAssetUsage, "hero" | "brand-logo"> {
+  return typeof value === "string" && value.startsWith("game-") && isCampaignAssetUsage(value);
+}
+
+/** Kind-parameterized size ceilings with the operator-facing Vietnamese labels. */
+export const CAMPAIGN_ASSET_USAGE_LIMITS: Record<
+  CampaignAssetUsage,
+  { maxBytes: number; label: string; sizeLabel: string }
+> = {
+  hero: { maxBytes: CAMPAIGN_ASSET_MAX_BYTES, label: "Ảnh hero", sizeLabel: CAMPAIGN_ASSET_MAX_BYTES_LABEL },
+  "brand-logo": { maxBytes: 2 * 1024 * 1024, label: "Logo thương hiệu", sizeLabel: "2 MB" },
+  "game-wheel-hub": {
+    maxBytes: CAMPAIGN_ASSET_MAX_BYTES,
+    label: "Ảnh tâm vòng quay",
+    sizeLabel: CAMPAIGN_ASSET_MAX_BYTES_LABEL,
+  },
+  "game-quiz-backdrop": {
+    maxBytes: CAMPAIGN_ASSET_MAX_BYTES,
+    label: "Ảnh nền trắc nghiệm",
+    sizeLabel: CAMPAIGN_ASSET_MAX_BYTES_LABEL,
+  },
+};
+
+export function campaignAssetUsageLimit(usage: string | null | undefined) {
+  return CAMPAIGN_ASSET_USAGE_LIMITS[
+    isCampaignAssetUsage(usage) ? usage : "hero"
+  ];
+}
+
 export type CampaignAssetContentType = (typeof CAMPAIGN_ASSET_ALLOWED_CONTENT_TYPES)[number];
 
 export type CampaignAssetRenderCandidate = {
@@ -21,6 +76,7 @@ export type CampaignAssetRenderCandidate = {
   validatedAt?: number;
   size?: number;
   contentType?: string | null;
+  usage?: string | null;
 };
 
 export function normalizeR2ObjectKey(key: string | null | undefined) {
@@ -112,9 +168,12 @@ export function validateCampaignAssetPolicy(input: {
   contentType?: string | null;
   fileName?: string | null;
   size?: number | null;
+  /** Asset kind; defaults to the campaign hero so the legacy path is untouched. */
+  usage?: string | null;
 }) {
   const contentType = normalizeAssetContentType(input.contentType);
   const size = input.size;
+  const limit = campaignAssetUsageLimit(input.usage);
   if (!isAllowedCampaignAssetContentType(contentType)) {
     throw new Error(`Chỉ hỗ trợ ảnh ${CAMPAIGN_ASSET_ALLOWED_TYPES_LABEL}`);
   }
@@ -123,8 +182,8 @@ export function validateCampaignAssetPolicy(input: {
     throw new Error("Không đọc được dung lượng ảnh upload");
   }
 
-  if (size > CAMPAIGN_ASSET_MAX_BYTES) {
-    throw new Error(`Ảnh hero tối đa ${CAMPAIGN_ASSET_MAX_BYTES_LABEL}`);
+  if (size > limit.maxBytes) {
+    throw new Error(`${limit.label} tối đa ${limit.sizeLabel}`);
   }
 
   return {
@@ -153,7 +212,10 @@ export function isRenderableCampaignAssetRecord(
       typeof asset.size === "number" &&
       Number.isSafeInteger(asset.size) &&
       asset.size > 0 &&
-      asset.size <= CAMPAIGN_ASSET_MAX_BYTES &&
+      (asset.usage && asset.usage !== "hero"
+        ? // Per-game slots and the brand logo carry their own ceilings.
+          asset.size <= campaignAssetUsageLimit(asset.usage).maxBytes
+        : asset.size <= CAMPAIGN_ASSET_MAX_BYTES) &&
       isAllowedCampaignAssetContentType(asset.contentType)
   );
 }

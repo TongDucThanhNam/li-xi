@@ -22,6 +22,11 @@ export const gamePublicCopyValidator = v.object({
 	startCtaLabel: v.string(),
 	collectCtaLabel: v.string(),
 	waitingMessage: v.string(),
+	// Optional for backward compatibility: rows written before the two fields
+	// existed still validate; normalizeCampaignGameConfigForTemplate fills
+	// them with "" on every write path.
+	thankYouMessage: v.optional(v.string()),
+	claimInstructions: v.optional(v.string()),
 });
 
 export const gameRewardSourceValidator = v.union(

@@ -13,6 +13,9 @@ export type GameFunnelMetric = Exclude<
   "session_created" | "redemption_created"
 >;
 
+/** Attribution channel carried by generic play events. */
+export type RewardChannel = "public-link" | "station";
+
 export type ExistingAnalyticsCounterEvent = {
   ownerId: string;
   campaignId?: string;
@@ -86,10 +89,61 @@ export function shareLinkCounterEventKey(
   return `share-open:${shareLinkId}:${openKey}:${metric}`;
 }
 
+/**
+ * Station waiting-screen opens. One stable client-generated key per
+ * waiting-screen mount, so a retried (or replayed) open can never double
+ * count; namespaced separately from share-link opens because a station has
+ * no share link.
+ */
+export function stationOpenCounterEventKey(
+  campaignGameId: string,
+  openKey: string,
+  metric: Extract<GameFunnelMetric, "game_open">,
+) {
+  assertNonEmptyAnalyticsId(campaignGameId, "campaignGameId");
+  assertNonEmptyAnalyticsId(openKey, "openKey");
+  return `station-open:${campaignGameId}:${openKey}:${metric}`;
+}
+
 export function campaignGameMetricKey(campaignGameId: string, metric: AnalyticsMetric) {
   assertNonEmptyAnalyticsId(campaignGameId, "campaignGameId");
   return `campaign-game:${campaignGameId}:${metric}`;
 }
+
+/** Per-campaign channel funnel counters (public-link vs station). */
+export function campaignChannelMetricKey(
+  campaignId: string,
+  channel: RewardChannel,
+  metric: AnalyticsMetric
+) {
+  assertNonEmptyAnalyticsId(campaignId, "campaignId");
+  return `campaign-channel:${campaignId}:${channel}:${metric}`;
+}
+
+/** Per-game channel funnel counters (public-link vs station). */
+export function gameChannelMetricKey(
+  campaignGameId: string,
+  channel: RewardChannel,
+  metric: AnalyticsMetric
+) {
+  assertNonEmptyAnalyticsId(campaignGameId, "campaignGameId");
+  return `game-channel:${campaignGameId}:${channel}:${metric}`;
+}
+
+/** Per-share-link funnel counters. */
+export function shareLinkMetricKey(shareLinkId: string, metric: AnalyticsMetric) {
+  assertNonEmptyAnalyticsId(shareLinkId, "shareLinkId");
+  return `share-link:${shareLinkId}:${metric}`;
+}
+
+/**
+ * Readiness stamp written onto an analytics event row once every counter
+ * scope it carries (per-game, per-channel, per-share-link) has been
+ * incremented exactly once — live inserts stamp immediately, and
+ * backfillOwnerChannelLinkCounters stamps rows it initializes, so replays of
+ * either path can never double count.
+ */
+export const COUNTER_SCOPES_VERSION = 1;
 
 
 export function rewardCounterEventKey(

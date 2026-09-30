@@ -7,6 +7,7 @@ import { describe, expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { FunctionReturnType } from "convex/server";
 import schema from "./schema";
 import {
 	buildLuckyWheelGameConfig,
@@ -17,6 +18,22 @@ import {
 	luckyWheelInitialCampaignGameConfig,
 } from "../lib/gameTemplates";
 import { modules } from "./test.setup";
+
+type PlayActionReply = FunctionReturnType<typeof api.publicPlay.playSessionAction>;
+
+/**
+ * Narrows a play-action reply to its completed outcome, failing loudly
+ * otherwise: the mutation reply is a union where quiz step states carry no
+ * outcome, and these tests only assert completed plays.
+ */
+function expectOutcome(
+	result: PlayActionReply,
+): NonNullable<PlayActionReply["outcome"]> {
+	if (!result.outcome) {
+		throw new Error("Expected a completed play result with an outcome");
+	}
+	return result.outcome;
+}
 
 function registerComponents(testContext: ReturnType<typeof convexTest>) {
 	aggregateTest.register(testContext);
@@ -230,7 +247,7 @@ describe("session admission and recovery", () => {
 			sessionToken: first.sessionToken,
 			action: { type: "spin" },
 		});
-		expect(action.outcome.kind).toBe("reward");
+		expect(expectOutcome(action).kind).toBe("reward");
 	});
 
 	test("start keys recover a lost first response instead of duplicating sessions", async () => {
@@ -307,8 +324,8 @@ describe("session admission and recovery", () => {
 			...capability,
 			action: { type: "spin" },
 		});
-		expect(result.outcome.kind).toBe("reward");
-		expect(result.outcome.segmentKey).not.toBeNull();
+		expect(expectOutcome(result).kind).toBe("reward");
+		expect(expectOutcome(result).segmentKey).not.toBeNull();
 
 		// Refresh after award, before claim.
 		await expect(t.query(api.publicPlay.getPublicSessionOutcome, capability)).resolves.toMatchObject({
@@ -356,7 +373,7 @@ describe("awarded inventory and claims", () => {
 			...capability,
 			action: { type: "spin" },
 		});
-		expect(result.outcome.rewardType).toBe("voucher");
+		expect(expectOutcome(result).rewardType).toBe("voucher");
 
 		// Owner edits are safely rejected while stock has been awarded; the
 		// claim then recovers the ORIGINAL details from the award snapshot.
@@ -762,13 +779,13 @@ describe("public play foundation", () => {
 		]);
 
 		const winners = [firstResult, secondResult].filter(
-			(result) => result.outcome.kind === "reward",
+			(result) => expectOutcome(result).kind === "reward",
 		);
 		expect(winners).toHaveLength(1);
-		const loser = firstResult.outcome.kind === "no-reward" ? firstResult : secondResult;
-		expect(loser.outcome.kind).toBe("no-reward");
-		expect(loser.outcome.label).toContain("Phần thưởng đã hết");
-		expect(loser.outcome.canClaim).toBe(false);
+		const loser = expectOutcome(firstResult).kind === "no-reward" ? firstResult : secondResult;
+		expect(expectOutcome(loser).kind).toBe("no-reward");
+		expect(expectOutcome(loser).label).toContain("Phần thưởng đã hết");
+		expect(expectOutcome(loser).canClaim).toBe(false);
 
 		const state = await t.run(async (ctx) => {
 			return {
@@ -953,8 +970,8 @@ describe("public play foundation", () => {
 			sessionToken: session.sessionToken,
 			action: { type: "spin" },
 		});
-		expect(result.outcome.kind).toBe("no-reward");
-		expect(result.outcome.label).toContain("Phần thưởng đã hết");
+		expect(expectOutcome(result).kind).toBe("no-reward");
+		expect(expectOutcome(result).label).toContain("Phần thưởng đã hết");
 
 		await expect(
 			t.mutation(api.publicPlay.claimPublicReward, {
@@ -1140,7 +1157,7 @@ describe("public play foundation", () => {
 			sessionToken: session.sessionToken,
 			action: { type: "spin" },
 		});
-		expect(result.outcome.label).toBe("Quà pool A");
+		expect(expectOutcome(result).label).toBe("Quà pool A");
 	});
 
 	test("campaigns stay independently active and the preferred default pointer changes nothing else", async () => {
@@ -1831,7 +1848,7 @@ describe("reward accounting initialization", () => {
 			...capability,
 			action: { type: "spin" },
 		});
-		expect(result.outcome.kind).toBe("reward");
+		expect(expectOutcome(result).kind).toBe("reward");
 		await t.mutation(api.publicPlay.claimPublicReward, capability);
 
 		const plan = await asOwner.query(api.entitlements.getPlanState, {});
@@ -1911,7 +1928,7 @@ describe("reward accounting initialization", () => {
 			sessionToken: started.sessionToken,
 			action: { type: "spin" },
 		});
-		expect(result.outcome.kind).toBe("reward");
+		expect(expectOutcome(result).kind).toBe("reward");
 		const finalPlan = await asOwner.query(api.entitlements.getPlanState, {});
 		expect(finalPlan.usage.redemptions).toBe(3);
 	});
@@ -2715,7 +2732,7 @@ describe("game and reward entitlements", () => {
 			sessionToken: started.sessionToken,
 			action: { type: "spin" },
 		});
-		expect(result.outcome.kind).toBe("no-reward");
+		expect(expectOutcome(result).kind).toBe("no-reward");
 
 		const unchanged = await asOwner.query(api.entitlements.getPlanState, {});
 		expect(unchanged.usage.redemptions).toBe(legacyLimit);

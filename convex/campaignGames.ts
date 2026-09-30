@@ -28,11 +28,18 @@ import {
 	requireGameTemplateId,
 	type CampaignGameConfig,
 } from "../lib/gameTemplates";
+import { assertValidScheduleWindow, normalizeScheduleWindow } from "../lib/schedulePolicy";
 
 type ConvexCtx = QueryCtx | MutationCtx;
 
 const MAX_GAMES_PER_CAMPAIGN = 12;
 const MAX_GAME_NAME_LENGTH = 60;
+
+/** Write-path args for the optional play window; both bounds independent. */
+const scheduleArgs = {
+	startsAt: v.optional(v.number()),
+	endsAt: v.optional(v.number()),
+};
 
 /**
  * Normalizes any stored config variant (legacy or tagged) into the tagged
@@ -163,6 +170,7 @@ export const createCampaignGame = mutation({
 		name: v.optional(v.string()),
 		config: campaignGameConfigValidator,
 		playLimits: v.optional(campaignGamePlayLimitsValidator),
+		...scheduleArgs,
 		status: v.union(v.literal("draft"), v.literal("active")),
 	},
 	handler: async (ctx, args) => {
@@ -187,6 +195,7 @@ export const createCampaignGame = mutation({
 		const templateId = requireGameTemplateId(args.templateId);
 		const config = normalizeCampaignGameConfigForTemplate(templateId, args.config);
 		const playLimits = normalizePlayLimits(args.playLimits);
+		const schedule = assertValidScheduleWindow(args);
 		const name = args.name?.trim().replace(/\s+/g, " ").slice(0, MAX_GAME_NAME_LENGTH) || defaultCampaignGameName(templateId);
 		const now = Date.now();
 
@@ -197,6 +206,8 @@ export const createCampaignGame = mutation({
 			config,
 			name,
 			playLimits,
+			startsAt: schedule.startsAt,
+			endsAt: schedule.endsAt,
 			// New games start with an empty session set: admission accounting is
 			// exact from creation.
 			accountingVersion: 1,
@@ -219,6 +230,7 @@ export const updateCampaignGame = mutation({
 		name: v.optional(v.string()),
 		config: campaignGameConfigValidator,
 		playLimits: v.optional(campaignGamePlayLimitsValidator),
+		...scheduleArgs,
 		status: v.optional(v.union(v.literal("draft"), v.literal("active"), v.literal("archived"))),
 	},
 	handler: async (ctx, args) => {
@@ -230,6 +242,9 @@ export const updateCampaignGame = mutation({
 
 		const config = normalizeCampaignGameConfigForTemplate(campaignGame.templateId, args.config);
 		const playLimits = normalizePlayLimits(args.playLimits ?? campaignGame.playLimits);
+		// The window is stored whole: an omitted bound clears it (undefined),
+		// so partial editors never leave one stale half of a window behind.
+		const schedule = assertValidScheduleWindow(args);
 		const name =
 			args.name === undefined
 				? campaignGame.name ?? defaultCampaignGameName(campaignGame.templateId)
@@ -240,6 +255,8 @@ export const updateCampaignGame = mutation({
 			config,
 			playLimits,
 			name,
+			startsAt: schedule.startsAt,
+			endsAt: schedule.endsAt,
 			...(args.status !== undefined ? { status: args.status } : {}),
 			updatedAt: Date.now(),
 		});
@@ -271,6 +288,7 @@ export const getCampaignGameAdminContext = query({
 				name: campaignGame.name ?? defaultCampaignGameName(campaignGame.templateId),
 				config: campaignGame.config,
 				playLimits: normalizePlayLimits(campaignGame.playLimits),
+				schedule: normalizeScheduleWindow(campaignGame),
 				status: campaignGame.status,
 			},
 		};

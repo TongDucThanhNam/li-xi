@@ -5,12 +5,14 @@ import { requireResolvedOwner } from "./authorization";
 import {
   assertCampaignAssetBucketMatchesConfigured,
   getRenderableCampaignAssetUrl,
+  getRenderableCampaignGameAssets,
   getOwnedAssetsByKey,
   getUniqueOwnedCampaignAssetByKey,
   isRenderableCampaignAsset,
   rejectAmbiguousOwnedAssets,
   rejectCampaignAssetAndScheduleObjectDelete,
   r2,
+  clearCampaignAssetRole,
 } from "./assets";
 import {
   ensureDefaultCampaignGame,
@@ -22,6 +24,7 @@ import {
   isLiXiGameConfig,
   normalizePlayLimits,
 } from "../lib/gameTemplates";
+import { normalizeScheduleWindow } from "../lib/schedulePolicy";
 import {
   DEFAULT_CAMPAIGN_BRAND,
   DEFAULT_CAMPAIGN_DESCRIPTION,
@@ -40,12 +43,17 @@ import {
   ensureHostProfileForOwner,
   getHostProfileForOwner,
 } from "./hostProfiles";
+import { campaignGameConfigValidator, campaignStyleVariantValidator, gameTemplateIdValidator } from "./gameTemplateValues";
 import {
-  campaignGameConfigValidator,
-  campaignStyleVariantValidator,
-  gameTemplateIdValidator,
-} from "./gameTemplateValues";
-import { validateCampaignAssetPolicy } from "../lib/assetPolicy";
+  isCampaignAssetUsage,
+  isCampaignGameAssetUsage,
+  validateCampaignAssetPolicy,
+} from "../lib/assetPolicy";
+import {
+  normalizeCampaignAudienceTags,
+  normalizeCampaignBrandColor,
+  CAMPAIGN_AUDIENCE_NOTE_MAX_LENGTH,
+} from "../lib/brandIdentity";
 import { gameTemplates } from "../lib/gameTemplates";
 
 const campaignThemeValidator = campaignStyleVariantValidator;
@@ -115,6 +123,18 @@ async function campaignView(ctx: QueryCtx, campaignId: Id<"campaigns">) {
     ? await getRenderableCampaignAssetUrl(ctx, campaign.ownerId, heroAsset.key, campaign._id)
     : null;
 
+  const logoAssetCandidate = campaign.logoAssetId
+    ? await ctx.db.get(campaign.logoAssetId)
+    : null;
+  const logoAsset =
+    isRenderableCampaignAsset(logoAssetCandidate, campaign.ownerId) &&
+    logoAssetCandidate.campaignId === campaign._id
+      ? logoAssetCandidate
+      : null;
+  const logoAssetUrl = logoAsset
+    ? await getRenderableCampaignAssetUrl(ctx, campaign.ownerId, logoAsset.key, campaign._id)
+    : null;
+
   return {
     id: campaign._id,
     name: campaign.name,
@@ -127,6 +147,19 @@ async function campaignView(ctx: QueryCtx, campaignId: Id<"campaigns">) {
     claimCollectLabel: campaign.claimCollectLabel ?? "",
     claimWaitingMessage: campaign.claimWaitingMessage ?? "",
     theme: campaign.theme,
+    // Brand identity metadata (workspace only; see docs/product-direction.md).
+    brandColor: campaign.brandColor ?? null,
+    logoAsset: logoAsset
+      ? {
+          id: logoAsset._id,
+          key: logoAsset.key,
+          fileName: logoAsset.fileName ?? "Campaign asset",
+          contentType: logoAsset.contentType ?? null,
+          url: logoAssetUrl,
+        }
+      : null,
+    audienceTags: campaign.audienceTags ?? [],
+    audienceNote: campaign.audienceNote ?? "",
     gameTemplateId: campaignGame.templateId,
     gameConfig: campaignGame.config,
     campaignGame: {
@@ -286,6 +319,15 @@ export const getCampaignGameRouteContext = query({
           campaign
         ),
         playLimits: normalizePlayLimits(campaignGame.playLimits),
+        schedule: normalizeScheduleWindow(campaignGame),
+        // Live per-game slot assets ({usage, assetId, url}); presentation
+        // only. assetId powers the editor panel's remove control.
+        assets: await getRenderableCampaignGameAssets(
+          ctx,
+          ownerId,
+          campaign._id,
+          campaignGame._id
+        ),
         status: campaignGame.status,
         createdAt: campaignGame.createdAt,
         updatedAt: campaignGame.updatedAt,
@@ -332,6 +374,7 @@ export const getCampaignGamesRouteContext = query({
             campaignGame.config,
             campaign
           ),
+          schedule: normalizeScheduleWindow(campaignGame),
           status: campaignGame.status,
           createdAt: campaignGame.createdAt,
           updatedAt: campaignGame.updatedAt,
@@ -368,6 +411,13 @@ export const saveCampaign = mutation({
     slug: v.optional(v.string()),
     brandName: v.optional(v.string()),
     description: v.optional(v.string()),
+    // Brand identity (workspace metadata only). Omitted values clear: every
+    // workspace form (create, overview, game editor) sends the full set from
+    // the campaign view on save.
+    brandColor: v.optional(v.string()),
+    logoAssetId: v.optional(v.id("campaignAssets")),
+    audienceTags: v.optional(v.array(v.string())),
+    audienceNote: v.optional(v.string()),
     claimHeadline: v.optional(v.string()),
     claimSubtitle: v.optional(v.string()),
     claimCtaLabel: v.optional(v.string()),
@@ -389,6 +439,13 @@ export const saveCampaign = mutation({
     const slug = slugifyCampaign(args.slug ?? name);
     const brandName = maybeText(args.brandName, "Tên thương hiệu", 80);
     const description = maybeText(args.description, "Mô tả chiến dịch", 180);
+    const brandColor = normalizeCampaignBrandColor(args.brandColor);
+    const audienceTags = normalizeCampaignAudienceTags(args.audienceTags);
+    const audienceNote = maybeText(
+      args.audienceNote,
+      "Ghi chú đối tượng",
+      CAMPAIGN_AUDIENCE_NOTE_MAX_LENGTH
+    );
     const claimHeadline = maybeText(args.claimHeadline, "Headline claim", 72);
     const claimSubtitle = maybeText(args.claimSubtitle, "Subtitle claim", 120);
     const claimCtaLabel = maybeText(args.claimCtaLabel, "Nhãn CTA claim", 28);
@@ -417,6 +474,16 @@ export const saveCampaign = mutation({
           throw new Error("Ảnh hero phải thuộc chiến dịch này");
         }
       }
+      if (args.logoAssetId) {
+        const logoAsset = await ctx.db.get(args.logoAssetId);
+        if (
+          !isRenderableCampaignAsset(logoAsset, ownerId) ||
+          logoAsset.campaignId !== campaign._id ||
+          logoAsset.usage !== "brand-logo"
+        ) {
+          throw new Error("Logo phải thuộc chiến dịch này");
+        }
+      }
       if (
         campaign.status === "active" &&
         args.status !== "active" &&
@@ -430,6 +497,10 @@ export const saveCampaign = mutation({
         slug,
         brandName,
         description,
+        brandColor,
+        logoAssetId: args.logoAssetId,
+        audienceTags,
+        audienceNote,
         claimHeadline,
         claimSubtitle,
         claimCtaLabel,
@@ -444,6 +515,9 @@ export const saveCampaign = mutation({
       if (args.heroAssetId) {
         throw new Error("Hãy lưu chiến dịch trước khi gắn ảnh hero");
       }
+      if (args.logoAssetId) {
+        throw new Error("Hãy lưu chiến dịch trước khi gắn logo");
+      }
       await assertCanCreateCampaign(ctx, ownerId);
       campaignId = await ctx.db.insert("campaigns", {
         ownerId,
@@ -451,6 +525,9 @@ export const saveCampaign = mutation({
         slug,
         brandName,
         description,
+        brandColor,
+        audienceTags,
+        audienceNote,
         claimHeadline,
         claimSubtitle,
         claimCtaLabel,
@@ -569,6 +646,65 @@ export const ensureDefaultCampaign = mutation({
   },
 });
 
+/**
+ * Detach the previous per-game slot assets of one usage before a new asset
+ * takes the slot: their (usage, campaignGameId) binding drops so the slot
+ * pointer stays unique per (game, usage). Rows stay attached/unrejected like
+ * a replaced hero does.
+ */
+async function detachOtherGameAssetsOfUsage(
+  ctx: MutationCtx,
+  ownerId: Id<"users">,
+  campaignGameId: Id<"campaignGames">,
+  usage: string,
+  keepAssetId: Id<"campaignAssets">
+) {
+  const rows = await ctx.db
+    .query("campaignAssets")
+    .withIndex("by_game_usage", (q) => q.eq("campaignGameId", campaignGameId))
+    .collect();
+  for (const row of rows) {
+    if (row._id === keepAssetId || row.ownerId !== ownerId || row.usage !== usage) {
+      continue;
+    }
+    await ctx.db.patch(row._id, {
+      usage: undefined,
+      campaignGameId: undefined,
+    });
+  }
+}
+
+/**
+ * Where an attached asset becomes visible, by kind: a per-game slot re-points
+ * the (usage, campaignGameId) binding (dropping any previous holder), the
+ * brand logo sets the campaign pointer, and the hero keeps the exact legacy
+ * heroAssetId write.
+ */
+async function pointCampaignAtAsset(
+  ctx: MutationCtx,
+  campaignId: Id<"campaigns">,
+  usage: string,
+  campaignGame: Doc<"campaignGames"> | null,
+  assetId: Id<"campaignAssets">,
+  now: number
+) {
+  if (isCampaignGameAssetUsage(usage) && campaignGame) {
+    await detachOtherGameAssetsOfUsage(ctx, campaignGame.ownerId, campaignGame._id, usage, assetId);
+    return;
+  }
+  if (usage === "brand-logo") {
+    await ctx.db.patch(campaignId, {
+      logoAssetId: assetId,
+      updatedAt: now,
+    });
+    return;
+  }
+  await ctx.db.patch(campaignId, {
+    heroAssetId: assetId,
+    updatedAt: now,
+  });
+}
+
 export const attachUploadedAsset = mutation({
   args: {
     campaignId: v.id("campaigns"),
@@ -576,6 +712,10 @@ export const attachUploadedAsset = mutation({
     fileName: v.optional(v.string()),
     contentType: v.optional(v.string()),
     size: v.optional(v.number()),
+    // Asset kind; omitted = the campaign hero (legacy call path untouched).
+    usage: v.optional(v.string()),
+    // Required for per-game kinds; must match the row reserved at upload.
+    campaignGameId: v.optional(v.id("campaignGames")),
   },
   handler: async (ctx, args) => {
     const { ownerId } = await requireResolvedOwner(ctx, undefined, {
@@ -586,6 +726,26 @@ export const attachUploadedAsset = mutation({
     const campaign = await ctx.db.get(args.campaignId);
     if (!campaign || campaign.ownerId !== ownerId) {
       throw new Error("Không tìm thấy chiến dịch");
+    }
+
+    const usage = args.usage === undefined || args.usage === "" ? "hero" : args.usage;
+    if (!isCampaignAssetUsage(usage)) {
+      throw new Error("Loại tài sản không hợp lệ");
+    }
+    const isGameSlot = isCampaignGameAssetUsage(usage);
+    let campaignGame: Doc<"campaignGames"> | null = null;
+    if (isGameSlot) {
+      if (!args.campaignGameId) {
+        throw new Error("Thiếu trò chơi cho tài sản của trò chơi");
+      }
+      campaignGame = await ctx.db.get(args.campaignGameId);
+      if (
+        !campaignGame ||
+        campaignGame.ownerId !== ownerId ||
+        campaignGame.campaignId !== campaign._id
+      ) {
+        throw new Error("Trò chơi không thuộc chiến dịch này");
+      }
     }
 
     const now = Date.now();
@@ -603,15 +763,17 @@ export const attachUploadedAsset = mutation({
       throw new Error("Asset upload không thuộc chiến dịch này");
     }
     assertCampaignAssetBucketMatchesConfigured(asset);
+    // The reserved row's kind is authoritative: an upload started as one
+    // kind can never be attached as another.
+    if ((asset.usage ?? "hero") !== usage || asset.campaignGameId !== (isGameSlot ? campaignGame!._id : undefined)) {
+      throw new Error("Loại tài sản không khớp lượt upload");
+    }
 
     if (asset.status === "attached") {
       if (!isRenderableCampaignAsset(asset, ownerId)) {
         throw new Error("Asset đã gắn nhưng chưa đủ điều kiện hiển thị");
       }
-      await ctx.db.patch(campaign._id, {
-        heroAssetId: asset._id,
-        updatedAt: now,
-      });
+      await pointCampaignAtAsset(ctx, campaign._id, usage, isGameSlot ? campaignGame : null, asset._id, now);
       return {
         assetId: asset._id,
         campaignId: campaign._id,
@@ -644,6 +806,7 @@ export const attachUploadedAsset = mutation({
         contentType: actualMetadata.contentType,
         fileName: args.fileName,
         size: actualMetadata.size,
+        usage,
       });
     } catch (error) {
       const rejectedReason =
@@ -668,18 +831,40 @@ export const attachUploadedAsset = mutation({
       rejectedReason: undefined,
       size: validated.size,
       status: "attached",
-      usage: "hero",
+      usage,
       validatedAt: now,
     });
-    await ctx.db.patch(campaign._id, {
-      heroAssetId: asset._id,
-      updatedAt: now,
-    });
+    await pointCampaignAtAsset(ctx, campaign._id, usage, isGameSlot ? campaignGame : null, asset._id, now);
 
     return {
       assetId: asset._id,
       campaignId: campaign._id,
       key: asset.key,
     };
+  },
+});
+
+/**
+ * Owner-authorized removal of one campaign asset's role: the campaign hero /
+ * brand-logo pointer clears and a per-game slot row drops its binding, so
+ * every consumer falls back to the default visuals. The row itself and the
+ * R2 object stay (same semantics as a replaced hero).
+ */
+export const detachCampaignAsset = mutation({
+  args: {
+    assetId: v.id("campaignAssets"),
+  },
+  handler: async (ctx, args) => {
+    const { ownerId } = await requireResolvedOwner(ctx, undefined, {
+      notFoundMessage: "Không tìm thấy host",
+      forbiddenMessage: "Bạn không có quyền chỉnh tài sản này",
+    });
+    const asset = await ctx.db.get(args.assetId);
+    if (!asset || asset.ownerId !== ownerId) {
+      throw new Error("Không tìm thấy asset chiến dịch");
+    }
+    const now = Date.now();
+    await clearCampaignAssetRole(ctx, asset, now);
+    return { assetId: asset._id, detached: true };
   },
 });

@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type QueryCtx } from "./_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { recordGenericPlayMetric, countGameSessionsExact, playSessionsByGame } from "./analytics";
 import {
 	assertSessionContextPlayable,
@@ -13,6 +13,7 @@ import {
 	playActionValidator,
 	validateActionForTemplate,
 	verifySessionCapability,
+	type GameRulesSnapshot,
 	type PublicOutcomeView,
 } from "./playEngine";
 import { resolveShareLink } from "./shareLinks";
@@ -22,12 +23,14 @@ import { listActiveRewardInventory } from "./rewardInventory";
 import { playSessionCounterEventKey, shareLinkCounterEventKey } from "../lib/analyticsPolicy";
 import {
 	DEFAULT_MAX_TOTAL_SESSIONS,
+	DEFAULT_PUBLIC_CLAIM_INSTRUCTIONS,
 	NO_REWARD_SEGMENT_KEY,
 	configRewardMode,
 	configRewardSource,
 	isLuckyWheelGameConfig,
 	normalizePlayLimits,
 	requireGameTemplateId,
+	resolvePublicCopyField,
 } from "../lib/gameTemplates";
 import {
 	assertOpenKey,
@@ -37,7 +40,12 @@ import {
 	normalizeShareCode,
 	sanitizeProvidedName,
 } from "../lib/playPolicy";
-import { getRenderableCampaignAssetUrl, isRenderableCampaignAsset } from "./assets";
+import { getRenderableCampaignAssetUrl, getRenderableCampaignGameAssets, isRenderableCampaignAsset } from "./assets";
+import {
+	normalizeScheduleWindow,
+	resolveGameScheduleState,
+	scheduleAdmissionError,
+} from "../lib/schedulePolicy";
 
 /** Bounded readiness probe: does this game have any recorded session? */
 async function hasAnyGameSession(
@@ -66,7 +74,7 @@ async function hasAnyGameSession(
  * only; the read path reports them as sold out so traffic cannot trust an
  * uninitialized counter).
  */
-async function resolveAdmission(
+export async function resolveAdmission(
 	ctx: QueryCtx,
 	campaignGame: Doc<"campaignGames">,
 	cap: number,
@@ -80,7 +88,7 @@ async function resolveAdmission(
 	return { atCap: hasHistory, ready: false, hasHistory };
 }
 
-async function getHeroAssetUrl(ctx: QueryCtx, campaign: Doc<"campaigns">): Promise<string | null> {
+export async function getHeroAssetUrl(ctx: QueryCtx, campaign: Doc<"campaigns">): Promise<string | null> {
 	const heroCandidate = campaign.heroAssetId ? await ctx.db.get(campaign.heroAssetId) : null;
 	const heroAsset =
 		isRenderableCampaignAsset(heroCandidate, campaign.ownerId) &&
@@ -104,6 +112,16 @@ export const getPublicShareEntry = query({
 	handler: async (ctx, args) => {
 		const resolution = await resolveShareLink(ctx, args.shareCode);
 		if (resolution.state !== "open") {
+			// Closed payload carries the play-window reason and the relevant
+			// bound time so the guest surface can show "Chưa đến giờ"/"Đã kết
+			// thúc" with context instead of a generic closed message.
+			if (resolution.state === "closed") {
+				return {
+					state: "closed" as const,
+					reason: resolution.reason,
+					scheduledAt: resolution.scheduledAt,
+				};
+			}
 			return { state: resolution.state };
 		}
 		const { link, campaignGame, campaign } = resolution.resolved;
@@ -195,7 +213,24 @@ export const getPublicShareEntry = query({
 				selfServe,
 				publicCopy: config.publicCopy,
 				wheel,
+				// Live per-game template slot URLs (usage → URL). Presentation
+				// only: resolved from the attached rows at read time, never part
+				// of the frozen admission snapshot.
+				assetUrls: Object.fromEntries(
+					(
+						await getRenderableCampaignGameAssets(
+							ctx,
+							campaign.ownerId,
+							campaign._id,
+							campaignGame._id,
+						)
+					).map((asset) => [asset.usage, asset.url]),
+				),
 				playLimits,
+				// Live play-window view for the entry surface (status chips and
+				// the waiting-room countdown); enforcement happens server-side
+				// at admission, never in the client.
+				schedule: normalizeScheduleWindow(campaignGame),
 			},
 			availability: { soldOut },
 			viewer,
@@ -241,6 +276,138 @@ export const recordShareEntryOpen = mutation({
 	},
 });
 
+/**
+ * Shared admission core for generic inventory-sourced play: the new-session
+ * capacity gate (with inline accounting initialization), the
+ * per-participant limit, the self-serve policy gate, the rules-snapshot
+ * freeze, the aggregate insert, and the game_start event — identical for
+ * every channel. Callers own participant resolution and any pre-gates
+ * (start-key recovery, participant resume, the station single-active
+ * guard); the public path's behavior is unchanged by this extraction.
+ */
+export async function admitGenericPlaySession(
+	ctx: MutationCtx,
+	args: {
+		ownerId: Id<"users">;
+		campaign: Doc<"campaigns">;
+		campaignGame: Doc<"campaignGames">;
+		participantId: Id<"participants">;
+		channel: "public-link" | "station";
+		channelLabel?: string;
+		shareLinkId?: Id<"publicPlayLinks">;
+		startKey?: string;
+	},
+): Promise<{ sessionId: Id<"playSessions">; sessionToken: string }> {
+	const campaignGame = args.campaignGame;
+	// Optional play window: server-authoritative admission gate shared by the
+	// public link and the station. Already-admitted in-flight sessions never
+	// pass through here, so they may finish after `endsAt` (documented
+	// exemption; lib/schedulePolicy.ts).
+	const scheduleState = resolveGameScheduleState(campaignGame, Date.now());
+	if (scheduleState !== "open") {
+		throw new Error(scheduleAdmissionError(scheduleState, campaignGame));
+	}
+	// New-session capacity gate: only sessions that would actually be
+	// newly admitted consume a slot. Uninitialized games with historical
+	// rows require the maintenance backfill first; empty games initialize
+	// inline on their first admission.
+	const playLimits = normalizePlayLimits(campaignGame.playLimits);
+	const totalCap = playLimits.maxTotalSessions ?? DEFAULT_MAX_TOTAL_SESSIONS;
+	const admission = await resolveAdmission(ctx, campaignGame, totalCap);
+	if (!admission.ready && admission.hasHistory) {
+		throw new Error(
+			"Trò chơi cần khởi tạo bộ đếm lượt chơi (playMaintenance:backfillGameAccountingPage) trước khi nhận lượt mới",
+		);
+	}
+	if (admission.atCap) {
+		throw new Error("Trò chơi đã hết lượt tham gia");
+	}
+
+	const completedSessions = await ctx.db
+		.query("playSessions")
+		.withIndex("by_participant_game_status", (q) =>
+			q
+				.eq("participantId", args.participantId)
+				.eq("campaignGameId", campaignGame._id)
+				.eq("status", "completed"),
+		)
+		.collect();
+	if (completedSessions.length >= playLimits.maxSessionsPerParticipant) {
+		throw new Error("Bạn đã hết lượt tham gia trò chơi này");
+	}
+
+	// Self-serve play requires an inventory-sourced game; fail before
+	// consuming an admission slot.
+	genericPlayPolicyForGame(campaignGame);
+
+	const now = Date.now();
+	const sessionToken = generateSessionToken();
+	// Freeze the admitted rules for the whole session: gameplay validation,
+	// reward strategy, and participant presentation use this snapshot, so
+	// owner config edits cannot change an admitted participant's rules.
+	// Wheel segments and slot candidate combinations both derive from the
+	// pool AT ADMISSION, in display order.
+	const admissionTemplateId = requireGameTemplateId(campaignGame.templateId);
+	const admissionRewarded = entryWheelRewarded(campaignGame);
+	const admissionPool =
+		(admissionTemplateId === "lucky-wheel" || admissionTemplateId === "slot-reveal") &&
+		admissionRewarded
+			? await listActiveRewardInventory(
+					ctx,
+					args.ownerId,
+					args.campaign._id,
+					genericPlayPolicyForGame(campaignGame).rewardPoolTag,
+				)
+			: [];
+	const rulesSnapshot = buildRulesSnapshot(
+		campaignGame,
+		admissionTemplateId === "lucky-wheel"
+			? admissionPool.map((item) => ({ key: item._id, label: item.name }))
+			: [],
+		admissionTemplateId === "slot-reveal"
+			? admissionPool.map((item) => item._id)
+			: undefined,
+	);
+	const sessionId = await ctx.db.insert("playSessions", {
+		ownerId: args.ownerId,
+		campaignId: args.campaign._id,
+		campaignGameId: campaignGame._id,
+		participantId: args.participantId,
+		shareLinkId: args.shareLinkId,
+		channel: args.channel,
+		channelLabel: args.channelLabel,
+		sessionToken,
+		startKey: args.startKey,
+		rulesSnapshot,
+		status: "active",
+		startedAt: now,
+		createdAt: now,
+		updatedAt: now,
+	});
+	const storedSession = await ctx.db.get(sessionId);
+	if (!storedSession) {
+		throw new Error("Không thể tạo phiên chơi");
+	}
+	await playSessionsByGame.insert(ctx, storedSession);
+	if (!admission.ready) {
+		// First admission of an empty game: mark accounting exact inline.
+		await ctx.db.patch(campaignGame._id, { accountingVersion: 1 });
+	}
+
+	await recordGenericPlayMetric(ctx, {
+		eventKey: playSessionCounterEventKey(sessionId, "game_start"),
+		ownerId: args.ownerId,
+		campaignId: args.campaign._id,
+		campaignGameId: campaignGame._id,
+		shareLinkId: args.shareLinkId,
+		channel: args.channel,
+		channelLabel: args.channelLabel,
+		metric: "game_start",
+	});
+
+	return { sessionId, sessionToken };
+}
+
 export const startPublicPlaySession = mutation({
 	args: {
 		shareCode: v.string(),
@@ -257,7 +424,19 @@ export const startPublicPlaySession = mutation({
 			throw new Error("Liên kết chơi đã bị thu hồi");
 		}
 		if (resolution.state === "closed") {
-			throw new Error("Trò chơi hiện chưa mở");
+			// Reason-aware fail-closed: a play-window boundary reports its
+			// schedule copy ("chưa mở cửa sổ chơi (mở lúc …)"/"đã kết thúc"),
+			// every other closed reason keeps the generic message.
+			throw new Error(
+				resolution.reason === "not-started" || resolution.reason === "ended"
+					? scheduleAdmissionError(resolution.reason, {
+							startsAt:
+								resolution.reason === "not-started"
+									? resolution.scheduledAt
+									: undefined,
+						})
+					: "Trò chơi hiện chưa mở",
+			);
 		}
 		const { link, campaignGame, campaign } = resolution.resolved;
 		const templateId = requireGameTemplateId(campaignGame.templateId);
@@ -330,107 +509,22 @@ export const startPublicPlaySession = mutation({
 			};
 		}
 
-		// 3. New-session capacity gate: only sessions that would actually be
-		// newly admitted consume a slot. Uninitialized games with historical
-		// rows require the maintenance backfill first; empty games initialize
-		// inline on their first admission.
-		const playLimits = normalizePlayLimits(campaignGame.playLimits);
-		const totalCap = playLimits.maxTotalSessions ?? DEFAULT_MAX_TOTAL_SESSIONS;
-		const admission = await resolveAdmission(ctx, campaignGame, totalCap);
-		if (!admission.ready && admission.hasHistory) {
-			throw new Error(
-				"Trò chơi cần khởi tạo bộ đếm lượt chơi (playMaintenance:backfillGameAccountingPage) trước khi nhận lượt mới",
-			);
-		}
-		if (admission.atCap) {
-			throw new Error("Trò chơi đã hết lượt tham gia");
-		}
-
-		const completedSessions = await ctx.db
-			.query("playSessions")
-			.withIndex("by_participant_game_status", (q) =>
-				q
-					.eq("participantId", participant._id)
-					.eq("campaignGameId", campaignGame._id)
-					.eq("status", "completed"),
-			)
-			.collect();
-		if (completedSessions.length >= playLimits.maxSessionsPerParticipant) {
-			throw new Error("Bạn đã hết lượt tham gia trò chơi này");
-		}
-
-		// Self-serve play requires an inventory-sourced game; fail before
-		// consuming an admission slot.
-		genericPlayPolicyForGame(campaignGame);
-
-		const now = Date.now();
-		const sessionToken = generateSessionToken();
-		// Freeze the admitted rules for the whole session: gameplay validation,
-		// reward strategy, and participant presentation use this snapshot, so
-		// owner config edits cannot change an admitted participant's rules.
-		// Wheel segments and slot candidate combinations both derive from the
-		// pool AT ADMISSION, in display order.
-		const admissionTemplateId = templateId;
-		const admissionRewarded = entryWheelRewarded(campaignGame);
-		const admissionPool =
-			(admissionTemplateId === "lucky-wheel" || admissionTemplateId === "slot-reveal") &&
-			admissionRewarded
-				? await listActiveRewardInventory(
-						ctx,
-						link.ownerId,
-						campaign._id,
-						genericPlayPolicyForGame(campaignGame).rewardPoolTag,
-					)
-				: [];
-		const rulesSnapshot = buildRulesSnapshot(
+		// 3. Shared admission core: capacity gate, per-participant limit,
+		// policy gate, snapshot freeze, aggregate insert, game_start.
+		const admission = await admitGenericPlaySession(ctx, {
+			ownerId: link.ownerId,
+			campaign,
 			campaignGame,
-			admissionTemplateId === "lucky-wheel"
-				? admissionPool.map((item) => ({ key: item._id, label: item.name }))
-				: [],
-			admissionTemplateId === "slot-reveal"
-				? admissionPool.map((item) => item._id)
-				: undefined,
-		);
-		const sessionId = await ctx.db.insert("playSessions", {
-			ownerId: link.ownerId,
-			campaignId: campaign._id,
-			campaignGameId: campaignGame._id,
 			participantId: participant._id,
-			shareLinkId: link._id,
 			channel: "public-link",
 			channelLabel: link.channel,
-			sessionToken,
+			shareLinkId: link._id,
 			startKey,
-			rulesSnapshot,
-			status: "active",
-			startedAt: now,
-			createdAt: now,
-			updatedAt: now,
-		});
-		const storedSession = await ctx.db.get(sessionId);
-		if (!storedSession) {
-			throw new Error("Không thể tạo phiên chơi");
-		}
-		await playSessionsByGame.insert(ctx, storedSession);
-		if (!admission.ready) {
-			// First admission of an empty game: mark accounting exact inline.
-			await ctx.db.patch(campaignGame._id, { accountingVersion: 1 });
-		}
-
-		await recordGenericPlayMetric(ctx, {
-			eventKey: playSessionCounterEventKey(sessionId, "game_start"),
-			ownerId: link.ownerId,
-			campaignId: campaign._id,
-			campaignGameId: campaignGame._id,
-			shareLinkId: link._id,
-			channel: "public-link",
-			channelLabel: link.channel,
-			metric: "game_start",
 		});
 
 		return {
-			sessionId,
-			sessionToken,
+			sessionId: admission.sessionId,
+			sessionToken: admission.sessionToken,
 			participantToken: participant.token,
 			participantDisplayName: participant.displayName ?? null,
 			resumed: false,
@@ -746,9 +840,18 @@ export type PublicClaimDetailView = {
  * repeated capability-authorized claim recovers the original code even after
  * the owner edited or replaced the inventory.
  */
-async function claimDetailView(
+/**
+ * Immutable claim presentation shared by the public capability surface and
+ * the owner-authorized station recovery (same reveal rule: voucher codes
+ * come from the award snapshot or the inventory item). Voucher-only claim
+ * instructions prefer the session's frozen publicCopy; the built-in default
+ * keeps every snapshot/config written before the field existed rendering
+ * unchanged.
+ */
+export async function claimDetailView(
 	ctx: QueryCtx,
 	outcome: Doc<"rewardOutcomes">,
+	frozenCopy?: GameRulesSnapshot["publicCopy"] | null,
 ): Promise<PublicClaimDetailView> {
 	let secretCode: string | null = null;
 	if (outcome.rewardType === "voucher" && outcome.rewardItemId) {
@@ -762,7 +865,10 @@ async function claimDetailView(
 		secretCode: outcome.awardSecretCode?.trim() || secretCode,
 		instructions:
 			outcome.rewardType === "voucher"
-				? "Lưu lại mã này để đổi thưởng với nhân viên chiến dịch."
+				? resolvePublicCopyField(
+						frozenCopy?.claimInstructions,
+						DEFAULT_PUBLIC_CLAIM_INSTRUCTIONS,
+					)
 				: null,
 	};
 }
@@ -782,7 +888,7 @@ export const getPublicClaimDetail = query({
 		if (!outcome || outcome.status !== "claimed") {
 			return null;
 		}
-		return { claim: await claimDetailView(ctx, outcome) };
+		return { claim: await claimDetailView(ctx, outcome, session.rulesSnapshot?.publicCopy ?? null) };
 	},
 });
 
@@ -807,7 +913,7 @@ export const claimPublicReward = mutation({
 			.unique();
 		if (existingClaim) {
 			return {
-				claim: await claimDetailView(ctx, outcome),
+				claim: await claimDetailView(ctx, outcome, session.rulesSnapshot?.publicCopy ?? null),
 				alreadyClaimed: true,
 			};
 		}
@@ -848,7 +954,7 @@ export const claimPublicReward = mutation({
 		});
 
 		return {
-			claim: await claimDetailView(ctx, outcome),
+			claim: await claimDetailView(ctx, outcome, session.rulesSnapshot?.publicCopy ?? null),
 			alreadyClaimed: false,
 		};
 	},

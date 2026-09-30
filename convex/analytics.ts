@@ -8,18 +8,23 @@ import { mutation, MutationCtx, query, QueryCtx } from "./_generated/server";
 import { requireResolvedOwner } from "./authorization";
 import { isValidMigrationToken, migrationTokenEnvNames } from "./migrationToken";
 import {
+  COUNTER_SCOPES_VERSION,
+  campaignChannelMetricKey,
   campaignGameMetricKey,
   campaignMetricKey,
   estimateAnalyticsCounterEventWrite,
+  gameChannelMetricKey,
   ownerMetricKey,
   playSessionCounterEventKey,
   redemptionCounterEventKey,
   rewardCounterEventKey,
   sessionCounterEventKey,
+  shareLinkMetricKey,
   type AnalyticsMetric,
   type AnalyticsCounterEventEstimate,
+  type RewardChannel,
 } from "../lib/analyticsPolicy";
-import { DEFAULT_GAME_TEMPLATE_ID } from "../lib/gameTemplates";
+import { requireGameTemplateId } from "../lib/gameTemplates";
 
 type CounterCtx = QueryCtx | MutationCtx;
 type OwnerMetric = AnalyticsMetric;
@@ -86,11 +91,19 @@ export const redemptionsByCampaignAmount = new TableAggregate<{
   sumValue: (doc) => doc.amount,
 });
 
-const ownerCounters = new ShardedCounter<string>(components.shardedCounter, {
+/** Exported for the channel/link backfill equivalence test and maintenance tooling. */
+export const ownerCounters = new ShardedCounter<string>(components.shardedCounter, {
   defaultShards: 16,
 });
 
-async function recordAnalyticsCounterEvent(
+/**
+ * Inserts one exactly-once funnel event and increments the owner/campaign
+ * scopes it has always owned. The per-game/channel/share-link scopes are
+ * intentionally NOT incremented here — recordGenericPlayMetric layers those
+ * on top (and stamps counterScopesVersion) so the channel/link backfill can
+ * distinguish pre-scope rows. Exported for the equivalence test.
+ */
+export async function recordAnalyticsCounterEvent(
   ctx: MutationCtx,
   args: {
     eventKey: string;
@@ -103,7 +116,7 @@ async function recordAnalyticsCounterEvent(
     metric: OwnerMetric;
     source: CounterEventSource;
   }
-) {
+): Promise<Id<"analyticsCounterEvents"> | null> {
   const existingEvent = await ctx.db
     .query("analyticsCounterEvents")
     .withIndex("by_eventKey", (q) => q.eq("eventKey", args.eventKey))
@@ -116,17 +129,17 @@ async function recordAnalyticsCounterEvent(
   });
   if (existingEvent) {
     if (estimate.markerWouldPatch === 0) {
-      return false;
+      return null;
     }
 
     await ctx.db.patch(existingEvent._id, {
       campaignId: args.campaignId,
     });
     await ownerCounters.inc(ctx, campaignMetricKey(args.campaignId!, args.metric));
-    return true;
+    return existingEvent._id;
   }
 
-  await ctx.db.insert("analyticsCounterEvents", {
+  const insertedEventId = await ctx.db.insert("analyticsCounterEvents", {
     eventKey: args.eventKey,
     ownerId: args.ownerId,
     campaignId: args.campaignId,
@@ -143,7 +156,7 @@ async function recordAnalyticsCounterEvent(
     await ownerCounters.inc(ctx, campaignMetricKey(args.campaignId, args.metric));
   }
 
-  return true;
+  return insertedEventId;
 }
 
 async function wouldRecordAnalyticsCounterEvent(
@@ -370,7 +383,7 @@ export async function recordGenericPlayMetric(
     source?: CounterEventSource;
   }
 ) {
-  const recorded = await recordAnalyticsCounterEvent(ctx, {
+  const eventId = await recordAnalyticsCounterEvent(ctx, {
     eventKey: args.eventKey,
     ownerId: args.ownerId,
     campaignId: args.campaignId,
@@ -381,10 +394,35 @@ export async function recordGenericPlayMetric(
     metric: args.metric,
     source: args.source ?? "live",
   });
-  if (recorded && args.campaignGameId) {
-    await ownerCounters.inc(ctx, campaignGameMetricKey(args.campaignGameId, args.metric));
+  if (eventId) {
+    // Exactly-once scopes ride the same per-transition event key: the
+    // per-game, per-channel, and per-share-link counters only increment on
+    // the insert (or legacy marker upgrade) of the underlying event, so
+    // replays and retries never double count. Legacy li xi events carry no
+    // channel/shareLinkId and stay unattributed by design. The readiness
+    // stamp marks the row's scopes as counted, so the channel/link backfill
+    // only ever initializes rows written before the scopes existed.
+    let scopesApplied = false;
+    if (args.campaignGameId) {
+      await ownerCounters.inc(ctx, campaignGameMetricKey(args.campaignGameId, args.metric));
+      scopesApplied = true;
+    }
+    if (args.channel) {
+      await ownerCounters.inc(ctx, campaignChannelMetricKey(args.campaignId, args.channel, args.metric));
+      if (args.campaignGameId) {
+        await ownerCounters.inc(ctx, gameChannelMetricKey(args.campaignGameId, args.channel, args.metric));
+      }
+      scopesApplied = true;
+    }
+    if (args.shareLinkId) {
+      await ownerCounters.inc(ctx, shareLinkMetricKey(args.shareLinkId, args.metric));
+      scopesApplied = true;
+    }
+    if (scopesApplied) {
+      await ctx.db.patch(eventId, { counterScopesVersion: COUNTER_SCOPES_VERSION });
+    }
   }
-  return recorded;
+  return eventId !== null;
 }
 
 // Namespace-prefixed so the per-game session tree never collides with the
@@ -541,7 +579,6 @@ export const getOwnerAnalytics = query({
       rewardClaimEvents,
       publicPlayLinkOpenEvents,
       gameMetrics: {
-        gameTemplateId: DEFAULT_GAME_TEMPLATE_ID,
         opens: gameOpenEvents,
         starts: gameStartEvents,
         completions: gameCompletionEvents,
@@ -725,7 +762,6 @@ export const getCampaignAnalytics = query({
       rewardClaimEvents,
       publicPlayLinkOpenEvents,
       gameMetrics: {
-        gameTemplateId: DEFAULT_GAME_TEMPLATE_ID,
         opens: gameOpenEvents,
         starts: gameStartEvents,
         completions: gameCompletionEvents,
@@ -892,6 +928,362 @@ export const backfillCampaignAnalytics = mutation({
       sessionCountersWouldBackfill,
       sessionCounterEventsWouldBackfill,
       sessionCounterIncrementsWouldBackfill,
+    };
+  },
+});
+
+/** Funnel metrics shared by the per-game, per-channel, and per-link rows. */
+type FunnelCounts = {
+  opens: number;
+  starts: number;
+  completions: number;
+  rewardOutcomes: number;
+  claims: number;
+  conversion: number | null;
+};
+
+function funnelConversion(counts: { opens: number; claims: number }): number | null {
+  return counts.opens > 0 ? counts.claims / counts.opens : null;
+}
+
+async function readCampaignFunnelCounts(
+  ctx: CounterCtx,
+  campaignId: Id<"campaigns">,
+): Promise<FunnelCounts> {
+  const [opens, starts, completions, rewardOutcomes, claims] = await Promise.all([
+    countCampaignMetric(ctx, campaignId, "game_open"),
+    countCampaignMetric(ctx, campaignId, "game_start"),
+    countCampaignMetric(ctx, campaignId, "game_completion"),
+    countCampaignMetric(ctx, campaignId, "reward_outcome"),
+    countCampaignMetric(ctx, campaignId, "reward_claim"),
+  ]);
+  return {
+    opens,
+    starts,
+    completions,
+    rewardOutcomes,
+    claims,
+    conversion: funnelConversion({ opens, claims }),
+  };
+}
+
+async function listBreakdownCampaigns(
+  ctx: CounterCtx,
+  ownerId: Id<"users">,
+  campaignId: Id<"campaigns"> | undefined,
+): Promise<Doc<"campaigns">[]> {
+  if (campaignId) {
+    return [await requireOwnedCampaign(ctx, ownerId, campaignId)];
+  }
+  return ctx.db
+    .query("campaigns")
+    .withIndex("by_owner_slug", (q) => q.eq("ownerId", ownerId))
+    .collect();
+}
+
+/**
+ * Per-game funnel rows backed by the exact campaign-game Sharded Counter
+ * scopes. gameTemplateId is each row's real template — the campaign-level
+ * aggregate in getOwnerAnalytics/getCampaignAnalytics spans templates and
+ * deliberately carries no single template id.
+ */
+export const getCampaignGameBreakdown = query({
+  args: {
+    campaignId: v.optional(v.id("campaigns")),
+  },
+  handler: async (ctx, args) => {
+    const { ownerId } = await requireResolvedOwner(ctx, undefined, {
+      notFoundMessage: "Không tìm thấy host",
+      forbiddenMessage: "Bạn không có quyền xem analytics này",
+    });
+    await listBreakdownCampaigns(ctx, ownerId, args.campaignId);
+    const games = args.campaignId
+      ? await ctx.db
+          .query("campaignGames")
+          .withIndex("by_campaign", (q) => q.eq("campaignId", args.campaignId!))
+          .collect()
+      : await ctx.db
+          .query("campaignGames")
+          .withIndex("by_owner", (q) => q.eq("ownerId", ownerId))
+          .collect();
+    const rows = await Promise.all(
+      games.map(async (game) => {
+        const [opens, starts, completions, rewardOutcomes, claims] = await Promise.all([
+          ownerCounters.count(ctx, campaignGameMetricKey(game._id, "game_open")),
+          ownerCounters.count(ctx, campaignGameMetricKey(game._id, "game_start")),
+          ownerCounters.count(ctx, campaignGameMetricKey(game._id, "game_completion")),
+          ownerCounters.count(ctx, campaignGameMetricKey(game._id, "reward_outcome")),
+          ownerCounters.count(ctx, campaignGameMetricKey(game._id, "reward_claim")),
+        ]);
+        return {
+          campaignId: game.campaignId,
+          campaignGameId: game._id,
+          gameName: game.name ?? null,
+          gameTemplateId: requireGameTemplateId(game.templateId),
+          opens,
+          starts,
+          completions,
+          rewardOutcomes,
+          claims,
+          conversion: funnelConversion({ opens, claims }),
+        };
+      }),
+    );
+    rows.sort(
+      (left, right) =>
+        left.campaignId.localeCompare(right.campaignId) ||
+        right.completions - left.completions ||
+        left.campaignGameId.localeCompare(right.campaignGameId),
+    );
+    return { rows };
+  },
+});
+
+/**
+ * Channel breakdown for the analytics channels view: public-link vs station
+ * counters plus a derived legacy row. Legacy draw traffic never carried
+ * channel attribution, so it surfaces as the campaign totals minus the
+ * attributed channel counters under the "li xi (legacy)" label. Event rows
+ * recorded before the channel counters existed need
+ * backfillOwnerChannelLinkCounters once, or the remainder overstates legacy.
+ */
+export const getCampaignChannelBreakdown = query({
+  args: {
+    campaignId: v.optional(v.id("campaigns")),
+  },
+  handler: async (ctx, args) => {
+    const { ownerId } = await requireResolvedOwner(ctx, undefined, {
+      notFoundMessage: "Không tìm thấy host",
+      forbiddenMessage: "Bạn không có quyền xem analytics này",
+    });
+    const campaigns = await listBreakdownCampaigns(ctx, ownerId, args.campaignId);
+
+    const channelRows: Array<{
+      key: RewardChannel | "legacy";
+      label: string;
+      counts: FunnelCounts;
+    }> = [];
+    for (const channel of ["public-link", "station"] as const) {
+      const totals = { opens: 0, starts: 0, completions: 0, rewardOutcomes: 0, claims: 0 };
+      for (const campaign of campaigns) {
+        const [opens, starts, completions, rewardOutcomes, claims] = await Promise.all([
+          ownerCounters.count(ctx, campaignChannelMetricKey(campaign._id, channel, "game_open")),
+          ownerCounters.count(ctx, campaignChannelMetricKey(campaign._id, channel, "game_start")),
+          ownerCounters.count(ctx, campaignChannelMetricKey(campaign._id, channel, "game_completion")),
+          ownerCounters.count(ctx, campaignChannelMetricKey(campaign._id, channel, "reward_outcome")),
+          ownerCounters.count(ctx, campaignChannelMetricKey(campaign._id, channel, "reward_claim")),
+        ]);
+        totals.opens += opens;
+        totals.starts += starts;
+        totals.completions += completions;
+        totals.rewardOutcomes += rewardOutcomes;
+        totals.claims += claims;
+      }
+      channelRows.push({
+        key: channel,
+        label: channel === "public-link" ? "Liên kết công khai" : "Trạm chơi",
+        counts: { ...totals, conversion: funnelConversion(totals) },
+      });
+    }
+
+    const legacyTotals = { opens: 0, starts: 0, completions: 0, rewardOutcomes: 0, claims: 0 };
+    for (const campaign of campaigns) {
+      const campaignCounts = await readCampaignFunnelCounts(ctx, campaign._id);
+      legacyTotals.opens += campaignCounts.opens;
+      legacyTotals.starts += campaignCounts.starts;
+      legacyTotals.completions += campaignCounts.completions;
+      legacyTotals.rewardOutcomes += campaignCounts.rewardOutcomes;
+      legacyTotals.claims += campaignCounts.claims;
+    }
+    for (const channelRow of channelRows) {
+      legacyTotals.opens -= channelRow.counts.opens;
+      legacyTotals.starts -= channelRow.counts.starts;
+      legacyTotals.completions -= channelRow.counts.completions;
+      legacyTotals.rewardOutcomes -= channelRow.counts.rewardOutcomes;
+      legacyTotals.claims -= channelRow.counts.claims;
+    }
+    channelRows.push({
+      key: "legacy",
+      label: "li xi (legacy)",
+      counts: { ...legacyTotals, conversion: funnelConversion(legacyTotals) },
+    });
+
+    return {
+      rows: channelRows.map((row) => ({
+        key: row.key,
+        label: row.label,
+        opens: row.counts.opens,
+        starts: row.counts.starts,
+        completions: row.counts.completions,
+        rewardOutcomes: row.counts.rewardOutcomes,
+        claims: row.counts.claims,
+        conversion: row.counts.conversion,
+      })),
+    };
+  },
+});
+
+/**
+ * Per-share-link funnel rows (label, channel, funnel, conversion) backed by
+ * the per-link Sharded Counter scopes. Legacy draw traffic has no share link
+ * and never appears here — see getCampaignChannelBreakdown for the legacy
+ * remainder row.
+ */
+export const getCampaignShareLinkBreakdown = query({
+  args: {
+    campaignId: v.optional(v.id("campaigns")),
+  },
+  handler: async (ctx, args) => {
+    const { ownerId } = await requireResolvedOwner(ctx, undefined, {
+      notFoundMessage: "Không tìm thấy host",
+      forbiddenMessage: "Bạn không có quyền xem analytics này",
+    });
+    const campaigns = await listBreakdownCampaigns(ctx, ownerId, args.campaignId);
+    const links = (
+      await Promise.all(
+        campaigns.map((campaign) =>
+          ctx.db
+            .query("publicPlayLinks")
+            .withIndex("by_campaign_createdAt", (q) => q.eq("campaignId", campaign._id))
+            .collect(),
+        ),
+      )
+    ).flat();
+    const rows = await Promise.all(
+      links.map(async (link) => {
+        const [linkOpens, opens, starts, completions, rewardOutcomes, claims] = await Promise.all([
+          ownerCounters.count(ctx, shareLinkMetricKey(link._id, "public_play_link_open")),
+          ownerCounters.count(ctx, shareLinkMetricKey(link._id, "game_open")),
+          ownerCounters.count(ctx, shareLinkMetricKey(link._id, "game_start")),
+          ownerCounters.count(ctx, shareLinkMetricKey(link._id, "game_completion")),
+          ownerCounters.count(ctx, shareLinkMetricKey(link._id, "reward_outcome")),
+          ownerCounters.count(ctx, shareLinkMetricKey(link._id, "reward_claim")),
+        ]);
+        return {
+          shareLinkId: link._id,
+          campaignId: link.campaignId,
+          campaignGameId: link.campaignGameId,
+          label: link.label ?? null,
+          channel: link.channel,
+          linkOpens,
+          opens,
+          starts,
+          completions,
+          rewardOutcomes,
+          claims,
+          conversion: funnelConversion({ opens, claims }),
+        };
+      }),
+    );
+    rows.sort(
+      (left, right) =>
+        left.campaignId.localeCompare(right.campaignId) ||
+        right.linkOpens - left.linkOpens ||
+        left.shareLinkId.localeCompare(right.shareLinkId),
+    );
+    return { rows };
+  },
+});
+
+/**
+ * One-time, idempotent initialization of the channel/share-link counter
+ * scopes for analytics event rows recorded before they existed (generic rows
+ * already carry channel/shareLinkId/campaignGameId). Exactly-once is kept
+ * with the row's own readiness stamp: live inserts already stamp
+ * `counterScopesVersion: 1`, the backfill stamps each row whose scopes it
+ * actually initialized, rows without channel/shareLinkId attribution (legacy
+ * li xi traffic) are skipped, and attributed rows with no countable target id
+ * stay unstamped and surface as `skippedUnscoped` instead of absorbing the
+ * readiness stamp. Bounded paginate traversal: relay `continueCursor` while
+ * `isDone` is false, like the playMaintenance traversals. `dryRun: true`
+ * previews read-only.
+ */
+export const backfillOwnerChannelLinkCounters = mutation({
+  args: {
+    ownerId: v.optional(v.id("users")),
+    limit: v.optional(v.number()),
+    cursor: v.optional(v.string()),
+    dryRun: v.optional(v.boolean()),
+    migrationToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const ownerId = await requireAnalyticsBackfillOwner(ctx, args.ownerId, args.migrationToken);
+    const limit = normalizeBackfillLimit(args.limit);
+    const dryRun = args.dryRun ?? false;
+    const page = await ctx.db
+      .query("analyticsCounterEvents")
+      .withIndex("by_owner_createdAt", (q) => q.eq("ownerId", ownerId))
+      .order("desc")
+      .paginate({ numItems: limit, cursor: args.cursor ?? null });
+
+    let countersBackfilled = 0;
+    let countersWouldBackfill = 0;
+    let skippedAlreadyScoped = 0;
+    let legacyRowsSkipped = 0;
+    let skippedUnscoped = 0;
+    for (const event of page.page) {
+      if (!event.channel && !event.shareLinkId) {
+        legacyRowsSkipped += 1;
+        continue;
+      }
+      if ((event.counterScopesVersion ?? 0) >= COUNTER_SCOPES_VERSION) {
+        skippedAlreadyScoped += 1;
+        continue;
+      }
+      // A row only initializes scopes that have a target id: an attributed
+      // row without campaignId/campaignGameId/shareLinkId would otherwise be
+      // stamped as scoped while nothing was counted. Such rows stay
+      // unstamped and are reported separately instead.
+      const hasScopedCounter =
+        Boolean(event.channel && (event.campaignId || event.campaignGameId)) ||
+        Boolean(event.shareLinkId);
+      if (dryRun) {
+        if (hasScopedCounter) {
+          countersWouldBackfill += 1;
+        } else {
+          skippedUnscoped += 1;
+        }
+        continue;
+      }
+      let appliedScopes = 0;
+      if (event.channel) {
+        if (event.campaignId) {
+          await ownerCounters.inc(
+            ctx,
+            campaignChannelMetricKey(event.campaignId, event.channel, event.metric)
+          );
+          appliedScopes += 1;
+        }
+        if (event.campaignGameId) {
+          await ownerCounters.inc(
+            ctx,
+            gameChannelMetricKey(event.campaignGameId, event.channel, event.metric)
+          );
+          appliedScopes += 1;
+        }
+      }
+      if (event.shareLinkId) {
+        await ownerCounters.inc(ctx, shareLinkMetricKey(event.shareLinkId, event.metric));
+        appliedScopes += 1;
+      }
+      if (appliedScopes === 0) {
+        skippedUnscoped += 1;
+        continue;
+      }
+      await ctx.db.patch(event._id, { counterScopesVersion: COUNTER_SCOPES_VERSION });
+      countersBackfilled += 1;
+    }
+
+    return {
+      eventsScanned: page.page.length,
+      countersBackfilled,
+      countersWouldBackfill,
+      skippedAlreadyScoped,
+      legacyRowsSkipped,
+      skippedUnscoped,
+      isDone: page.isDone,
+      continueCursor: page.isDone ? null : page.continueCursor,
+      dryRun,
     };
   },
 });

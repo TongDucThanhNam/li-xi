@@ -2,22 +2,25 @@ import type { CampaignGameConfig, CampaignGamePlayLimits } from "@/lib/gameTempl
 
 /**
  * Pure edit-state contract for the campaign-game editor. The COMPLETE
- * editable draft is config + game status + play limits: serializing all
- * three means status-only and limit-only changes make the editor dirty and
- * enable Save, exactly like copy changes.
+ * editable draft is config + game status + play limits + play window:
+ * serializing all four means status-only, limit-only and schedule-only
+ * changes make the editor dirty and enable Save, exactly like copy changes.
  */
 
 export type GameEditorStatus = "draft" | "active" | "archived";
+
+export type GameEditorSchedule = { startsAt: number | null; endsAt: number | null };
 
 export type GameEditorDraft = {
 	config: CampaignGameConfig;
 	gameStatus: GameEditorStatus;
 	playLimits: CampaignGamePlayLimits;
+	schedule: GameEditorSchedule;
 };
 
 /** Canonical comparable form of the complete editable draft. */
 export function serializeEditorDraft(draft: GameEditorDraft): string {
-	return JSON.stringify([draft.config, draft.gameStatus, draft.playLimits]);
+	return JSON.stringify([draft.config, draft.gameStatus, draft.playLimits, draft.schedule]);
 }
 
 export function isEditorDirty(draft: GameEditorDraft, baseline: string): boolean {

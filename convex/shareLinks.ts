@@ -4,6 +4,7 @@ import { mutation, MutationCtx, query, QueryCtx } from "./_generated/server";
 import { requireResolvedOwner } from "./authorization";
 import { requireOwnedCampaignGame } from "./campaignGames";
 import { generateShareCode, normalizeShareCode } from "../lib/playPolicy";
+import { resolveGameScheduleState } from "../lib/schedulePolicy";
 
 type ConvexCtx = QueryCtx | MutationCtx;
 
@@ -20,13 +21,26 @@ export type ResolvedShareLink = {
 export type ShareLinkResolution =
 	| { state: "invalid" }
 	| { state: "revoked" }
-	| { state: "closed"; reason: "campaign-inactive" | "game-inactive" | "campaign-missing" | "game-missing" }
+	| {
+			state: "closed";
+			reason:
+				| "campaign-inactive"
+				| "game-inactive"
+				| "campaign-missing"
+				| "game-missing"
+				// Play-window states: the game itself is active but outside its
+				// optional schedule. `scheduledAt` carries the relevant bound so
+				// the guest surface can show "Chưa đến giờ" with the start time.
+				| "not-started"
+				| "ended";
+			scheduledAt: number | null;
+	  }
 	| { state: "open"; resolved: ResolvedShareLink };
 
 /**
  * Resolve a share code into a playable link. Fails closed for malformed
- * codes, revoked links, and inactive campaigns/games; never leaks other
- * owners' assets.
+ * codes, revoked links, inactive campaigns/games, and games outside their
+ * optional play window; never leaks other owners' assets.
  */
 export async function resolveShareLink(
 	ctx: ConvexCtx,
@@ -53,17 +67,27 @@ export async function resolveShareLink(
 
 	const campaign = await ctx.db.get(link.campaignId);
 	if (!campaign || campaign.ownerId !== link.ownerId) {
-		return { state: "closed", reason: "campaign-missing" };
+		return { state: "closed", reason: "campaign-missing", scheduledAt: null };
 	}
 	if (campaign.status !== "active") {
-		return { state: "closed", reason: "campaign-inactive" };
+		return { state: "closed", reason: "campaign-inactive", scheduledAt: null };
 	}
 	const campaignGame = await ctx.db.get(link.campaignGameId);
 	if (!campaignGame || campaignGame.ownerId !== link.ownerId || campaignGame.campaignId !== campaign._id) {
-		return { state: "closed", reason: "game-missing" };
+		return { state: "closed", reason: "game-missing", scheduledAt: null };
 	}
 	if (campaignGame.status !== "active") {
-		return { state: "closed", reason: "game-inactive" };
+		return { state: "closed", reason: "game-inactive", scheduledAt: null };
+	}
+	// Optional play window (server-authoritative): new admissions fail closed
+	// before the start and after the end. In-flight sessions are exempt —
+	// they finish under their frozen snapshot (lib/schedulePolicy.ts).
+	const scheduleState = resolveGameScheduleState(campaignGame, Date.now());
+	if (scheduleState === "not-started") {
+		return { state: "closed", reason: "not-started", scheduledAt: campaignGame.startsAt ?? null };
+	}
+	if (scheduleState === "ended") {
+		return { state: "closed", reason: "ended", scheduledAt: campaignGame.endsAt ?? null };
 	}
 
 	return { state: "open", resolved: { link, campaignGame, campaign } };

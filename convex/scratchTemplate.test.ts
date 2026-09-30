@@ -7,7 +7,24 @@ import shardedCounterTest from "@convex-dev/sharded-counter/test";
 import schema from "./schema";
 import { modules } from "./test.setup";
 import { api } from "./_generated/api";
+import type { FunctionReturnType } from "convex/server";
 import { buildScratchCardGameConfig } from "../lib/gameTemplates";
+
+type PlayActionReply = FunctionReturnType<typeof api.publicPlay.playSessionAction>;
+
+/**
+ * Narrows a play-action reply to its completed outcome, failing loudly
+ * otherwise: the mutation reply is a union where quiz step states carry no
+ * outcome, and these tests only assert completed plays.
+ */
+function expectOutcome(
+	result: PlayActionReply,
+): NonNullable<PlayActionReply["outcome"]> {
+	if (!result.outcome) {
+		throw new Error("Expected a completed play result with an outcome");
+	}
+	return result.outcome;
+}
 
 async function fixture(stock = 5) {
 	const t = convexTest({ schema, modules });
@@ -141,18 +158,18 @@ test("last-unit concurrency: second scratch after exhaustion gets no-reward", as
 	const f = await fixture(1);
 	const first = await admit(f.t, f.shareCode, "0123456789abcdef0123456789abcdef");
 	const firstResult = await reveal(f.t, first.capability);
-	expect(firstResult.outcome.kind).toBe("reward");
+	expect(expectOutcome(firstResult).kind).toBe("reward");
 	const second = await admit(f.t, f.shareCode, "fedcba9876543210fedcba9876543210");
 	const secondResult = await reveal(f.t, second.capability);
 	// Stock exhausted: server truthfully reports the no-reward outcome.
-	expect(secondResult.outcome.kind).toBe("no-reward");
+	expect(expectOutcome(secondResult).kind).toBe("no-reward");
 });
 
 test("frozen config: scratch outcome survives live config edits after admission", async () => {
 	const f = await fixture(5);
 	const { capability, started } = await admit(f.t, f.shareCode, "0123456789abcdef0123456789abcdef");
 	const first = await reveal(f.t, capability);
-	expect(first.outcome.rewardType).toBe("voucher");
+	expect(expectOutcome(first).rewardType).toBe("voucher");
 	// Owner flips the admitted game to engagement-only afterwards.
 	await f.t.run(async (ctx) => {
 		const game = await ctx.db.get(f.campaignGameId);
@@ -201,7 +218,7 @@ test("scratch: two concurrent reveals against the last unit allocate exactly one
 		reveal(f.t, first.capability),
 		reveal(f.t, second.capability),
 	]);
-	const kinds = [firstResult.outcome.kind, secondResult.outcome.kind].sort();
+	const kinds = [expectOutcome(firstResult).kind, expectOutcome(secondResult).kind].sort();
 	expect(kinds).toEqual(["no-reward", "reward"]);
 	// Exact stock identity: the single unit went to exactly one session.
 	// (Allocation deactivates an exhausted item, so read without the active
@@ -213,14 +230,14 @@ test("scratch: two concurrent reveals against the last unit allocate exactly one
 	expect(remaining).toBe(0);
 	// Outcome identity: the rewarded session carries the allocated inventory
 	// item; the losing session carries no claimable outcome.
-	const rewardResult = firstResult.outcome.kind === "reward" ? firstResult : secondResult;
-	const noRewardResult = firstResult.outcome.kind === "reward" ? secondResult : firstResult;
-	expect(rewardResult.outcome.canClaim).toBe(true);
-	expect(rewardResult.outcome.rewardType).toBe("voucher");
-	expect(noRewardResult.outcome.canClaim).toBe(false);
+	const rewardResult = expectOutcome(firstResult).kind === "reward" ? firstResult : secondResult;
+	const noRewardResult = expectOutcome(firstResult).kind === "reward" ? secondResult : firstResult;
+	expect(expectOutcome(rewardResult).canClaim).toBe(true);
+	expect(expectOutcome(rewardResult).rewardType).toBe("voucher");
+	expect(expectOutcome(noRewardResult).canClaim).toBe(false);
 	// Replay of the losing capability keeps the same truthful no-reward.
 	const noRewardReplay = await reveal(f.t, noRewardResult === secondResult ? second.capability : first.capability);
-	expect(noRewardReplay.outcome.kind).toBe("no-reward");
+	expect(expectOutcome(noRewardReplay).kind).toBe("no-reward");
 });
 
 test("scratch: config edited after admission leaves the frozen snapshot intact", async () => {
@@ -256,8 +273,8 @@ test("scratch: config edited after admission leaves the frozen snapshot intact",
 	// The reveal resolves under the frozen rules: still rewarded, still the
 	// original cover — never the live engagement edit.
 	const result = await reveal(f.t, capability);
-	expect(result.outcome.kind).toBe("reward");
-	expect(result.outcome.rewardType).toBe("voucher");
+	expect(expectOutcome(result).kind).toBe("reward");
+	expect(expectOutcome(result).rewardType).toBe("voucher");
 	const remaining = await f.t.run(async (ctx) => {
 		const item = await ctx.db
 			.query("rewardInventory")
@@ -314,8 +331,8 @@ test("scratch: explicit engagement mode keeps stocked inventory untouched", asyn
 	});
 	const { capability } = await admit(t, seeded.shareCode, "0123456789abcdef0123456789abcdef");
 	const result = await reveal(t, capability);
-	expect(result.outcome.kind).toBe("no-reward");
-	expect(result.outcome.canClaim).toBe(false);
+	expect(expectOutcome(result).kind).toBe("no-reward");
+	expect(expectOutcome(result).canClaim).toBe(false);
 	// Engagement never allocates or consumes stocked inventory.
 	const remaining = await t.run(async (ctx) => {
 		const item = await ctx.db
@@ -335,7 +352,7 @@ test("scratch: public snapshot and outcome stay secret-free before the claim", a
 	const f = await fixture(5);
 	const { capability } = await admit(f.t, f.shareCode, "0123456789abcdef0123456789abcdef");
 	const revealed = await reveal(f.t, capability);
-	expect(revealed.outcome.canClaim).toBe(true);
+	expect(expectOutcome(revealed).canClaim).toBe(true);
 	const snapshot = await f.t.query(api.publicPlay.getPublicSessionSnapshot, capability);
 	expect(JSON.stringify(snapshot)).not.toContain("SCRATCH-SECRET-CODE");
 	const outcome = await f.t.query(api.publicPlay.getPublicSessionOutcome, capability);

@@ -8,6 +8,8 @@ import { requireResolvedOwner } from "./authorization";
 import { assertCanUploadAsset } from "./entitlements";
 import {
   assertR2ObjectKey,
+  isCampaignAssetUsage,
+  isCampaignGameAssetUsage,
   isRenderableCampaignAssetRecord,
   isSafeCampaignAssetBucketName,
   normalizeR2ObjectKey,
@@ -63,6 +65,44 @@ async function clearCampaignHeroAssetIfCurrent(
   }
 }
 
+async function clearCampaignLogoAssetIfCurrent(
+  ctx: MutationCtx,
+  asset: Doc<"campaignAssets">,
+  now: number
+) {
+  if (!asset.campaignId) {
+    return;
+  }
+
+  const campaign = await ctx.db.get(asset.campaignId);
+  if (campaign?.logoAssetId === asset._id) {
+    await ctx.db.patch(campaign._id, {
+      logoAssetId: undefined,
+      updatedAt: now,
+    });
+  }
+}
+
+/**
+ * A campaign asset leaves its role when it is rejected or replaced: campaign
+ * pointers clear, and a per-game slot row drops its (usage, campaignGameId)
+ * binding so the slot falls back to the template default.
+ */
+export async function clearCampaignAssetRole(
+  ctx: MutationCtx,
+  asset: Doc<"campaignAssets">,
+  now: number
+) {
+  await clearCampaignHeroAssetIfCurrent(ctx, asset, now);
+  await clearCampaignLogoAssetIfCurrent(ctx, asset, now);
+  if (asset.campaignGameId || (asset.usage && asset.usage !== "hero")) {
+    await ctx.db.patch(asset._id, {
+      usage: undefined,
+      campaignGameId: undefined,
+    });
+  }
+}
+
 export async function rejectCampaignAssetAndScheduleObjectDelete(
   ctx: MutationCtx,
   asset: Doc<"campaignAssets">,
@@ -78,7 +118,7 @@ export async function rejectCampaignAssetAndScheduleObjectDelete(
     rejectedReason,
     status: "rejected",
   });
-  await clearCampaignHeroAssetIfCurrent(ctx, asset, now);
+  await clearCampaignAssetRole(ctx, asset, now);
   if (safeKey) {
     await r2.deleteObject(ctx, safeKey);
   }
@@ -151,12 +191,56 @@ export async function getRenderableCampaignAssetUrl(
   return r2.getUrl(asset.key);
 }
 
+/**
+ * Live per-game template slot assets, keyed list of {usage, assetId, url}.
+ * Slot images are presentation, not rules: they are resolved from the
+ * currently attached rows on every read (never frozen into rulesSnapshot) so
+ * a swap shows up on the next query replay and an absent slot falls back to
+ * the template's default visuals.
+ */
+export async function getRenderableCampaignGameAssets(
+  ctx: ConvexCtx,
+  ownerId: Id<"users">,
+  campaignId: Id<"campaigns">,
+  campaignGameId: Id<"campaignGames">
+): Promise<Array<{ usage: string; assetId: Id<"campaignAssets">; url: string }>> {
+  const rows = await ctx.db
+    .query("campaignAssets")
+    .withIndex("by_game_usage", (q) => q.eq("campaignGameId", campaignGameId))
+    .collect();
+  const assets: Array<{ usage: string; assetId: Id<"campaignAssets">; url: string }> = [];
+  for (const asset of rows) {
+    if (
+      asset.ownerId !== ownerId ||
+      asset.campaignId !== campaignId ||
+      !isCampaignGameAssetUsage(asset.usage) ||
+      !isRenderableCampaignAsset(asset, ownerId)
+    ) {
+      continue;
+    }
+    const url = await getRenderableCampaignAssetUrl(
+      ctx,
+      ownerId,
+      asset.key,
+      campaignId
+    );
+    if (url && asset.usage) {
+      assets.push({ usage: asset.usage, assetId: asset._id, url });
+    }
+  }
+  return assets;
+}
+
 export const generateUploadUrl = mutation({
   args: {
     campaignId: v.id("campaigns"),
     fileName: v.string(),
     contentType: v.string(),
     size: v.number(),
+    // Asset kind; omitted = the campaign hero (legacy call path untouched).
+    usage: v.optional(v.string()),
+    // Required for per-game kinds; the game must belong to the campaign.
+    campaignGameId: v.optional(v.id("campaignGames")),
   },
   handler: async (ctx, args) => {
     const { ownerId } = await requireResolvedOwner(ctx, undefined, {
@@ -169,10 +253,31 @@ export const generateUploadUrl = mutation({
       throw new Error("Không tìm thấy chiến dịch");
     }
 
+    const usage = args.usage === undefined || args.usage === "" ? "hero" : args.usage;
+    if (!isCampaignAssetUsage(usage)) {
+      throw new Error("Loại tài sản không hợp lệ");
+    }
+    let campaignGameId: Id<"campaignGames"> | undefined;
+    if (isCampaignGameAssetUsage(usage)) {
+      if (!args.campaignGameId) {
+        throw new Error("Thiếu trò chơi cho tài sản của trò chơi");
+      }
+      const campaignGame = await ctx.db.get(args.campaignGameId);
+      if (
+        !campaignGame ||
+        campaignGame.ownerId !== ownerId ||
+        campaignGame.campaignId !== campaign._id
+      ) {
+        throw new Error("Trò chơi không thuộc chiến dịch này");
+      }
+      campaignGameId = campaignGame._id;
+    }
+
     const validated = validateCampaignAssetPolicy({
       contentType: args.contentType,
       fileName: args.fileName,
       size: args.size,
+      usage,
     });
 
     const configuredBucket = requireConfiguredR2Bucket();
@@ -190,7 +295,8 @@ export const generateUploadUrl = mutation({
       metadataSource: "client",
       size: validated.size,
       status: "reserved",
-      usage: "hero",
+      usage,
+      campaignGameId,
       createdAt: now,
     });
 
@@ -293,6 +399,9 @@ const clientApi = r2.clientApi<DataModel>({
           contentType: metadata.contentType,
           fileName: asset.fileName,
           size: metadata.size,
+          // Re-validate against the row's own kind so a slot asset can never
+          // sneak past its kind-specific ceiling at metadata sync.
+          usage: isCampaignAssetUsage(asset.usage) ? asset.usage : "hero",
         });
 
         await ctx.db.patch(asset._id, {

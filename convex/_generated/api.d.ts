@@ -36,10 +36,12 @@ import type * as playSessions from "../playSessions.js";
 import type * as polarClient from "../polarClient.js";
 import type * as publicLinks from "../publicLinks.js";
 import type * as publicPlay from "../publicPlay.js";
+import type * as rewardClaims from "../rewardClaims.js";
 import type * as rewardInventory from "../rewardInventory.js";
 import type * as security from "../security.js";
 import type * as setup from "../setup.js";
 import type * as shareLinks from "../shareLinks.js";
+import type * as stationPlay from "../stationPlay.js";
 
 import type {
   ApiFromModules,
@@ -76,10 +78,12 @@ declare const fullApi: ApiFromModules<{
   polarClient: typeof polarClient;
   publicLinks: typeof publicLinks;
   publicPlay: typeof publicPlay;
+  rewardClaims: typeof rewardClaims;
   rewardInventory: typeof rewardInventory;
   security: typeof security;
   setup: typeof setup;
   shareLinks: typeof shareLinks;
+  stationPlay: typeof stationPlay;
 }>;
 
 /**
