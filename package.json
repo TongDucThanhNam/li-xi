@@ -27,9 +27,9 @@
     "verify:production": "node scripts/verify-production-readiness.mjs --prod"
   },
   "dependencies": {
-    "@auth/core": "^0.37.4",
+    "@auth/core": "^0.41.3",
     "@convex-dev/aggregate": "^0.2.1",
-    "@convex-dev/auth": "^0.0.92",
+    "@convex-dev/auth": "^0.0.95",
     "@convex-dev/polar": "^0.9.1",
     "@convex-dev/r2": "^0.10.1",
     "@convex-dev/sharded-counter": "^0.2.0",
@@ -44,12 +44,15 @@
     "embla-carousel-react": "^8.6.0",
     "lucide-react": "^1.16.0",
     "motion": "^12.40.0",
-    "nitro": "^3.0.260429-beta",
+    "nitro": "^3.0.260903-beta",
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
+    "react-aria-components": "1.18.0",
     "react-dom": "19.2.3",
     "react-resizable-panels": "^4.11.2",
-    "recharts": "^3.8.1"
+    "recharts": "^3.8.1",
+    "tailwind-merge": ">=3.4.0",
+    "tailwind-variants": ">=3.2.0"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",
@@ -67,7 +70,7 @@
     "tailwindcss": "^4.1.18",
     "typescript": "^5",
     "typescript-eslint": "^8.59.4",
-    "vite": "^8.0.13",
+    "vite": "^8.0.16",
     "vitest": "^4.1.7"
   },
   "ignoreScripts": [
@@ -76,9 +79,20 @@
   ],
   "trustedDependencies": [
     "sharp",
-    "unrs-resolver"
+    "unrs-resolver",
+    "heroui-pro",
+    "@heroui-pro/react",
+    "heroui-native-pro"
   ],
   "overrides": {
-    "ws": "8.20.1"
+    "ws": "8.22.0",
+    "tar": "7.5.22",
+    "@babel/core": "7.29.7",
+    "browserslist": "4.29.3",
+    "baseline-browser-mapping": "2.11.26",
+    "js-yaml": "4.3.2",
+    "nanoid": "3.3.19",
+    "postcss": "8.5.28",
+    "undici": "7.30.0"
   }
 }

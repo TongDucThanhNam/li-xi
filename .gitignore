@@ -42,3 +42,7 @@ yarn-error.log*
 # tests/ui/*.snapshots/ are intentionally tracked references)
 /tests/ui/artifacts/
 /tests/ui/reports/
+
+# Local review/dispatch working directories (not product code or evidence)
+/.tmp/
+/.zcode-dispatch/
