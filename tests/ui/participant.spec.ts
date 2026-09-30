@@ -680,3 +680,120 @@ async function startWheelPlayAndSpinByKey(page: Page) {
 	await spin.focus();
 	await spin.press("Enter");
 }
+
+// ---------------------------------------------------------------------------
+// Slice 4d-2: configured guest copy (thank-you / claim instructions) and the
+// play-window closed entry states on /p. Evidence screenshots land in
+// .tmp/slice4d2-evidence (not baseline snapshots).
+// ---------------------------------------------------------------------------
+
+const SLICE_EVIDENCE_DIR = path.resolve(
+	path.dirname(fileURLToPath(import.meta.url)),
+	"../../.tmp/slice4d2-evidence",
+);
+
+async function saveSliceEvidence(page: Page, name: string) {
+	mkdirSync(SLICE_EVIDENCE_DIR, { recursive: true });
+	const shot = await page.screenshot({ fullPage: true });
+	writeFileSync(path.join(SLICE_EVIDENCE_DIR, `${name}.png`), shot);
+}
+
+function setScheduleClosed(
+	page: Page,
+	mode: "not-started" | "ended" | null,
+	scheduledAt?: number,
+) {
+	return page.evaluate(
+		([value, epoch]) =>
+			(
+				window as unknown as { __participantFixture: ParticipantFixtureApi }
+			).__participantFixture.setScheduleClosed(
+				value as "not-started" | "ended" | null,
+				epoch as number | undefined,
+			),
+		[mode, scheduledAt],
+	);
+}
+
+test("wheel-copy: configured thank-you and claim instructions render on the guest surfaces", async ({
+	page,
+}) => {
+	await page.goto("/participant.html?share=wheel-copy");
+	const start = page.getByRole("button", { name: "Bắt đầu" });
+	await expect(start).toBeVisible();
+	await start.click();
+	await waitWheelStage(page);
+	await page.getByRole("button", { name: "Bắt đầu" }).click();
+	await expect(page.getByRole("region", { name: "Kết quả vòng quay" })).toBeVisible({
+		timeout: 15_000,
+	});
+	await expect(page.getByRole("heading", { name: "Voucher quà tặng" })).toBeVisible();
+
+	// The claimed voucher shows the CONFIGURED claim instructions next to
+	// the code, not the built-in default.
+	await page.getByRole("button", { name: "Nhận quà" }).click();
+	await expect(page.getByText("SYNTHETIC-COPY-CODE", { exact: true })).toBeVisible();
+	await expect(
+		page.getByText("Xuất trình mã này tại quầy ưu đãi của sự kiện."),
+	).toBeVisible();
+
+	// Finish reaches the completion surface carrying the CONFIGURED
+	// thank-you message.
+	await page.getByRole("button", { name: "Hoàn tất" }).click();
+	await expect(page.getByRole("heading", { name: "Hoàn tất" })).toBeVisible();
+	await expect(
+		page.getByText("Cảm ơn bạn đã đồng hành cùng gian hàng tri ân!"),
+	).toBeVisible();
+	// The built-in defaults stay out of the way when copy is configured.
+	await expect(
+		page.getByText("Cảm ơn bạn đã tham gia trải nghiệm của chúng tôi!"),
+	).toBeHidden();
+	await expect(
+		page.getByText("Lưu lại mã này để đổi thưởng với nhân viên chiến dịch."),
+	).toBeHidden();
+});
+
+test("play window not-started: /p entry closes with the precise message at both viewports", async ({
+	page,
+}) => {
+	const startsAt = Date.parse("2026-10-10T09:00:00+07:00");
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await page.goto("/participant.html?share=wheel");
+	await setScheduleClosed(page, "not-started", startsAt);
+	await expect(page.getByText("Trò chơi đã đóng")).toBeVisible();
+	await expect(
+		page.getByText(/Chưa đến giờ — trò chơi mở cửa sổ chơi lúc/),
+	).toBeVisible();
+	// The bound time renders in Vietnam time (09:00 for the fixed epoch).
+	await expect(page.getByText(/09:00/)).toBeVisible();
+	await saveSliceEvidence(page, "closed-not-started-1440");
+
+	await page.setViewportSize({ width: 390, height: 844 });
+	await expect(page.getByText("Trò chơi đã đóng")).toBeVisible();
+	expect(
+		await page.evaluate(
+			() =>
+				document.documentElement.scrollWidth >
+				document.documentElement.clientWidth,
+		),
+	).toBe(false);
+	await saveSliceEvidence(page, "closed-not-started-390");
+});
+
+test("play window ended: /p entry closes with the ended message and reopens when cleared", async ({
+	page,
+}) => {
+	const endsAt = Date.parse("2026-09-01T21:00:00+07:00");
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto("/participant.html?share=wheel");
+	await setScheduleClosed(page, "ended", endsAt);
+	await expect(page.getByText("Trò chơi đã đóng")).toBeVisible();
+	await expect(
+		page.getByText(/Đã kết thúc — cửa sổ chơi của trò chơi này đã đóng/),
+	).toBeVisible();
+	await saveSliceEvidence(page, "closed-ended-390");
+
+	// Restoring an open entry brings the playable hero back on the same page.
+	await setScheduleClosed(page, null);
+	await expect(page.getByRole("button", { name: "Bắt đầu" })).toBeVisible();
+});

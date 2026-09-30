@@ -12,11 +12,10 @@ import {
 } from "./participant-convex-mock";
 
 // Template stylesheets load in real /p route order: li-xi first, then the
-// wheel, scratch, and slot layers (mirrors app/p/$shareCode.tsx head links).
-import "../../../app/styles/draw.css";
-import "../../../app/styles/lucky-wheel.css";
-import "../../../app/styles/scratch-card.css";
-import "../../../app/styles/slot-reveal.css";
+// wheel, scratch, slot, and quiz layers (mirrors app/p/$shareCode.tsx head
+// links). The single participant-styles.css entry carries the Tailwind
+// @source for app/ that generates the utilities the stages rely on.
+import "./participant-styles.css";
 
 const shareCode = resolveParticipantShareCode(
 	new URLSearchParams(window.location.search).get("share") ?? "wheel",

@@ -1,0 +1,30 @@
+/* Analytics fixture styles: same processing as the operator fixture — import
+   the real admin stylesheet AND scan the app directory so every Tailwind
+   utility used by the mounted feature is generated. The fixture shell mimics
+   the workspace layout's content+aside grid; animations are frozen so
+   snapshots stay deterministic. */
+@import "../../../app/styles/admin.css";
+@source "../../../app";
+
+.analytics-fixture-shell {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 360px;
+	gap: 1.5rem;
+	align-items: start;
+	padding: 1.5rem;
+	max-width: 1400px;
+	margin: 0 auto;
+}
+
+@media (max-width: 1023px) {
+	.analytics-fixture-shell {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.analytics-fixture-shell *,
+.analytics-fixture-shell *::before,
+.analytics-fixture-shell *::after {
+	animation: none !important;
+	transition: none !important;
+}

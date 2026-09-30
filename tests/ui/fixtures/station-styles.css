@@ -1,0 +1,10 @@
+/* Station fixture stylesheet entry: the app-owned station shell + template
+   layers in the real route's documented order, plus a Tailwind @source for
+   app/ so the utility classes the real route compiles (each production CSS
+   unit scans the whole app tree) also exist in the fixture build. Same
+   pattern as styles.css / operator-styles.css. */
+@import "../../../app/styles/station.css";
+@import "../../../app/styles/draw.css";
+@import "../../../app/styles/lucky-wheel.css";
+@import "../../../app/styles/scratch-card.css";
+@source "../../../app";

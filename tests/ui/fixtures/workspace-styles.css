@@ -1,0 +1,23 @@
+/* Workspace fixture styles: the REAL admin stylesheet plus every template
+   layer the game editor previews can reference, and an app @source scan so
+   every Tailwind utility used by the mounted workspace features is
+   generated. Animations/transitions are frozen for deterministic snapshots;
+   chart animation is disabled per-test via prefers-reduced-motion. */
+/* Template layers first, admin last: draw.css and lucky-wheel.css ship
+   global `@layer base body` dark-theme rules that the real app only loads on
+   game routes (per-route cssHref), never on workspace routes. Importing
+   admin.css last keeps the admin body theme authoritative here. */
+@import "../../../app/styles/draw.css";
+@import "../../../app/styles/lucky-wheel.css";
+@import "../../../app/styles/scratch-card.css";
+@import "../../../app/styles/slot-reveal.css";
+@import "../../../app/styles/quiz.css";
+@import "../../../app/styles/admin.css";
+@source "../../../app";
+
+*,
+*::before,
+*::after {
+	animation: none !important;
+	transition: none !important;
+}

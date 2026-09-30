@@ -46,6 +46,12 @@ type ParticipantBackend = {
 	actionDelivery: "immediate" | "delayed" | "fail-once";
 	/** fail-once: the first reveal throws before allocating anything. */
 	actionFailedOnce: boolean;
+	/**
+	 * Play-window close simulation for getPublicShareEntry: null keeps the
+	 * entry open; otherwise the entry resolves closed with the precise
+	 * reason + bound time, mirroring the real server payload.
+	 */
+	scheduleClose: { reason: "not-started" | "ended"; scheduledAt: number | null } | null;
 	/** A fresh module instance after navigation means the page reloaded. */
 	reloaded: boolean;
 	opens: number;
@@ -59,7 +65,7 @@ type ParticipantGame = {
 	shareCode: string;
 	campaignId: string;
 	campaignGameId: string;
-	templateId: "li-xi" | "lucky-wheel" | "scratch-card" | "slot-reveal";
+	templateId: "li-xi" | "lucky-wheel" | "scratch-card" | "slot-reveal" | "quiz";
 	gameName: string;
 	headline: string;
 	engagement: boolean;
@@ -95,6 +101,19 @@ type ParticipantGame = {
 	>;
 	/** Active reward segment override for the NEXT rewarded play. */
 	activeRewardSegmentKey?: string;
+	/**
+	 * Configured guest copy for the two 4d-2 fields; empty/absent renders
+	 * the built-in defaults, exactly like the real server.
+	 */
+	publicCopy?: {
+		thankYouMessage?: string;
+		claimInstructions?: string;
+	};
+	/**
+	 * Live per-game template slot images (4d-3); absent/empty renders the
+	 * template fallback visuals, exactly like the real server.
+	 */
+	assetUrls?: Record<string, string>;
 };
 
 const GAMES: Record<string, ParticipantGame> = {
@@ -206,6 +225,47 @@ const GAMES: Record<string, ParticipantGame> = {
 			"slot-item-points-copy": { rewardType: "points", label: "Điểm thưởng", amount: 25 },
 		},
 	},
+	quiz: {
+		scenario: "quiz",
+		shareCode: "uiquiz0000000000000000", // 22-char
+		campaignId: "campaign-a",
+		campaignGameId: "game-quiz",
+		templateId: "quiz",
+		gameName: "Trắc nghiệm tri ân",
+		headline: "Trắc nghiệm tri ân",
+		engagement: false,
+		segments: [],
+		noRewardLabel: "Chưa đạt — cảm ơn bạn đã tham gia",
+		noRewardKey: "__no-reward__",
+		voucherSecret: "SYNTHETIC-QUIZ-CODE",
+		rewardSegmentKey: "voucher-pool",
+		startCtaLabel: "Bắt đầu",
+		// PRIVATE half: passCount 2 of 3 questions; distinct correct indexes so
+		// both the pass and the deliberate-fail spec paths are deterministic.
+		quiz: {
+			passCount: 2,
+			questions: [
+				{
+					prompt: "Câu 1: Bộ sưu tập Tết có bao nhiêu màu chủ đạo?",
+					choices: ["Hai màu", "Ba màu", "Bốn màu"],
+					correctIndex: 1,
+					explanation: "Bộ sưu tập dùng ba màu chủ đạo: đỏ, vàng, hồng.",
+				},
+				{
+					prompt: "Câu 2: Đơn hàng nào được miễn phí giao hàng?",
+					choices: ["Đơn từ 300K", "Đơn từ 500K", "Đơn từ 700K"],
+					correctIndex: 0,
+					explanation: "Mọi đơn từ 300K đều được miễn phí giao hàng.",
+				},
+				{
+					prompt: "Câu 3: Quà tích điểm đổi được trong bao lâu?",
+					choices: ["7 ngày", "20 ngày", "30 ngày"],
+					correctIndex: 2,
+					explanation: "Điểm tích lũy đổi quà trong vòng 30 ngày.",
+				},
+			],
+		},
+	},
 	lunar: {
 		scenario: "lunar",
 		shareCode: "uilunar000000000000000",
@@ -219,6 +279,24 @@ const GAMES: Record<string, ParticipantGame> = {
 		noRewardLabel: "Hẹn gặp lại",
 		noRewardKey: "__no-reward__",
 		voucherSecret: "SYNTHETIC-STORED-CODE",
+	},
+	"wheel-copy": {
+		scenario: "wheel-copy",
+		shareCode: "uiwheelcopy00000000000", // 22-char
+		campaignId: "campaign-a",
+		campaignGameId: "game-wheel-copy",
+		templateId: "lucky-wheel",
+		gameName: "Vòng quay tri ân đặc biệt",
+		headline: "Vòng quay tri ân đặc biệt",
+		engagement: false,
+		segments: [{ key: "voucher-pool", label: "Voucher quà tặng" }],
+		noRewardLabel: "Chúc bạn may mắn",
+		noRewardKey: "__no-reward__",
+		voucherSecret: "SYNTHETIC-COPY-CODE",
+		publicCopy: {
+			thankYouMessage: "Cảm ơn bạn đã đồng hành cùng gian hàng tri ân!",
+			claimInstructions: "Xuất trình mã này tại quầy ưu đãi của sự kiện.",
+		},
 	},
 };
 
@@ -236,6 +314,7 @@ function defaultBackend(): ParticipantBackend {
 		dropNextStart: false,
 		actionDelivery: "immediate",
 		actionFailedOnce: false,
+		scheduleClose: null,
 		reloaded: false,
 		opens: 0,
 		starts: 0,
@@ -323,6 +402,13 @@ export function participantQuery(name: string, args: any) {
 
 	if (name === "publicPlay:getPublicShareEntry") {
 		if (backend.entryState !== "open") return { state: backend.entryState };
+		if (backend.scheduleClose) {
+			return {
+				state: "closed",
+				reason: backend.scheduleClose.reason,
+				scheduledAt: backend.scheduleClose.scheduledAt,
+			};
+		}
 		return {
 			state: "open",
 			shareCode,
@@ -342,12 +428,14 @@ export function participantQuery(name: string, args: any) {
 					startCtaLabel: game.startCtaLabel ?? "Bắt đầu",
 					collectCtaLabel: "Nhận quà",
 					waitingMessage: "",
+					...(game.publicCopy ?? {}),
 				},
 				wheel:
 					game.templateId === "lucky-wheel"
 						? { segments: game.segments, noRewardLabel: game.noRewardLabel, noRewardKey: game.noRewardKey }
 						: undefined,
 				playLimits: { maxSessionsPerParticipant: 1, maxTotalSessions: null },
+				assetUrls: game.assetUrls ? { ...game.assetUrls } : {},
 			},
 			availability: { soldOut: false },
 			viewer: { canPlay: true, reason: null },
@@ -390,7 +478,8 @@ export function participantQuery(name: string, args: any) {
 				rewardType: session.outcome?.rewardType ?? "voucher",
 				amount: session.outcome?.amount ?? null,
 				secretCode: session.secretCode,
-				instructions: "Hướng dẫn nhận thưởng (fixture).",
+				// Voucher instructions prefer the game's configured copy.
+				instructions: game.publicCopy?.claimInstructions ?? "Hướng dẫn nhận thưởng (fixture).",
 			},
 		};
 	}
@@ -405,6 +494,7 @@ export function participantQuery(name: string, args: any) {
 					startCtaLabel: game.startCtaLabel ?? "Bắt đầu",
 					collectCtaLabel: "Nhận quà",
 					waitingMessage: "",
+					...(game.publicCopy ?? {}),
 				},
 				...(game.templateId === "lucky-wheel"
 					? {
@@ -455,6 +545,19 @@ export function participantQuery(name: string, args: any) {
 							},
 						}
 					: {}),
+				// Quiz PUBLIC half only: prompts/choices/passCount — the answer
+				// key and explanations never leave the mock server here.
+				...(game.templateId === "quiz" && game.quiz
+					? {
+							quiz: {
+								passCount: game.quiz.passCount,
+								questions: game.quiz.questions.map((question) => ({
+									prompt: question.prompt,
+									choices: question.choices,
+								})),
+							},
+						}
+					: {}),
 			},
 		};
 	}
@@ -481,7 +584,166 @@ export function participantQuery(name: string, args: any) {
 			}),
 		};
 	}
+	if (name === "publicPlay:getPublicQuizState") {
+		return quizStateFor(game, session ?? null);
+	}
 	throw new Error(`Unsupported synthetic participant query: ${name}`);
+}
+
+/**
+ * Capability-bound quiz progression, mirroring publicPlay.getPublicQuizState:
+ * before completion ONLY safe progress (never the answer key); after
+ * completion the authoritative score/pass plus the permitted answer review.
+ */
+function quizStateFor(
+	game: ParticipantGame,
+	session: ParticipantSession | null,
+) {
+	const quiz = game.quiz;
+	if (!session || !quiz || quiz.questions.length === 0) {
+		return null;
+	}
+	const total = quiz.questions.length;
+	const answers = session.quizAnswers ?? [];
+	const completed = session.status === "completed" && Boolean(session.outcome);
+	if (!completed) {
+		const currentIndex = Math.min(answers.length, total);
+		const currentQuestion =
+			currentIndex < total
+				? {
+						index: currentIndex,
+						prompt: quiz.questions[currentIndex].prompt,
+						choices: quiz.questions[currentIndex].choices,
+					}
+				: null;
+		return {
+			totalQuestions: total,
+			answeredCount: answers.length,
+			currentIndex,
+			completed: false,
+			currentQuestion,
+		};
+	}
+	let score = 0;
+	const review = answers.map((answer) => {
+		const question = quiz.questions[answer.questionIndex];
+		const correctIndex = question?.correctIndex ?? -1;
+		const correct = correctIndex === answer.choiceIndex;
+		if (correct) {
+			score += 1;
+		}
+		return {
+			questionIndex: answer.questionIndex,
+			choiceIndex: answer.choiceIndex,
+			correctIndex,
+			correct,
+			explanation: question?.explanation ?? null,
+		};
+	});
+	return {
+		totalQuestions: total,
+		answeredCount: answers.length,
+		currentIndex: total,
+		completed: true,
+		score,
+		passed: score >= quiz.passCount,
+		review,
+	};
+}
+
+/**
+ * Multi-step quiz answer, mirroring playEngine.answerQuizQuestion: the
+ * revision is the client's accepted-answer count; identical replays of the
+ * LAST accepted answer are idempotent, stale/conflicting ones reject. The
+ * final answer grades ONCE from the private key — a pass (with stock, in
+ * rewarded mode) allocates exactly once; a fail or engagement completion is
+ * a truthful no-reward that never touches stock.
+ */
+function answerQuizAction(
+	game: ParticipantGame,
+	session: ParticipantSession,
+	backend: ParticipantBackend,
+	action: {
+		type: "quiz-answer";
+		questionIndex: number;
+		choiceIndex: number;
+		revision: number;
+	},
+):
+	| { quizStep: { totalQuestions: number; answeredCount: number } }
+	| {
+			outcome: ParticipantOutcome;
+			quizResult: { score: number; passed: boolean };
+	  } {
+	const quiz = game.quiz;
+	if (!quiz || quiz.questions.length === 0) {
+		throw new Error("Trắc nghiệm này chưa được cấu hình");
+	}
+	const total = quiz.questions.length;
+	const answers = session.quizAnswers ?? [];
+	const question = quiz.questions[action.questionIndex];
+	if (!question) {
+		throw new Error("Câu hỏi không hợp lệ");
+	}
+	if (action.choiceIndex < 0 || action.choiceIndex >= question.choices.length) {
+		throw new Error("Lựa chọn không hợp lệ");
+	}
+	if (action.revision === answers.length - 1 && answers.length > 0) {
+		const last = answers[answers.length - 1];
+		if (
+			last.questionIndex === action.questionIndex &&
+			last.choiceIndex === action.choiceIndex
+		) {
+			return { quizStep: { totalQuestions: total, answeredCount: answers.length } };
+		}
+		throw new Error("Câu trả lời đã cũ hoặc không khớp tiến độ");
+	}
+	if (action.revision !== answers.length) {
+		throw new Error("Câu trả lời đã cũ hoặc không khớp tiến độ");
+	}
+	if (action.questionIndex !== answers.length) {
+		throw new Error("Chỉ được trả lời câu hỏi hiện tại");
+	}
+	session.quizAnswers = [
+		...answers,
+		{ questionIndex: action.questionIndex, choiceIndex: action.choiceIndex },
+	];
+	if (session.quizAnswers.length < total) {
+		return {
+			quizStep: { totalQuestions: total, answeredCount: session.quizAnswers.length },
+		};
+	}
+	let score = 0;
+	for (const answer of session.quizAnswers) {
+		if (quiz.questions[answer.questionIndex]?.correctIndex === answer.choiceIndex) {
+			score += 1;
+		}
+	}
+	const passed = score >= quiz.passCount;
+	session.status = "completed";
+	session.playedHere = true;
+	if (passed && !game.engagement && backend.stock > 0) {
+		backend.stock -= 1;
+		session.secretCode = game.voucherSecret;
+		session.outcome = {
+			kind: "reward",
+			rewardType: "voucher",
+			label: "Voucher quà tặng",
+			amount: null,
+			canClaim: true,
+			segmentKey: game.rewardSegmentKey ?? "voucher-pool",
+		};
+	} else {
+		session.outcome = {
+			kind: "no-reward",
+			rewardType: "none",
+			label: game.noRewardLabel,
+			amount: null,
+			canClaim: false,
+			segmentKey: game.noRewardKey,
+		};
+	}
+	return { outcome: session.outcome, quizResult: { score, passed } };
 }
 
 export function participantMutation(name: string, args: any) {
@@ -552,16 +814,39 @@ export function participantMutation(name: string, args: any) {
 			emit();
 			return { outcome: session.outcome };
 		}
-		// fail-once: the FIRST unfinished reveal rejects WITHOUT allocating;
-		// the retry replays the same capability and succeeds exactly once.
+		// fail-once: the FIRST unfinished action rejects WITHOUT recording or
+		// allocating; the retry replays the same capability and succeeds
+		// exactly once.
 		if (backend.actionDelivery === "fail-once" && !backend.actionFailedOnce) {
 			backend.actionFailedOnce = true;
 			emit();
 			throw new Error(
 				game.templateId === "slot-reveal"
 					? "Mất phản hồi quay máy (mô phỏng)"
-					: "Mất phản hồi mở thẻ (mô phỏng)",
+					: game.templateId === "quiz"
+						? "Mất phản hồi ghi nhận câu trả lời (mô phỏng)"
+						: "Mất phản hồi mở thẻ (mô phỏng)",
 			);
+		}
+		// Multi-step quiz answers progress the session; only the final answer
+		// grades and (maybe) allocates. Intermediate answers return a typed
+		// step state and create no outcome/completion.
+		if (args.action?.type === "quiz-answer") {
+			const runQuizAnswer = () => {
+				const reply = answerQuizAction(game, session, backend, args.action);
+				emit();
+				return reply;
+			};
+			// delayed: the whole answer (recording included) is held until the
+			// harness calls deliverActions(); the stage keeps its pending state.
+			if (backend.actionDelivery === "delayed") {
+				const resolvers = pendingActions.get(shareCode) ?? [];
+				return new Promise((resolve) => {
+					resolvers.push(() => resolve(runQuizAnswer()));
+					pendingActions.set(shareCode, resolvers);
+				});
+			}
+			return runQuizAnswer();
 		}
 		const runReveal = () => {
 			session.status = "completed";
@@ -619,7 +904,8 @@ export function participantMutation(name: string, args: any) {
 				rewardType: session.outcome?.rewardType ?? "voucher",
 				amount: session.outcome?.amount ?? null,
 				secretCode: session.secretCode,
-				instructions: "Hướng dẫn nhận thưởng (fixture).",
+				// Voucher instructions prefer the game's configured copy.
+				instructions: game.publicCopy?.claimInstructions ?? "Hướng dẫn nhận thưởng (fixture).",
 			},
 		};
 	}
@@ -636,11 +922,22 @@ export type ParticipantFixtureApi = {
 		| "scratch"
 		| "scratch-high"
 		| "scratch-crimson"
-		| "slot",
+		| "slot"
+		| "quiz"
+		| "wheel-copy",
 		string
 	>;
 	setActiveShareCode(shareCode: string): void;
 	closeEntry(shareCode?: string): void;
+	/**
+	 * Simulates the play-window closed entry: a reason + the relevant bound
+	 * time, or null to restore an open entry.
+	 */
+	setScheduleClosed(
+		mode: "not-started" | "ended" | null,
+		scheduledAt?: number,
+		shareCode?: string,
+	): void;
 	setResultDelivery(mode: "immediate" | "delayed", shareCode?: string): void;
 	deliverOutcomes(shareCode?: string): void;
 	setClaimDelivery(mode: "immediate" | "delayed", shareCode?: string): void;
@@ -652,6 +949,7 @@ export type ParticipantFixtureApi = {
 	): void;
 	deliverActions(shareCode?: string): void;
 	setEngagement(enabled: boolean, shareCode?: string): void;
+	setAssetUrls(urls: Record<string, string> | null, shareCode?: string): void;
 	completeSessionRemotely(shareCode?: string): void;
 	setRewardSegmentKey(segmentKey: string | null, shareCode?: string): void;
 	setStock(value: number, shareCode?: string): void;
@@ -692,6 +990,8 @@ export const participantFixtureApi: ParticipantFixtureApi = {
 		"scratch-high": "scratch-high",
 		"scratch-crimson": "scratch-crimson",
 		slot: "slot",
+		quiz: "quiz",
+		"wheel-copy": "wheel-copy",
 	},
 	setActiveShareCode(shareCode: string) {
 		activeShareCode = shareCode;
@@ -699,6 +999,15 @@ export const participantFixtureApi: ParticipantFixtureApi = {
 	closeEntry(shareCode = activeShareCode) {
 		const backend = backendFor(shareCode);
 		backend.entryState = "revoked";
+		emit();
+	},
+	setScheduleClosed(
+		mode: "not-started" | "ended" | null,
+		scheduledAt: number | undefined = undefined,
+		shareCode = activeShareCode,
+	) {
+		const backend = backendFor(shareCode);
+		backend.scheduleClose = mode ? { reason: mode, scheduledAt: scheduledAt ?? null } : null;
 		emit();
 	},
 	setResultDelivery(mode: "immediate" | "delayed" = "delayed", shareCode = activeShareCode) {
@@ -747,6 +1056,13 @@ export const participantFixtureApi: ParticipantFixtureApi = {
 	setEngagement(enabled: boolean, shareCode = activeShareCode) {
 		const game = gameByShareCode(shareCode);
 		game.engagement = enabled;
+		emit();
+	},
+	/** Sets or clears the live per-game slot image map (4d-3); null falls
+	 * back to the template's default visuals. */
+	setAssetUrls(urls: Record<string, string> | null, shareCode = activeShareCode) {
+		const game = gameByShareCode(shareCode);
+		game.assetUrls = urls ?? undefined;
 		emit();
 	},
 	/** Slots the NEXT rewarded play's outcome identity (typed synthetic

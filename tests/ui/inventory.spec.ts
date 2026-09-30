@@ -182,7 +182,9 @@ test("remove+replacement save emits the replacement only; blank save preserves",
 }) => {
 	await openInventory(page);
 
-	await page.getByLabel("Xoá mã hiện tại của phần thưởng 1").check();
+	// The HeroUI checkbox keeps its input visually hidden behind the styled
+	// control, so toggle it the way a user does: click the label text.
+	await page.getByText("Xóa mã hiện tại khi lưu (thay vì giữ nguyên)").click();
 	await page
 		.getByRole("textbox", { name: /Mã voucher/ })
 		.fill("REPLACEMENT-CODE-1");

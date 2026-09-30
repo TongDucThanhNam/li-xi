@@ -39,6 +39,8 @@ const games: Array<Record<string, any>> = [
 			},
 		},
 		playLimits: { maxSessionsPerParticipant: 1, maxTotalSessions: null },
+		// Real-shaped play window (the editor normalizes this on load).
+		schedule: { startsAt: null, endsAt: null },
 	},
 	{
 		id: GAME_WHEEL,
@@ -61,6 +63,8 @@ const games: Array<Record<string, any>> = [
 			},
 		},
 		playLimits: { maxSessionsPerParticipant: 1, maxTotalSessions: null },
+		// Real-shaped play window (the editor normalizes this on load).
+		schedule: { startsAt: null, endsAt: null },
 	},
 	{
 		id: GAME_SCRATCH,
@@ -85,6 +89,8 @@ const games: Array<Record<string, any>> = [
 			},
 		},
 		playLimits: { maxSessionsPerParticipant: 1, maxTotalSessions: null },
+		// Real-shaped play window (the editor normalizes this on load).
+		schedule: { startsAt: null, endsAt: null },
 	},
 	{
 		id: GAME_SLOT,
@@ -108,6 +114,8 @@ const games: Array<Record<string, any>> = [
 			},
 		},
 		playLimits: { maxSessionsPerParticipant: 1, maxTotalSessions: null },
+		// Real-shaped play window (the editor normalizes this on load).
+		schedule: { startsAt: null, endsAt: null },
 	},
 ];
 
@@ -152,6 +160,37 @@ export function operatorQuery(name: string, args: any) {
 	}
 	if (name === "campaigns:getCampaignGamesRouteContext") {
 		return { campaign, campaignGames: games.map((game) => ({ ...game })) };
+	}
+	if (name === "stationPlay:getStationPlayState") {
+		// Station state for the console launch card, synthesized from this
+		// fixture's own campaign/game data (the station kiosk flow itself is
+		// covered by the station fixture).
+		const game = games.find((g) => g.id === args.campaignGameId);
+		if (!game) return null;
+		return {
+			state: "open",
+			campaignGameId: game.id,
+			templateId: game.templateId,
+			gameName: game.name,
+			campaign: {
+				name: campaign.name,
+				brandName: campaign.brandName,
+				description: campaign.description,
+				heroAssetUrl: null,
+			},
+			copy: game.config.publicCopy,
+			availability: { soldOut: false },
+			inventory: [
+				{
+					id: "op-station-inv-1",
+					name: "Voucher quà tặng",
+					rewardType: "voucher",
+					quantityTotal: 4,
+					quantityRemaining: 4,
+				},
+			],
+			playSession: null,
+		};
 	}
 	if (name === "campaigns:getCampaignRouteContext") {
 		return { ...campaign };

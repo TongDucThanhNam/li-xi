@@ -28,6 +28,8 @@ const EDITOR_URL = "/operator.html?route=editor";
 const DISTRIBUTION_URL = "/operator.html?route=distribution";
 const SCRATCH_EDITOR_URL = "/operator.html?route=scratch-editor";
 const SLOT_EDITOR_URL = "/operator.html?route=slot-editor";
+const OPERATE_WHEEL_URL = "/operator.html?route=operate&game=op-game-wheel";
+const OPERATE_SLOT_URL = "/operator.html?route=operate&game=op-game-slot";
 const GAME_WHEEL = "op-game-wheel";
 const GAME_SCRATCH = "op-game-scratch";
 const GAME_SLOT = "op-game-slot";
@@ -35,6 +37,9 @@ const SCREENSHOT_DIR = path.resolve(
 	path.dirname(fileURLToPath(import.meta.url)),
 	"artifacts/screenshots",
 );
+const EVIDENCE_DIR = process.env.SLICE3_EVIDENCE_DIR
+	? path.resolve(process.env.SLICE3_EVIDENCE_DIR)
+	: null;
 
 /** Uncaught page errors and unexpected console errors fail the suite. */
 let pageErrors: string[] = [];
@@ -469,11 +474,13 @@ test("distribution: reusable link creation, QR, copy and legacy /play entry", as
 }) => {
 	await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
 	// Pin Date.now BEFORE navigation so Date.now-dependent initial state
-	// (legacy entry expiry, creation timestamps) is deterministic.
-	await page.clock.setFixedTime(new Date("2026-09-12T00:29:30"));
+	// (legacy entry expiry, creation timestamps) is deterministic. The offset
+	// is explicit because the pages render in the configured Asia/Ho_Chi_Minh
+	// timezone, independent of the runner machine's local timezone.
+	await page.clock.setFixedTime(new Date("2026-09-12T00:29:30+07:00"));
 	await page.goto(DISTRIBUTION_URL);
 	// Deterministic "Tạo <date>" text on link cards.
-	await page.clock.setFixedTime(new Date("2026-09-12T00:29:30"));
+	await page.clock.setFixedTime(new Date("2026-09-12T00:29:30+07:00"));
 	await awaitFonts(page);
 	await expect(page.getByRole("heading", { name: "Phân phối", level: 1 })).toBeVisible();
 	expect(await hasHorizontalOverflow(page)).toBe(false);
@@ -538,7 +545,7 @@ test("closed games: creation disappears; revoke/restore/copy of existing links r
 }) => {
 	await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
 	// Pin Date.now before navigation for deterministic card timestamps.
-	await page.clock.setFixedTime(new Date("2026-09-12T00:29:30"));
+	await page.clock.setFixedTime(new Date("2026-09-12T00:29:30+07:00"));
 	// Seed one existing link before closing all games.
 	await page.goto(DISTRIBUTION_URL);
 	await page.getByLabel("Trò chơi của liên kết").selectOption(GAME_WHEEL);
@@ -602,11 +609,64 @@ async function saveFreshCheckpoint(
 	await testInfo.attach(name, { contentType: "image/png", body: shot });
 }
 
+test("station-capable console shows the self-serve launch card", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await page.goto(OPERATE_WHEEL_URL);
+	await expect(
+		page.getByRole("heading", { name: "Trạm tự phục vụ" }),
+	).toBeVisible();
+	await expect(
+		page.getByText("Vòng quay tri ân sẵn sàng đón khách tại trạm"),
+	).toBeVisible();
+
+	// The station screen link points at the kiosk route for this game.
+	const stationLink = page.getByRole("link", { name: "Mở màn hình trạm" });
+	await expect(stationLink).toBeVisible();
+	await expect(stationLink).toHaveAttribute(
+		"href",
+		"/station/op-game-wheel",
+	);
+	await expect(
+		page.getByRole("link", { name: "Liên kết công khai và mã QR" }),
+	).toHaveAttribute("href", "/campaigns/campaign-op/distribution");
+
+	// Inventory summary is served by the station state query.
+	await expect(
+		page.getByText("Phần thưởng còn lại trong kho"),
+	).toBeVisible();
+	await expect(page.getByText("Loại phần thưởng đang bật")).toBeVisible();
+
+	// Host PIN exit remains the documented operational guard.
+	await expect(
+		page.getByText(/xác minh Host PIN/).first(),
+	).toBeVisible();
+
+	if (EVIDENCE_DIR) {
+		mkdirSync(EVIDENCE_DIR, { recursive: true });
+		const shot = await page.screenshot({ fullPage: true });
+		writeFileSync(
+			path.join(EVIDENCE_DIR, "operator-station-launch-card-1440.png"),
+			shot,
+		);
+	}
+
+	// Public-self-serve templates keep the fail-closed console notice.
+	await page.goto(OPERATE_SLOT_URL);
+	await expect(
+		page.getByText("Máy quay tri ân chạy qua liên kết công khai"),
+	).toBeVisible();
+	await expect(
+		page.getByRole("link", { name: "Mở màn hình trạm" }),
+	).toHaveCount(0);
+});
+
 test.describe("distribution visual checkpoints (desktop + 390px)", () => {
 	// Pin the deterministic instant BEFORE every navigation in this scope so
 	// Date.now-dependent card text (Tạo/Hết hạn) is frozen for references.
 	test.beforeEach(async ({ page }) => {
-		await page.clock.setFixedTime(new Date("2026-09-12T00:29:30"));
+		await page.clock.setFixedTime(new Date("2026-09-12T00:29:30+07:00"));
 	});
 
 	test("desktop distribution checkpoint with link, QR and legacy entry", async ({

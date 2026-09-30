@@ -15,6 +15,7 @@ import {
 } from "@tanstack/react-router";
 import { CampaignGameEditorFeature } from "../../../app/_workspace/-features/CampaignGameEditorFeature";
 import { DistributionFeature } from "../../../app/_workspace/-features/DistributionFeature";
+import { OperatorConsoleFeature } from "../../../app/_workspace/-features/OperatorConsoleFeature";
 // Same processing as the inventory fixture: real stylesheets + app @source
 // scan, so all Tailwind utilities used by the mounted features are generated.
 import "./operator-styles.css";
@@ -35,6 +36,15 @@ function DistributionFrame() {
 	return (
 		<main data-testid="distribution-root">
 			<DistributionFeature campaignId="campaign-op" />
+		</main>
+	);
+}
+
+function OperateFrame() {
+	const { campaignGameId } = operateRoute.useParams();
+	return (
+		<main data-testid="operator-console">
+			<OperatorConsoleFeature campaignGameId={campaignGameId} />
 		</main>
 	);
 }
@@ -71,7 +81,7 @@ const analyticsRoute = createRoute({
 const operateRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/operate/$campaignGameId",
-	component: PlaceholderFrame,
+	component: OperateFrame,
 });
 const stationRoute = createRoute({
 	getParentRoute: () => rootRoute,
@@ -81,14 +91,17 @@ const stationRoute = createRoute({
 
 const routeParam =
 	new URLSearchParams(window.location.search).get("route") ?? "editor";
+const gameParam = new URLSearchParams(window.location.search).get("game");
 const initialEntry =
 	routeParam === "distribution"
 		? "/campaigns/campaign-op/distribution"
-		: routeParam === "scratch-editor"
-			? "/campaigns/campaign-op/games/op-game-scratch"
-			: routeParam === "slot-editor"
-				? "/campaigns/campaign-op/games/op-game-slot"
-				: "/campaigns/campaign-op/games/op-game-wheel";
+		: routeParam === "operate"
+			? `/operate/${gameParam ?? "op-game-wheel"}`
+			: routeParam === "scratch-editor"
+				? "/campaigns/campaign-op/games/op-game-scratch"
+				: routeParam === "slot-editor"
+					? "/campaigns/campaign-op/games/op-game-slot"
+					: "/campaigns/campaign-op/games/op-game-wheel";
 
 const router = createRouter({
 	routeTree: rootRoute.addChildren([

@@ -1,0 +1,16 @@
+/* Participant fixture stylesheet entry: the five template layers in the real
+   /p route order (li-xi -> wheel -> scratch -> slot -> quiz) plus a Tailwind
+   @source for app/, so every utility class the guest-stage JSX uses is
+   generated (each production CSS unit scans the whole app tree). Same
+   pattern as station-styles.css / workspace-styles.css; without the @source,
+   the Tailwind Vite plugin only scans the Vite root (this fixtures folder)
+   and the stages compile with no utilities — fixed-position result modals
+    keep their static position and fall out of the viewport. Animation and
+   transition state is deliberately NOT frozen here: gameplay motion tests
+   assert real durations on this page. */
+@import "../../../app/styles/draw.css";
+@import "../../../app/styles/lucky-wheel.css";
+@import "../../../app/styles/scratch-card.css";
+@import "../../../app/styles/slot-reveal.css";
+@import "../../../app/styles/quiz.css";
+@source "../../../app";
