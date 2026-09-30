@@ -2,17 +2,44 @@
 
 import assert from "node:assert/strict";
 import {
+  campaignChannelMetricKey,
   campaignMetricKey,
+  COUNTER_SCOPES_VERSION,
   estimateAnalyticsCounterEventWrite,
+  gameChannelMetricKey,
   ownerMetricKey,
   playSessionCounterEventKey,
   redemptionCounterEventKey,
   rewardCounterEventKey,
   sessionCounterEventKey,
+  shareLinkMetricKey,
 } from "../lib/analyticsPolicy.ts";
 
 assert.equal(ownerMetricKey("user_1", "session_created"), "owner:user_1:session_created");
 assert.equal(campaignMetricKey("campaign_1", "redemption_created"), "campaign:campaign_1:redemption_created");
+// Channel/share-link counter scopes (slice 4c): per campaign, per game, and
+// per link, derived from the same validated id inputs as the owner scopes.
+assert.equal(
+  campaignChannelMetricKey("campaign_1", "public-link", "game_open"),
+  "campaign-channel:campaign_1:public-link:game_open"
+);
+assert.equal(
+  campaignChannelMetricKey("campaign_1", "station", "reward_claim"),
+  "campaign-channel:campaign_1:station:reward_claim"
+);
+assert.equal(
+  gameChannelMetricKey("game_1", "station", "game_completion"),
+  "game-channel:game_1:station:game_completion"
+);
+assert.equal(
+  shareLinkMetricKey("link_1", "public_play_link_open"),
+  "share-link:link_1:public_play_link_open"
+);
+assert.throws(() => campaignChannelMetricKey("", "public-link", "game_open"), /campaignId analytics không được rỗng/);
+assert.throws(() => gameChannelMetricKey("  ", "station", "game_open"), /Analytics id không được rỗng/);
+assert.throws(() => shareLinkMetricKey("", "game_open"), /Analytics id không được rỗng/);
+// The readiness stamp stays a stable exactly-once marker for the backfill.
+assert.equal(COUNTER_SCOPES_VERSION, 1);
 assert.equal(sessionCounterEventKey("session_1"), "session:session_1:session_created");
 assert.equal(redemptionCounterEventKey("redemption_1"), "redemption:redemption_1:redemption_created");
 assert.equal(playSessionCounterEventKey("session_1", "game_open"), "play-session:session_1:game_open");

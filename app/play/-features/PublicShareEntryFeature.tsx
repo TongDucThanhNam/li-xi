@@ -17,6 +17,11 @@ import type { FunctionReturnType } from "convex/server";
 import { normalizePublicShareCode } from "@/lib/publicAppUrlPolicy";
 import { newStartKey } from "@/lib/playPolicy";
 import {
+	DEFAULT_PUBLIC_THANK_YOU_MESSAGE,
+	resolvePublicCopyField,
+} from "@/lib/gameTemplates";
+import { formatScheduleTime } from "@/lib/schedulePolicy";
+import {
 	buildSurfaceInputs,
 	collectSavedRewardRows,
 	deriveCapabilityRecovery,
@@ -143,6 +148,23 @@ function appendClaimHistory(shareCode: string, entry: HistoryEntry) {
 	}
 }
 
+/**
+ * Closed-entry copy keyed by the server reason. The optional play-window
+ * states surface as friendly schedule messages ("Chưa đến giờ" with the
+ * start time, "Đã kết thúc") instead of a generic closed line.
+ */
+function closedEntryMessage(entry: Extract<ShareEntryResult, { state: "closed" }>): string {
+	if (entry.reason === "not-started") {
+		return entry.scheduledAt
+			? `Chưa đến giờ — trò chơi mở cửa sổ chơi lúc ${formatScheduleTime(entry.scheduledAt)}. Hẹn gặp lại bạn nhé!`
+			: "Chưa đến giờ — trò chơi chưa mở cửa sổ chơi. Hẹn gặp lại bạn nhé!";
+	}
+	if (entry.reason === "ended") {
+		return "Đã kết thúc — cửa sổ chơi của trò chơi này đã đóng. Cảm ơn bạn đã quan tâm!";
+	}
+	return "Chiến dịch hoặc trò chơi hiện không còn hoạt động. Cảm ơn bạn đã quan tâm!";
+}
+
 function newOpenKey(): string {
 	if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
 		return crypto.randomUUID().replace(/-/g, "");
@@ -213,7 +235,7 @@ export function PublicShareEntryFeature({ shareCode }: { shareCode: string }) {
 	const quizState = useQuery(
 		api.publicPlay.getPublicQuizState,
 		session &&
-		(sessionSnapshot?.rules.templateId ?? entry?.game.templateId) === "quiz"
+		(sessionSnapshot?.rules.templateId ?? entry?.game?.templateId) === "quiz"
 			? { sessionId: session.sessionId, sessionToken: session.sessionToken }
 			: "skip",
 	);
@@ -297,6 +319,12 @@ export function PublicShareEntryFeature({ shareCode }: { shareCode: string }) {
 				sessionToken: session.sessionToken,
 				action,
 			});
+			// A multi-step quiz answer in progress carries no outcome; the
+			// immediate play path never advances a quiz session (its stage
+			// submits answers through handlePlayStep).
+			if (result.quizStep) {
+				throw new Error("Lượt chơi chưa hoàn tất nên chưa có kết quả");
+			}
 			setActionResults((previous) =>
 				new Map(previous).set(session.sessionId, result.outcome),
 			);
@@ -530,7 +558,11 @@ export function PublicShareEntryFeature({ shareCode }: { shareCode: string }) {
 							: undefined
 					}
 					icon={CircleCheck}
-					message="Cảm ơn bạn đã tham gia trải nghiệm của chúng tôi!"
+					message={resolvePublicCopyField(
+						sessionSnapshot?.rules.publicCopy.thankYouMessage ??
+							openEntry?.game.publicCopy.thankYouMessage,
+						DEFAULT_PUBLIC_THANK_YOU_MESSAGE,
+					)}
 					title="Hoàn tất"
 					tone="complete"
 				>
@@ -611,14 +643,16 @@ export function PublicShareEntryFeature({ shareCode }: { shareCode: string }) {
 			closed: {
 				icon: Lock,
 				title: "Trò chơi đã đóng",
-				message:
-					"Chiến dịch hoặc trò chơi hiện không còn hoạt động. Cảm ơn bạn đã quan tâm!",
+				message: "Chiến dịch hoặc trò chơi hiện không còn hoạt động. Cảm ơn bạn đã quan tâm!",
 			},
 		};
 		const copy = closedCopy[entry.state];
+		// The play-window reasons carry their own message (with the bound time).
+		const message =
+			entry.state === "closed" ? closedEntryMessage(entry) : copy.message;
 		return (
 			<>
-				<EntryStatusShell icon={copy.icon} message={copy.message} title={copy.title} />
+				<EntryStatusShell icon={copy.icon} message={message} title={copy.title} />
 				{savedRewards}
 			</>
 		);
@@ -715,6 +749,9 @@ function TemplateEntrySurface({
 					undefined,
 			},
 			heroAssetUrl: entry?.campaign.heroAssetUrl ?? null,
+			// Live per-game slot URLs (usage → URL), same precedence as the hero:
+			// read from the open entry even mid-session (presentation only).
+			assetUrls: entry?.game.assetUrls ?? null,
 			playContext: sessionSnapshot?.rules.scratchCard
 				? {
 						coverStyle: sessionSnapshot.rules.scratchCard.coverStyle,
@@ -824,6 +861,7 @@ function TemplateEntrySurface({
 			description: entry.campaign.description,
 			gameName: entry.game.gameName,
 			heroAssetUrl: entry.campaign.heroAssetUrl,
+			assetUrls: entry.game.assetUrls,
 			onStart: onStart ?? (() => {}),
 		};
 		return (

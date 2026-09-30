@@ -1,5 +1,6 @@
-import { Input, Label, NumberField, TextArea } from "@heroui/react";
+import { Input, Label, NumberField } from "@heroui/react";
 import { NativeSelect, Widget } from "@heroui-pro/react";
+import { GamePublicCopyFields, type GamePublicCopyFieldKey } from "../GamePublicCopyFields";
 import {
 	REWARD_MODE_LABELS,
 	REWARD_SOURCE_LABELS,
@@ -9,7 +10,6 @@ import {
 	isLiXiGameConfig,
 	liXiDefaultGameConfig,
 	type CampaignGameConfig,
-	type GamePublicCopy,
 	type GameRewardMode,
 	type GameRewardSource,
 	type LiXiGameConfig,
@@ -28,7 +28,7 @@ export function LiXiGameConfigEditor({ config, onChange }: { config: CampaignGam
 				publicCopy: config.publicCopy,
 			})
 		: { ...liXiDefaultGameConfig, publicCopy: buildLiXiGameConfig().publicCopy };
-	const updateCopy = (key: keyof GamePublicCopy, value: string) => onChange({ ...liXiConfig, publicCopy: { ...liXiConfig.publicCopy, [key]: value } });
+	const updateCopy = (key: GamePublicCopyFieldKey, value: string) => onChange({ ...liXiConfig, publicCopy: { ...liXiConfig.publicCopy, [key]: value } });
 	return (
 		<div className="grid gap-6">
 			<Widget>
@@ -119,10 +119,11 @@ export function LiXiGameConfigEditor({ config, onChange }: { config: CampaignGam
 			<Widget>
 				<Widget.Header><Widget.Title>Nội dung trải nghiệm</Widget.Title><Widget.Description>Nội dung này xuất hiện trên trạm và liên kết chơi công khai.</Widget.Description></Widget.Header>
 				<Widget.Content className="gap-4">
-					<div className="admin-field"><Label htmlFor="li-xi-headline">Tiêu đề</Label><Input fullWidth id="li-xi-headline" value={liXiConfig.publicCopy.headline} variant="secondary" onChange={(event) => updateCopy("headline", event.currentTarget.value)} /></div>
-					<div className="admin-field"><Label htmlFor="li-xi-subtitle">Mô tả ngắn</Label><TextArea fullWidth id="li-xi-subtitle" value={liXiConfig.publicCopy.subtitle} variant="secondary" onChange={(event) => updateCopy("subtitle", event.currentTarget.value)} /></div>
-					<div className="grid gap-4 md:grid-cols-2"><div className="admin-field"><Label htmlFor="li-xi-start-label">Nút bắt đầu</Label><Input fullWidth id="li-xi-start-label" value={liXiConfig.publicCopy.startCtaLabel} variant="secondary" onChange={(event) => updateCopy("startCtaLabel", event.currentTarget.value)} /></div><div className="admin-field"><Label htmlFor="li-xi-collect-label">Nút nhận kết quả</Label><Input fullWidth id="li-xi-collect-label" value={liXiConfig.publicCopy.collectCtaLabel} variant="secondary" onChange={(event) => updateCopy("collectCtaLabel", event.currentTarget.value)} /></div></div>
-					<div className="admin-field"><Label htmlFor="li-xi-waiting">Thông điệp chờ</Label><Input fullWidth id="li-xi-waiting" value={liXiConfig.publicCopy.waitingMessage} variant="secondary" onChange={(event) => updateCopy("waitingMessage", event.currentTarget.value)} /></div>
+					<GamePublicCopyFields
+						copy={liXiConfig.publicCopy}
+						idPrefix="li-xi"
+						onChange={(key, value) => updateCopy(key, value)}
+					/>
 				</Widget.Content>
 			</Widget>
 		</div>

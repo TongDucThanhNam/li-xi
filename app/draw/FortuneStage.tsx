@@ -376,7 +376,7 @@ export default function FortuneStage({
 	return (
 		<>
 		<section
-			className={`relative w-full h-dvh overflow-hidden perspective-2000 font-vn transition-colors duration-700 ${
+			className={`lunar-stage relative w-full h-dvh overflow-hidden perspective-2000 font-vn transition-colors duration-700 ${
 				legendaryFx.isActive
 					? "bg-black"
 					: "bg-[radial-gradient(circle_at_50%_30%,rgba(116,14,14,0.4),var(--color-black-ink))]"

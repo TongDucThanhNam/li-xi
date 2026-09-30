@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, Button, Chip, Label, NumberField, Spinner } from "@heroui/react";
+import { Alert, Button, Chip, Input, Label, NumberField, Spinner } from "@heroui/react";
 import { EmptyState, NativeSelect, Widget } from "@heroui-pro/react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
@@ -29,8 +29,14 @@ import {
 	finiteNumberOr,
 	optionalFiniteNumberOrNull,
 	serializeEditorDraft,
+	type GameEditorSchedule,
 	type GameEditorStatus,
 } from "@/lib/gameEditorState";
+import {
+	normalizeScheduleWindow,
+	scheduleEpochToInputValue,
+	scheduleInputValueToEpoch,
+} from "@/lib/schedulePolicy";
 
 export function CampaignGameEditorFeature({ campaignId, campaignGameId }: { campaignId: string; campaignGameId: string }) {
 	const context = useQuery(api.campaigns.getCampaignGameRouteContext, { campaignGameId: campaignGameId as Id<"campaignGames"> });
@@ -39,6 +45,7 @@ export function CampaignGameEditorFeature({ campaignId, campaignGameId }: { camp
 	const [config, setConfig] = useState<CampaignGameConfig | null>(null);
 	const [gameStatus, setGameStatus] = useState<GameEditorStatus>("draft");
 	const [playLimits, setPlayLimits] = useState<CampaignGamePlayLimits>({ ...DEFAULT_PLAY_LIMITS });
+	const [schedule, setSchedule] = useState<GameEditorSchedule>({ startsAt: null, endsAt: null });
 	const [loadedCampaignGameId, setLoadedCampaignGameId] = useState("");
 	const [baseline, setBaseline] = useState("");
 	const [saving, setSaving] = useState(false);
@@ -57,11 +64,14 @@ export function CampaignGameEditorFeature({ campaignId, campaignGameId }: { camp
 		setGameStatus(context.campaignGame.status);
 		const nextLimits = normalizePlayLimits(context.campaignGame.playLimits);
 		setPlayLimits(nextLimits);
+		const nextSchedule = normalizeScheduleWindow(context.campaignGame.schedule);
+		setSchedule(nextSchedule);
 		setBaseline(
 			serializeEditorDraft({
 				config: next,
 				gameStatus: context.campaignGame.status,
 				playLimits: nextLimits,
+				schedule: nextSchedule,
 			}),
 		);
 		setLoadedCampaignGameId(context.campaignGame.id);
@@ -75,9 +85,18 @@ export function CampaignGameEditorFeature({ campaignId, campaignGameId }: { camp
 				config: config as CampaignGameConfig,
 				gameStatus,
 				playLimits,
+				schedule,
 			}) !== baseline,
-		[baseline, config, gameStatus, playLimits],
+		[baseline, config, gameStatus, playLimits, schedule],
 	);
+	// Mirror of the server write-path rule so the operator sees it inline
+	// instead of only after a failed save.
+	const scheduleRangeError =
+		schedule.startsAt !== null &&
+		schedule.endsAt !== null &&
+		schedule.startsAt >= schedule.endsAt
+			? "Thời gian bắt đầu phải trước thời gian kết thúc."
+			: "";
 
 	const save = useCallback(async () => {
 		if (!context?.campaign || context.campaign.id !== campaignId || !config) return false;
@@ -90,7 +109,7 @@ export function CampaignGameEditorFeature({ campaignId, campaignGameId }: { camp
 		// Snapshot the exact draft being saved: edits made while the mutation
 		// is in flight keep the editor dirty instead of being silently marked
 		// clean by the slower save.
-		const savedSnapshot = serializeEditorDraft({ config, gameStatus, playLimits });
+		const savedSnapshot = serializeEditorDraft({ config, gameStatus, playLimits, schedule });
 		try {
 			// Every instance stores its own row-scoped config/limits/status;
 			// sibling games and campaign-wide defaults stay untouched.
@@ -100,17 +119,21 @@ export function CampaignGameEditorFeature({ campaignId, campaignGameId }: { camp
 				name: context.campaignGame.name,
 				playLimits,
 				status: gameStatus,
+				startsAt: schedule.startsAt ?? undefined,
+				endsAt: schedule.endsAt ?? undefined,
 			});
 			if (isPrimaryLiXiInstance) {
 				// The primary li xi instance additionally syncs the campaign-wide
-				// legacy copy columns that station/legacy public flows read.
+				// legacy copy columns that station/legacy public flows read. Brand
+				// identity metadata round-trips untouched (a patch with an omitted
+				// optional column clears it).
 				const presentation = template.toLegacyCampaignPresentation(config);
-				await saveCampaign({ campaignId: campaign.id, name: campaign.name, slug: campaign.slug, brandName: campaign.brandName || undefined, description: campaign.description || undefined, ...presentation, status: campaign.status === "archived" ? "draft" : campaign.status, heroAssetId: campaign.heroAsset?.id, gameTemplateId: template.id, gameConfig: config });
+				await saveCampaign({ campaignId: campaign.id, name: campaign.name, slug: campaign.slug, brandName: campaign.brandName || undefined, description: campaign.description || undefined, brandColor: campaign.brandColor ?? undefined, audienceTags: campaign.audienceTags.length > 0 ? campaign.audienceTags : undefined, audienceNote: campaign.audienceNote || undefined, logoAssetId: campaign.logoAsset?.id, ...presentation, status: campaign.status === "archived" ? "draft" : campaign.status, heroAssetId: campaign.heroAsset?.id, gameTemplateId: template.id, gameConfig: config });
 			}
 			setBaseline(savedSnapshot); setMessage("Đã lưu cấu hình trò chơi"); return true;
 		} catch (unknownError) { setError(unknownError instanceof Error ? unknownError.message : "Không thể lưu cấu hình"); return false; }
 		finally { setSaving(false); }
-	}, [campaignGameId, campaignId, config, context, gameStatus, playLimits, saveCampaign, updateCampaignGame]);
+	}, [campaignGameId, campaignId, config, context, gameStatus, playLimits, saveCampaign, schedule, updateCampaignGame]);
 
 	if (context === undefined) return <div className="grid min-h-[50vh] place-items-center" role="status"><Spinner aria-label="Đang tải cấu hình trò chơi" /></div>;
 	if (!context?.campaign || context.campaign.id !== campaignId) return <AdminPageShell title="Không tìm thấy trò chơi"><EmptyState><EmptyState.Header><EmptyState.Media variant="icon"><FileQuestion aria-hidden="true" /></EmptyState.Media><EmptyState.Title>Không tìm thấy trò chơi</EmptyState.Title><EmptyState.Description>Trò chơi không thuộc chiến dịch này hoặc bạn không có quyền truy cập.</EmptyState.Description></EmptyState.Header><EmptyState.Content><Link to="/campaigns">Quay lại danh sách chiến dịch</Link></EmptyState.Content></EmptyState></AdminPageShell>;
@@ -154,7 +177,7 @@ export function CampaignGameEditorFeature({ campaignId, campaignGameId }: { camp
 	const isPrimaryLiXiInstance =
 		campaign.campaignGame.id === campaignGameId && templateId === "li-xi";
 	return (
-		<AdminPageShell actions={<Button isDisabled={!dirty} isPending={saving} onPress={save}><Save aria-hidden="true" />Lưu thay đổi</Button>} breadcrumbContext={campaign.name} description={template.description} eyebrow={campaign.name} title={context.campaignGame.name}>
+		<AdminPageShell actions={<Button isDisabled={!dirty || Boolean(scheduleRangeError)} isPending={saving} onPress={save}><Save aria-hidden="true" />Lưu thay đổi</Button>} breadcrumbContext={campaign.name} description={template.description} eyebrow={campaign.name} title={context.campaignGame.name}>
 			<UnsavedChangesGuard dirty={dirty} saving={saving} onSave={save} />
 			{error || message ? <Alert status={error ? "danger" : "success"}><Alert.Indicator /><Alert.Content><Alert.Title>{error || message}</Alert.Title></Alert.Content></Alert> : null}
 			<CampaignContextNav campaignId={campaignId} />
@@ -238,6 +261,52 @@ export function CampaignGameEditorFeature({ campaignId, campaignGameId }: { camp
 							</p>
 						</div>
 					</div>
+					<div className="grid gap-4 md:grid-cols-2">
+						<div className="admin-field">
+							<Label htmlFor="campaign-game-starts-at">Bắt đầu cửa sổ chơi (tuỳ chọn)</Label>
+							<Input
+								fullWidth
+								id="campaign-game-starts-at"
+								type="datetime-local"
+								variant="secondary"
+								value={scheduleEpochToInputValue(schedule.startsAt)}
+								onChange={(event) =>
+									setSchedule((current) => ({
+										...current,
+										startsAt: scheduleInputValueToEpoch(event.currentTarget.value),
+									}))
+								}
+							/>
+							<p className="mt-1 text-xs text-muted">
+								Giờ Việt Nam (UTC+7). Để trống nếu trò chơi mở ngay khi kích hoạt.
+							</p>
+						</div>
+						<div className="admin-field">
+							<Label htmlFor="campaign-game-ends-at">Kết thúc cửa sổ chơi (tuỳ chọn)</Label>
+							<Input
+								fullWidth
+								id="campaign-game-ends-at"
+								type="datetime-local"
+								variant="secondary"
+								value={scheduleEpochToInputValue(schedule.endsAt)}
+								onChange={(event) =>
+									setSchedule((current) => ({
+										...current,
+										endsAt: scheduleInputValueToEpoch(event.currentTarget.value),
+									}))
+								}
+							/>
+							<p className="mt-1 text-xs text-muted">
+								Sau thời điểm này liên kết công khai và trạm không nhận lượt mới; lượt đang chơi
+								vẫn được hoàn tất theo cấu hình đã chốt.
+							</p>
+						</div>
+					</div>
+					{scheduleRangeError ? (
+						<p className="text-sm text-danger" role="alert">
+							{scheduleRangeError}
+						</p>
+					) : null}
 					{isPrimaryLiXiInstance ? (
 						<Chip variant="soft">Trò chơi chính: nội dung đồng bộ luồng trạm/liên kết li xì cổ điển</Chip>
 					) : null}
@@ -245,7 +314,13 @@ export function CampaignGameEditorFeature({ campaignId, campaignGameId }: { camp
 			</Widget>
 			<ConfigEditor config={config} onChange={setConfig} />
 			<Preview config={config} heroUrl={campaign.heroAsset?.url} />
-			<CampaignGameAssetsPanel campaignId={campaign.id} heroUrl={campaign.heroAsset?.url} />
+			<CampaignGameAssetsPanel
+				assets={context.campaignGame.assets}
+				campaignGameId={context.campaignGame.id as Id<"campaignGames">}
+				campaignId={campaign.id}
+				heroUrl={campaign.heroAsset?.url}
+				slots={template.assetSlots}
+			/>
 		</AdminPageShell>
 	);
 }

@@ -1,0 +1,332 @@
+/* Station shell chrome layer — exit trigger, Host PIN dialog, status
+   screens, and the recovery banner for /station/$campaignGameId. Owned by
+   the shell (never the template guest stage, never admin CSS); documented
+   per template in docs/design-lucky-wheel.md and docs/design-scratch-card.md
+   station sections. Every class is prefixed `station-` so this layer never
+   collides with the draw-era, `wheel-*`, `scratch-*`, or admin classes.
+   Theming is variable-driven: the shell mounts with
+   `data-template="<templateId>"` and each template's tokens drive the
+   colors; the fallbacks below are the lunar (li-xi) values so the legacy
+   station keeps its draw.css look unchanged. */
+@import "./base.css";
+
+.station-shell {
+	--station-shell-bg: var(--color-black-ink, #050000);
+	--station-shell-ink: var(--color-gold-shine, #fff8dc);
+	--station-shell-ink-soft: rgba(255, 248, 220, 0.7);
+	--station-shell-accent: var(--color-gold-base, #d4af37);
+	--station-shell-accent-border: rgba(212, 175, 55, 0.5);
+	--station-shell-on-accent: #241a05;
+	--station-shell-panel: var(--color-red-deep, #5e0a0a);
+	--station-shell-panel-border: rgba(212, 175, 55, 0.5);
+	--station-shell-input-bg: rgba(5, 0, 0, 0.6);
+	--station-shell-trigger-bg: rgba(5, 0, 0, 0.7);
+	--station-shell-font: var(--font-vn, "Noto Serif", "Times New Roman", serif);
+	--station-shell-display: var(--font-cinzel, "Cinzel Decorative", "Noto Serif", serif);
+
+	position: relative;
+	width: 100%;
+	height: 100dvh;
+	overflow: hidden;
+	background: var(--station-shell-bg);
+	color: var(--station-shell-ink);
+}
+
+.station-shell[data-template="lucky-wheel"] {
+	--station-shell-bg: var(--color-wheel-bg, #141433);
+	--station-shell-ink: var(--color-wheel-cream, #fff6e8);
+	--station-shell-ink-soft: rgba(255, 246, 232, 0.72);
+	--station-shell-accent: var(--color-wheel-amber, #f5a623);
+	--station-shell-accent-border: rgba(245, 166, 35, 0.55);
+	--station-shell-panel: var(--color-wheel-bg-soft, #1e1e4d);
+	--station-shell-panel-border: rgba(245, 166, 35, 0.4);
+	--station-shell-input-bg: rgba(32, 26, 48, 0.6);
+	--station-shell-trigger-bg: rgba(20, 20, 51, 0.7);
+	--station-shell-font: var(--font-wheel-body, "Be Vietnam Pro", system-ui, sans-serif);
+	--station-shell-display: var(--font-wheel-display, "Baloo 2", "Be Vietnam Pro", system-ui, sans-serif);
+}
+
+.station-shell[data-template="scratch-card"] {
+	--station-shell-bg: var(--scratch-bg, #141433);
+	--station-shell-ink: var(--scratch-ink, #fff6e8);
+	--station-shell-ink-soft: var(--scratch-ink-soft, rgba(255, 246, 232, 0.72));
+	--station-shell-accent: var(--scratch-gold, #d4af37);
+	--station-shell-accent-border: rgba(212, 175, 55, 0.5);
+	--station-shell-panel: var(--scratch-bg-deep, #0e0e28);
+	--station-shell-panel-border: var(--scratch-line, rgba(255, 246, 232, 0.16));
+	--station-shell-input-bg: rgba(14, 14, 40, 0.6);
+	--station-shell-trigger-bg: rgba(14, 14, 40, 0.7);
+	--station-shell-font: "Playfair Display", "Noto Serif", system-ui, sans-serif;
+	--station-shell-display: "Cinzel Decorative", "Playfair Display", serif;
+}
+
+/* Discreet but touch-friendly staff exit: corner pill, ≥ 44px tall. */
+.station-exit-trigger {
+	position: absolute;
+	top: 12px;
+	right: 12px;
+	z-index: 50;
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+	padding: 0 1.05rem;
+	border: 1px solid var(--station-shell-accent-border);
+	border-radius: 999px;
+	background: var(--station-shell-trigger-bg);
+	color: var(--station-shell-ink);
+	font-family: var(--station-shell-font);
+	font-size: 0.875rem;
+	font-weight: 500;
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+	cursor: pointer;
+	transition:
+		border-color 160ms ease,
+		background-color 160ms ease;
+}
+
+.station-exit-trigger:hover {
+	border-color: var(--station-shell-accent);
+}
+
+.station-exit-trigger:focus-visible {
+	outline: 2px solid var(--station-shell-accent);
+	outline-offset: 2px;
+}
+
+/* Host PIN dialog (exit + result dismissal). */
+.station-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 60;
+	display: grid;
+	place-items: center;
+	padding: 1.5rem;
+	background: rgba(0, 0, 0, 0.92);
+}
+
+.station-dialog {
+	width: min(100%, 24rem);
+	padding: 1.5rem;
+	border: 1px solid var(--station-shell-panel-border);
+	border-radius: 1rem;
+	background: var(--station-shell-panel);
+	color: var(--station-shell-ink);
+	font-family: var(--station-shell-font);
+	box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+}
+
+.station-dialog__title {
+	margin: 0;
+	font-family: var(--station-shell-display);
+	font-size: 1.25rem;
+	font-weight: 700;
+}
+
+.station-dialog__description {
+	margin-top: 0.5rem;
+	font-size: 0.875rem;
+	line-height: 1.5;
+	color: var(--station-shell-ink-soft);
+}
+
+.station-dialog__label {
+	display: block;
+	margin-top: 1.25rem;
+	font-size: 0.875rem;
+}
+
+.station-dialog__input {
+	width: 100%;
+	margin-top: 0.5rem;
+	padding: 0.75rem 1rem;
+	border: 1px solid var(--station-shell-accent-border);
+	border-radius: 0.75rem;
+	background: var(--station-shell-input-bg);
+	color: var(--station-shell-ink);
+	font-family: var(--station-shell-font);
+	font-size: 1rem;
+	letter-spacing: 0.2em;
+	outline: none;
+}
+
+.station-dialog__input:focus {
+	border-color: var(--station-shell-accent);
+}
+
+.station-dialog__error {
+	margin: 0.5rem 0 0;
+	font-size: 0.875rem;
+	color: var(--station-shell-ink);
+}
+
+.station-dialog__actions {
+	display: flex;
+	gap: 0.75rem;
+	margin-top: 1.25rem;
+}
+
+.station-dialog__submit {
+	flex: 1;
+	min-height: 44px;
+	border: none;
+	border-radius: 999px;
+	background: var(--station-shell-accent);
+	color: var(--station-shell-on-accent);
+	font-family: var(--station-shell-font);
+	font-size: 0.95rem;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.station-dialog__submit:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
+.station-dialog__cancel {
+	min-height: 44px;
+	padding: 0 1rem;
+	border: 1px solid var(--station-shell-accent-border);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--station-shell-ink);
+	font-family: var(--station-shell-font);
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+.station-dialog__cancel:focus-visible,
+.station-dialog__submit:focus-visible {
+	outline: 2px solid var(--station-shell-accent);
+	outline-offset: 2px;
+}
+
+/* Full-screen loading / missing / inactive / fail-closed states. */
+.station-status {
+	display: grid;
+	place-items: center;
+	min-height: 100dvh;
+	padding: 1.5rem;
+	background: var(--station-shell-bg);
+	color: var(--station-shell-ink);
+	font-family: var(--station-shell-font);
+	text-align: center;
+}
+
+.station-status__card {
+	width: min(100%, 26rem);
+	padding: 1.5rem;
+	border: 1px solid var(--station-shell-panel-border);
+	border-radius: 1rem;
+	background: var(--station-shell-panel);
+}
+
+.station-status__title {
+	margin: 0;
+	font-family: var(--station-shell-display);
+	font-size: 1.5rem;
+	font-weight: 700;
+}
+
+.station-status__text {
+	margin: 0.75rem 0 0;
+	font-size: 0.875rem;
+	line-height: 1.6;
+	color: var(--station-shell-ink-soft);
+}
+
+.station-status__link {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+	margin-top: 1.5rem;
+	padding: 0 1.25rem;
+	border: 1px solid var(--station-shell-accent-border);
+	border-radius: 999px;
+	color: var(--station-shell-ink);
+	font-size: 0.9rem;
+	text-decoration: none;
+	transition: border-color 160ms ease;
+}
+
+.station-status__link:hover {
+	border-color: var(--station-shell-accent);
+}
+
+.station-status__link:focus-visible {
+	outline: 2px solid var(--station-shell-accent);
+	outline-offset: 2px;
+}
+
+/* Recovery banner for a completed-but-unresolved station result. */
+.station-recovery {
+	position: absolute;
+	top: 4.5rem;
+	left: 50%;
+	z-index: 40;
+	width: min(92vw, 26rem);
+	padding: 1.1rem 1.25rem;
+	border: 1px solid var(--station-shell-accent-border);
+	border-radius: 1.25rem;
+	background: var(--station-shell-panel);
+	color: var(--station-shell-ink);
+	font-family: var(--station-shell-font);
+	text-align: center;
+	transform: translateX(-50%);
+	box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+.station-recovery__title {
+	margin: 0;
+	font-family: var(--station-shell-display);
+	font-size: 1.05rem;
+	font-weight: 700;
+	color: var(--station-shell-accent);
+}
+
+.station-recovery__text {
+	margin: 0.4rem 0 0;
+	font-size: 0.85rem;
+	line-height: 1.55;
+	color: var(--station-shell-ink-soft);
+}
+
+.station-recovery__actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 0.6rem;
+	margin-top: 0.9rem;
+}
+
+.station-recovery__resume {
+	min-height: 44px;
+	padding: 0 1.1rem;
+	border: none;
+	border-radius: 999px;
+	background: var(--station-shell-accent);
+	color: var(--station-shell-on-accent);
+	font-family: var(--station-shell-font);
+	font-size: 0.9rem;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.station-recovery__dismiss {
+	min-height: 44px;
+	padding: 0 1.1rem;
+	border: 1px solid var(--station-shell-accent-border);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--station-shell-ink);
+	font-family: var(--station-shell-font);
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+.station-recovery__resume:focus-visible,
+.station-recovery__dismiss:focus-visible {
+	outline: 2px solid var(--station-shell-accent);
+	outline-offset: 2px;
+}

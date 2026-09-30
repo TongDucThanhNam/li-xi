@@ -3,8 +3,12 @@
 import assert from "node:assert/strict";
 import {
   CAMPAIGN_ASSET_MAX_BYTES,
+  CAMPAIGN_ASSET_USAGE_LIMITS,
   assertR2ObjectKey,
+  campaignAssetUsageLimit,
   isAllowedCampaignAssetContentType,
+  isCampaignAssetUsage,
+  isCampaignGameAssetUsage,
   isRenderableCampaignAssetRecord,
   isSafeCampaignAssetBucketName,
   normalizeR2ObjectKey,
@@ -124,6 +128,116 @@ assert.equal(
   "asset filenames should strip path separators and control characters before display/storage"
 );
 assert.equal(sanitizeAssetFileName("a".repeat(121)).length, 120);
+
+// Slice 4d-3: kind-parameterized asset policy. The hero path keeps its exact
+// literal; every declared kind carries its own ceiling and operator label;
+// unknown/absent kinds fall back to the hero limits.
+assert.deepEqual(CAMPAIGN_ASSET_USAGE_LIMITS.hero, {
+  maxBytes: CAMPAIGN_ASSET_MAX_BYTES,
+  label: "Ảnh hero",
+  sizeLabel: "8 MB",
+});
+assert.equal(isCampaignAssetUsage("hero"), true);
+assert.equal(isCampaignAssetUsage("brand-logo"), true);
+assert.equal(isCampaignAssetUsage("game-wheel-hub"), true);
+assert.equal(isCampaignAssetUsage("game-quiz-backdrop"), true);
+assert.equal(isCampaignAssetUsage("banner"), false);
+assert.equal(isCampaignAssetUsage(undefined), false);
+assert.equal(isCampaignGameAssetUsage("hero"), false);
+assert.equal(isCampaignGameAssetUsage("brand-logo"), false);
+assert.equal(isCampaignGameAssetUsage("game-wheel-hub"), true);
+assert.equal(isCampaignGameAssetUsage("game-quiz-backdrop"), true);
+
+assert.throws(
+  () =>
+    validateCampaignAssetPolicy({
+      contentType: "image/png",
+      fileName: "too-large.png",
+      size: CAMPAIGN_ASSET_MAX_BYTES + 1,
+    }),
+  /Ảnh hero tối đa 8 MB/,
+  "the default (hero) size message must keep its exact literal"
+);
+assert.equal(campaignAssetUsageLimit(undefined).maxBytes, CAMPAIGN_ASSET_MAX_BYTES);
+assert.equal(campaignAssetUsageLimit("not-a-kind").maxBytes, CAMPAIGN_ASSET_MAX_BYTES);
+
+assert.equal(CAMPAIGN_ASSET_USAGE_LIMITS["brand-logo"].maxBytes, 2 * 1024 * 1024);
+assert.doesNotThrow(() =>
+  validateCampaignAssetPolicy({
+    contentType: "image/png",
+    fileName: "logo.png",
+    size: 1.5 * 1024 * 1024,
+    usage: "brand-logo",
+  })
+);
+assert.throws(
+  () =>
+    validateCampaignAssetPolicy({
+      contentType: "image/png",
+      fileName: "logo-too-large.png",
+      size: 2 * 1024 * 1024 + 1,
+      usage: "brand-logo",
+    }),
+  /Logo thương hiệu tối đa 2 MB/
+);
+assert.throws(
+  () =>
+    validateCampaignAssetPolicy({
+      contentType: "image/png",
+      fileName: "logo-huge.png",
+      size: 3 * 1024 * 1024,
+      usage: "brand-logo",
+    }),
+  /Logo thương hiệu tối đa 2 MB/,
+  "a brand logo over its kind ceiling must fail even though it is under the hero ceiling"
+);
+
+for (const usage of ["game-wheel-hub", "game-quiz-backdrop"]) {
+  const limit = CAMPAIGN_ASSET_USAGE_LIMITS[usage];
+  assert.equal(limit.maxBytes, CAMPAIGN_ASSET_MAX_BYTES);
+  assert.doesNotThrow(() =>
+    validateCampaignAssetPolicy({
+      contentType: "image/webp",
+      fileName: `${usage}.webp`,
+      size: limit.maxBytes,
+      usage,
+    })
+  );
+  assert.throws(
+    () =>
+      validateCampaignAssetPolicy({
+        contentType: "image/webp",
+        fileName: `${usage}-too-large.webp`,
+        size: limit.maxBytes + 1,
+        usage,
+      }),
+    new RegExp(`${limit.label} tối đa ${limit.sizeLabel}`)
+  );
+}
+
+assert.equal(
+  isRenderableCampaignAssetRecord(
+    { ...attachedR2Asset, usage: "brand-logo", size: 2 * 1024 * 1024 + 1 },
+    ownerId,
+    configuredBucket
+  ),
+  false,
+  "an oversized brand-logo row must not render even under the global ceiling"
+);
+assert.equal(
+  isRenderableCampaignAssetRecord(
+    { ...attachedR2Asset, usage: "brand-logo", size: 1024 },
+    ownerId,
+    configuredBucket
+  ),
+  true,
+  "an attached R2-validated brand-logo row inside its kind ceiling should render"
+);
+assert.equal(
+  isRenderableCampaignAssetRecord({ ...attachedR2Asset, usage: undefined }, ownerId, configuredBucket),
+  true,
+  "legacy rows without a usage keep rendering under the hero limits"
+);
 assert.equal(
   isRenderableCampaignAssetRecord(attachedR2Asset, ownerId, configuredBucket),
   true,

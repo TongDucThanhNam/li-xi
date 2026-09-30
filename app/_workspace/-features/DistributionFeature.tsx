@@ -1,18 +1,20 @@
 "use client";
 
-import { Alert, Button, Chip, Spinner } from "@heroui/react";
+import { Alert, Button, Chip, Spinner, buttonVariants } from "@heroui/react";
 import { EmptyState, ItemCard, ItemCardGroup, Widget } from "@heroui-pro/react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { Clipboard, ExternalLink, Link2, MonitorPlay, QrCode } from "lucide-react";
+import { Clipboard, ExternalLink, CalendarClock, Link2, MonitorPlay, QrCode } from "lucide-react";
 import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { CampaignContextNav } from "@/app/_workspace/-components/CampaignContextNav";
+import { ScheduleStatusChip, scheduleRangeText } from "@/app/_workspace/-components/ScheduleStatusChip";
 import { ShareLinksPanel } from "@/app/_workspace/-features/ShareLinksPanel";
 import { AdminPageShell } from "@/app/components/AdminPageShell";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { buildPublicPlayUrl } from "@/lib/publicAppUrl";
+import { configRewardSource, supportsSelfServeStationGame } from "@/lib/gameTemplates";
 
 export function DistributionFeature({ campaignId }: { campaignId: string }) {
 	const campaign = useQuery(api.campaigns.getCampaignRouteContext, {
@@ -47,7 +49,17 @@ export function DistributionFeature({ campaignId }: { campaignId: string }) {
 	}
 
 	const campaignGameId = campaign.campaignGame.id;
+	const campaignGameIsLegacyLiXiStation =
+		campaign.campaignGame.templateId === "li-xi" &&
+		configRewardSource(campaign.campaignGame.config) === "campaign-budget";
+	// Station launch appears for the li xi legacy flow and for
+	// self-serve-station templates; quiz/slot campaigns get no station link.
+	const stationLaunchAvailable =
+		campaignGameIsLegacyLiXiStation ||
+		supportsSelfServeStationGame(campaign.campaignGame.templateId, campaign.campaignGame.config);
 	const pendingLinks = station?.pendingLinkSessions ?? [];
+	const primaryGameSchedule =
+		gamesContext?.campaignGames.find((game) => game.id === campaignGameId)?.schedule ?? null;
 	const copyLink = async (url: string, guestName: string) => {
 		setError("");
 		setFeedback("");
@@ -75,6 +87,7 @@ export function DistributionFeature({ campaignId }: { campaignId: string }) {
 					name: game.name,
 					templateId: game.templateId,
 					status: game.status,
+					schedule: game.schedule,
 				}))}
 			/>
 			{error || feedback ? (
@@ -98,7 +111,7 @@ export function DistributionFeature({ campaignId }: { campaignId: string }) {
 									<EmptyState.Description>Tạo một lượt chơi ở bảng vận hành để nhận liên kết `/play` và mã QR.</EmptyState.Description>
 								</EmptyState.Header>
 								<EmptyState.Content>
-									{campaignGameId ? <Link className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-accent-foreground" params={{ campaignGameId }} to="/operate/$campaignGameId">Mở bảng vận hành</Link> : null}
+									{campaignGameId ? <Link className={buttonVariants({ variant: "primary" })} params={{ campaignGameId }} to="/operate/$campaignGameId">Mở bảng vận hành</Link> : null}
 								</EmptyState.Content>
 							</EmptyState>
 						) : (
@@ -159,7 +172,7 @@ export function DistributionFeature({ campaignId }: { campaignId: string }) {
 								<ItemCard variant="secondary">
 									<ItemCard.Icon><MonitorPlay aria-hidden="true" /></ItemCard.Icon>
 									<ItemCard.Content>
-										<ItemCard.Title>Trạm tại sự kiện</ItemCard.Title>
+										<ItemCard.Title>Trạm chơi</ItemCard.Title>
 										<ItemCard.Description>{station?.hasSetup ? "Kho phần thưởng đã sẵn sàng." : "Cần cấu hình phần thưởng trước khi chơi."}</ItemCard.Description>
 									</ItemCard.Content>
 									<ItemCard.Action><Chip color={station?.hasSetup ? "success" : "warning"} size="sm" variant="soft">{station?.hasSetup ? "Sẵn sàng" : "Cần thiết lập"}</Chip></ItemCard.Action>
@@ -171,6 +184,20 @@ export function DistributionFeature({ campaignId }: { campaignId: string }) {
 										<ItemCard.Description>{pendingLinks.length} liên kết đang chờ.</ItemCard.Description>
 									</ItemCard.Content>
 								</ItemCard>
+								{primaryGameSchedule ? (
+									<ItemCard variant="secondary">
+										<ItemCard.Icon><CalendarClock aria-hidden="true" /></ItemCard.Icon>
+										<ItemCard.Content>
+											<ItemCard.Title>Cửa sổ chơi</ItemCard.Title>
+											<ItemCard.Description>
+												{scheduleRangeText(primaryGameSchedule) || "Không giới hạn thời gian."}
+											</ItemCard.Description>
+										</ItemCard.Content>
+										<ItemCard.Action>
+											<ScheduleStatusChip schedule={primaryGameSchedule} size="sm" />
+										</ItemCard.Action>
+									</ItemCard>
+								) : null}
 							</ItemCardGroup>
 						</Widget.Content>
 					</Widget>
@@ -178,8 +205,10 @@ export function DistributionFeature({ campaignId }: { campaignId: string }) {
 						<Widget>
 							<Widget.Header><Widget.Title>Khởi chạy</Widget.Title></Widget.Header>
 							<Widget.Content className="gap-3">
-								<Link className="inline-flex items-center justify-center rounded-xl bg-accent px-4 py-2 text-sm font-medium text-accent-foreground" params={{ campaignGameId }} to="/operate/$campaignGameId">Mở bảng vận hành</Link>
-								<Link className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium text-foreground" params={{ campaignGameId }} to="/station/$campaignGameId">Mở trạm chơi</Link>
+								<Link className={buttonVariants({ variant: "primary" })} params={{ campaignGameId }} to="/operate/$campaignGameId">Mở bảng vận hành</Link>
+								{stationLaunchAvailable ? (
+									<Link className={buttonVariants({ variant: "secondary" })} params={{ campaignGameId }} to="/station/$campaignGameId">Mở trạm chơi</Link>
+								) : null}
 							</Widget.Content>
 						</Widget>
 					) : null}

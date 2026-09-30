@@ -123,6 +123,7 @@ export default function LuckyWheelStage({
 	statusMessage,
 	copy,
 	heroAssetUrl,
+	assetUrls,
 	playContext,
 	initialOutcome,
 	initialClaim,
@@ -131,6 +132,10 @@ export default function LuckyWheelStage({
 	onCollect,
 	onRevealStateChange,
 }: GamePlayStageProps) {
+	// Live per-game slot URL (docs/design-lucky-wheel.md "Asset slots");
+	// presentation only — absent key renders the default glyph exactly as
+	// before.
+	const hubUrl = assetUrls?.["game-wheel-hub"] ?? null;
 	// The displayed segment set is frozen for the lifetime of this session
 	// mount: a live stock change never re-renders the wheel mid-journey, and
 	// every configured outcome in the frozen set stays reachable.
@@ -299,7 +304,7 @@ export default function LuckyWheelStage({
 			) : null}
 			<div className="wheel-stage__inner">
 				<header className="flex flex-col items-center">
-					<p className="wheel-hero__eyebrow">{copy.subtitle?.trim() || "Customer Appreciation"}</p>
+					<p className="wheel-hero__eyebrow">{copy.subtitle?.trim() || "Tri ân"}</p>
 					<h1 className="wheel-hero__title">{resolvedTitle}</h1>
 					{copy.waitingMessage?.trim() && phase === "hero" && !canPlay ? (
 						<p className="wheel-hero__subtitle" role="status">
@@ -369,7 +374,16 @@ export default function LuckyWheelStage({
 						<circle cx="100" cy="100" r="90" fill="none" stroke="rgba(255,246,232,0.35)" strokeWidth="1" />
 					</svg>
 					<div className="wheel-disc__hub" aria-hidden="true">
-						<RotateCw size={18} strokeWidth={2.4} />
+						{hubUrl ? (
+							<img
+								alt=""
+								className="wheel-disc__hub-image"
+								loading="lazy"
+								src={hubUrl}
+							/>
+						) : (
+							<RotateCw size={18} strokeWidth={2.4} />
+						)}
 					</div>
 				</div>
 

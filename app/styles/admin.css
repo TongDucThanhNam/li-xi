@@ -135,6 +135,12 @@
 		background-color: var(--separator);
 	}
 
+	.admin-kpi-strip > [data-slot="kpi"]:last-child {
+		/* Span to the row end so a partial last row never exposes the
+		   separator background through empty grid tracks. */
+		grid-column: auto / -1;
+	}
+
 	.admin-kpi-strip > [data-slot="kpi"] {
 		@apply min-w-0;
 		background-color: var(--surface);
@@ -182,7 +188,7 @@
 
 	.widget__title,
 	.item-card__title {
-		@apply max-w-full leading-5;
+		@apply max-w-full whitespace-normal leading-5;
 	}
 
 	.widget__description,

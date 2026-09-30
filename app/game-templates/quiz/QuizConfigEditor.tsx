@@ -1,6 +1,7 @@
 "use client";
 
 import { Description, Input, Label, NumberField, TextArea, Button } from "@heroui/react";
+import { GamePublicCopyFields, type GamePublicCopyFieldKey } from "../GamePublicCopyFields";
 import { NativeSelect, Widget } from "@heroui-pro/react";
 import { Plus, Trash2 } from "lucide-react";
 import {
@@ -31,10 +32,10 @@ export function QuizConfigEditor({
 }) {
 	const quizConfig = isQuizGameConfig(config)
 		? config
-		: { ...quizDefaultGameConfig, publicCopy: config.publicCopy };
+		: buildQuizGameConfig({ ...quizDefaultGameConfig, publicCopy: config.publicCopy });
 	const update = (next: Partial<typeof quizConfig>) =>
 		onChange(buildQuizGameConfig({ ...quizConfig, ...next }));
-	const updateCopy = (key: "headline" | "subtitle", value: string) =>
+	const updateCopy = (key: GamePublicCopyFieldKey, value: string) =>
 		onChange({ ...quizConfig, publicCopy: { ...quizConfig.publicCopy, [key]: value } });
 
 	const setQuestion = (index: number, question: QuizQuestionConfig) => {
@@ -189,7 +190,12 @@ export function QuizConfigEditor({
 								id={`quiz-prompt-${questionIndex}`}
 								value={question.prompt}
 								variant="secondary"
-								onChange={(value) => setQuestion(questionIndex, { ...question, prompt: value })}
+								onChange={(event) =>
+									setQuestion(questionIndex, {
+										...question,
+										prompt: event.currentTarget.value,
+									})
+								}
 							/>
 							{question.choices.map((choice, choiceIndex) => (
 								<div className="flex items-end gap-2" key={choiceIndex}>
@@ -297,26 +303,11 @@ export function QuizConfigEditor({
 					<Widget.Description>Nội dung này xuất hiện trên liên kết chơi công khai.</Widget.Description>
 				</Widget.Header>
 				<Widget.Content className="gap-4">
-					<div className="admin-field">
-						<Label htmlFor="quiz-headline">Tiêu đề</Label>
-						<Input
-							fullWidth
-							id="quiz-headline"
-							value={quizConfig.publicCopy.headline}
-							variant="secondary"
-							onChange={(event) => updateCopy("headline", event.currentTarget.value)}
-						/>
-					</div>
-					<div className="admin-field">
-						<Label htmlFor="quiz-subtitle">Mô tả ngắn</Label>
-						<Input
-							fullWidth
-							id="quiz-subtitle"
-							value={quizConfig.publicCopy.subtitle}
-							variant="secondary"
-							onChange={(event) => updateCopy("subtitle", event.currentTarget.value)}
-						/>
-					</div>
+					<GamePublicCopyFields
+						copy={quizConfig.publicCopy}
+						idPrefix="quiz"
+						onChange={updateCopy}
+					/>
 				</Widget.Content>
 			</Widget>
 		</div>

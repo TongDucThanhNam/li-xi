@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, Gift, PartyPopper, XCircle } from "lucide-react";
+import {
+	CheckCircle2,
+	Gift,
+	ListChecks,
+	PartyPopper,
+	Play,
+	XCircle,
+} from "lucide-react";
 import type {
 	GamePlayStageProps,
 	GenericClaimDetail,
@@ -20,9 +27,12 @@ import {
  * Every answer is one server-validated `quiz-answer` action carrying the
  * question index and a retry revision; the stage adopts ONLY server
  * step states at least as new as its own (stale replies can never regress
- * progress). Intermediate answers create no outcome; the final answer is
- * graded ONCE by the server. Review (correct choice + explanation) renders
- * only after completion, from the capability-bound quiz state.
+ * progress). Intermediate answers create no outcome and — because the
+ * correct choice is a server-private half — no correctness feedback; the
+ * selected choice flashes while the server acknowledges. The final answer
+ * is graded ONCE by the server. The answer review (correct choice +
+ * explanation) renders only after completion, from the capability-bound
+ * quiz state (mount-time snapshot or the reactive adoption below).
  */
 
 type QuizPlayContext = {
@@ -30,7 +40,10 @@ type QuizPlayContext = {
 	questions?: Array<{ prompt?: string; choices?: string[] }>;
 };
 
-type Phase = "question" | "result";
+type QuizQuestionView = { prompt: string; choices: string[] };
+type QuizReviewEntry = NonNullable<GenericQuizProgressState["review"]>[number];
+
+type Phase = "ready" | "question" | "result";
 
 export default function QuizStage({
 	canPlay,
@@ -38,28 +51,35 @@ export default function QuizStage({
 	statusMessage,
 	copy,
 	heroAssetUrl,
+	assetUrls,
 	playContext,
 	initialOutcome,
 	initialClaim,
 	initialQuizState,
-	onPlay,
 	onPlayStep,
 	onClaim,
 	onCollect,
 	onRevealStateChange,
 }: GamePlayStageProps) {
+	// Backdrop slot (docs/design-quiz.md "Asset slots"): presentation only —
+	// the slot image takes the dimmed background layer; without it the layer
+	// renders the campaign hero exactly as before.
+	const backdropUrl = assetUrls?.["game-quiz-backdrop"] ?? heroAssetUrl ?? null;
 	const frozenContextRef = useRef<QuizPlayContext | null>(null);
 	if (!frozenContextRef.current) {
 		frozenContextRef.current = (playContext ?? {}) as QuizPlayContext;
 	}
 	const context = frozenContextRef.current;
 	const questions = (context.questions ?? []).filter(
-		(question) =>
+		(question): question is QuizQuestionView =>
 			typeof question?.prompt === "string" && Array.isArray(question.choices),
 	);
 	const total = questions.length;
 
-	const [phase, setPhase] = useState<Phase>(initialOutcome ? "result" : "question");
+	const [phase, setPhase] = useState<Phase>(() => {
+		if (initialOutcome) return "result";
+		return (initialQuizState?.answeredCount ?? 0) > 0 ? "question" : "ready";
+	});
 	const [currentIndex, setCurrentIndex] = useState(() => {
 		if (initialOutcome) return initialQuizState?.currentIndex ?? total;
 		return initialQuizState?.currentIndex ?? 0;
@@ -78,7 +98,7 @@ export default function QuizStage({
 				}
 			: null,
 	);
-	const [review, setReview] = useState<GenericQuizProgressState["review"]>(
+	const [review, setReview] = useState<QuizReviewEntry[] | null>(
 		initialQuizState?.completed ? (initialQuizState.review ?? null) : null,
 	);
 	const [claim, setClaim] = useState<GenericClaimDetail | null>(
@@ -89,7 +109,9 @@ export default function QuizStage({
 	const [answerPending, setAnswerPending] = useState(false);
 	const [justAnswered, setJustAnswered] = useState<number | null>(null);
 
-	// Server step counter mirror: guards against stale replies regressing.
+	// Server step counter mirror: guards against stale replies regressing and
+	// keeps the retry revision identical to the server's accepted-answer count
+	// (synced from the capability-bound quiz state when it loads after mount).
 	const answeredCountRef = useRef(initialQuizState?.answeredCount ?? 0);
 	const appliedOutcomeKeyRef = useRef("");
 	const localPlayAttemptedRef = useRef(false);
@@ -132,14 +154,29 @@ export default function QuizStage({
 	}, [initialClaim, claim, outcome]);
 
 	// Reactive capability-bound quiz state: adopt server truth that is NEWER
-	// than local progress (never regress a newer local answer).
+	// than local progress (never regress a newer local answer). After
+	// completion this delivers the authoritative score/pass and the permitted
+	// answer review — including for a quiz graded on another device.
 	useEffect(() => {
 		if (!initialQuizState) return;
 		if (initialQuizState.answeredCount < answeredCountRef.current) return;
 		if (initialQuizState.completed) {
+			answeredCountRef.current = initialQuizState.answeredCount;
 			setPhase("result");
+			if (typeof initialQuizState.score === "number") {
+				setGrading({
+					score: initialQuizState.score,
+					passed: Boolean(initialQuizState.passed),
+				});
+			}
+			setReview(initialQuizState.review ?? null);
 		} else {
+			answeredCountRef.current = initialQuizState.answeredCount;
 			setCurrentIndex(initialQuizState.currentIndex);
+			if (initialQuizState.answeredCount > 0) {
+				// Recovered mid-quiz progress skips the ready intro.
+				setPhase((current) => (current === "ready" ? "question" : current));
+			}
 		}
 	}, [initialQuizState]);
 
@@ -156,6 +193,12 @@ export default function QuizStage({
 		typeof context.passCount === "number" && context.passCount >= 1
 			? context.passCount
 			: 1;
+
+	const begin = () => {
+		if (total === 0 || answerPending || disabled || !canPlay) return;
+		setPlayError("");
+		setPhase("question");
+	};
 
 	const answer = async (choiceIndex: number) => {
 		if (
@@ -180,7 +223,8 @@ export default function QuizStage({
 				revision: answeredCountRef.current,
 			});
 			if (result.status === "in-progress") {
-				// Stale-reply guard: never regress below local progress.
+				// Stale-reply guard: never regress below local progress. An
+				// idempotent retry replays the current state unchanged.
 				if (result.step.answeredCount >= answeredCountRef.current + 1) {
 					answeredCountRef.current = result.step.answeredCount;
 					setCurrentIndex(result.step.answeredCount);
@@ -234,12 +278,12 @@ export default function QuizStage({
 
 	return (
 		<main className="quiz-stage">
-			{heroAssetUrl ? (
+			{backdropUrl ? (
 				<div
 					aria-hidden="true"
 					className="absolute inset-0 opacity-20 mix-blend-screen"
 					style={{
-						backgroundImage: `url(${heroAssetUrl})`,
+						backgroundImage: `url(${backdropUrl})`,
 						backgroundSize: "cover",
 						backgroundPosition: "center",
 					}}
@@ -255,6 +299,31 @@ export default function QuizStage({
 						</p>
 					) : null}
 				</header>
+
+				{phase === "ready" ? (
+					<section
+						aria-label="Sẵn sàng bắt đầu trắc nghiệm"
+						className="quiz-card quiz-ready"
+						data-testid="quiz-ready"
+					>
+						<div aria-hidden="true" className="quiz-hero__badge">
+							<ListChecks size={26} />
+						</div>
+						<p className="quiz-ready__meta">
+							{total} câu hỏi · cần đúng ít nhất {passCount} câu
+						</p>
+						<button
+							className="quiz-cta"
+							data-testid="quiz-start"
+							disabled={!canPlay || disabled || total === 0}
+							onClick={begin}
+							type="button"
+						>
+							<Play aria-hidden="true" size={17} />
+							{resolvedCta}
+						</button>
+					</section>
+				) : null}
 
 				{phase === "question" && currentQuestion ? (
 					<section
@@ -295,11 +364,9 @@ export default function QuizStage({
 								</button>
 							))}
 						</div>
-						{answerPending ? (
-							<p aria-live="polite" className="quiz-status" role="status">
-								Đang ghi nhận câu trả lời…
-							</p>
-						) : null}
+						<p aria-live="polite" className="quiz-status" role="status">
+							{answerPending ? "Đang ghi nhận câu trả lời…" : ""}
+						</p>
 					</section>
 				) : null}
 
@@ -313,6 +380,7 @@ export default function QuizStage({
 				{phase === "result" && outcome ? (
 					<section
 						aria-label="Kết quả trắc nghiệm"
+						aria-live="polite"
 						className={`quiz-result ${outcome.kind === "reward" ? "quiz-result--pass" : ""}`}
 						data-testid="quiz-result-panel"
 					>
@@ -324,7 +392,9 @@ export default function QuizStage({
 						{grading ? (
 							<p className="quiz-result__score" data-testid="quiz-score">
 								Bạn đúng {grading.score}/{total} câu
-								{grading.passed ? " — đạt yêu cầu!" : ""}
+								{grading.passed
+									? " — đạt yêu cầu!"
+									: ` — chưa đạt (cần đúng ít nhất ${passCount}/${total} câu).`}
 							</p>
 						) : null}
 						<h2 className="quiz-result__label">{outcome.label}</h2>

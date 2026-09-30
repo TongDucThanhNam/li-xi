@@ -17,16 +17,21 @@ export default function QuizEntryHero({
 	description,
 	gameName,
 	heroAssetUrl,
+	assetUrls,
 	onStart,
 }: GameEntryHeroProps) {
+	// Backdrop slot (docs/design-quiz.md "Asset slots"): the slot image takes
+	// the dimmed background layer; without it the hero renders the campaign
+	// hero exactly as before.
+	const backdropUrl = assetUrls?.["game-quiz-backdrop"] ?? heroAssetUrl ?? null;
 	return (
 		<main className="quiz-stage">
-			{heroAssetUrl ? (
+			{backdropUrl ? (
 				<div
 					aria-hidden="true"
 					className="absolute inset-0 opacity-20 mix-blend-screen"
 					style={{
-						backgroundImage: `url(${heroAssetUrl})`,
+						backgroundImage: `url(${backdropUrl})`,
 						backgroundSize: "cover",
 						backgroundPosition: "center",
 					}}

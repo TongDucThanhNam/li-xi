@@ -4,10 +4,20 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useMemo, useRef, useState } from "react";
 import { gameTemplates } from "@/app/game-templates/registry";
-import { configRewardSource } from "@/lib/gameTemplates";
+import {
+	configRewardSource,
+	supportsSelfServeStationGame,
+} from "@/lib/gameTemplates";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { PIN_LENGTH, type Rarity } from "@/lib/lixiPolicy";
+import type { FunctionReturnType } from "convex/server";
+import type { Rarity } from "@/lib/lixiPolicy";
+import { StationPinDialog } from "./StationPinDialog";
+import { StationSelfServePlay } from "./StationSelfServePlay";
+
+export type StationRouteContext = FunctionReturnType<
+	typeof api.campaigns.getCampaignGameRouteContext
+>;
 
 export function StationPlayFeature({
 	campaignGameId,
@@ -18,23 +28,170 @@ export function StationPlayFeature({
 	const context = useQuery(api.campaigns.getCampaignGameRouteContext, {
 		campaignGameId: campaignGameId as Id<"campaignGames">,
 	});
+	const verifyHostPin = useMutation(api.auth.verifyHostPin);
+	const [exitOpen, setExitOpen] = useState(false);
+	const [exitError, setExitError] = useState("");
+	const exitTriggerRef = useRef<HTMLButtonElement>(null);
+	const closeExitDialog = () => {
+		setExitOpen(false);
+		setExitError("");
+		requestAnimationFrame(() => exitTriggerRef.current?.focus());
+	};
+
+	if (context === undefined) {
+		return (
+			<main className="station-status" role="status">
+				Đang tải trạm chơi…
+			</main>
+		);
+	}
+	if (!context?.campaign) {
+		return (
+			<main className="station-status">
+				<section className="station-status__card">
+					<h1 className="station-status__title">Không thể mở trạm chơi</h1>
+					<p className="station-status__text">
+						Trò chơi không tồn tại hoặc bạn không có quyền truy cập.
+					</p>
+					<Link className="station-status__link" to="/campaigns">
+						Quay lại Campaign Studio
+					</Link>
+				</section>
+			</main>
+		);
+	}
+	if (
+		context.campaign.status !== "active" ||
+		context.campaignGame.status !== "active"
+	) {
+		return (
+			<main className="station-status">
+				<section className="station-status__card">
+					<h1 className="station-status__title">Trạm chơi chưa hoạt động</h1>
+					<p className="station-status__text">
+						Kích hoạt chiến dịch và trò chơi trước khi đón người tham gia.
+					</p>
+					<Link
+						className="station-status__link"
+						params={{
+							campaignGameId,
+							campaignId: context.campaign.id,
+						}}
+						to="/campaigns/$campaignId/games/$campaignGameId"
+					>
+						Mở cấu hình trò chơi
+					</Link>
+				</section>
+			</main>
+		);
+	}
+	const templateId = context.campaignGame.templateId;
+	const legacyLiXiStation =
+		templateId === "li-xi" &&
+		configRewardSource(context.campaignGame.config) === "campaign-budget";
+	const selfServeStationGame =
+		!legacyLiXiStation &&
+		supportsSelfServeStationGame(templateId, context.campaignGame.config);
+	if (!legacyLiXiStation && !selfServeStationGame) {
+		// Station mode is a li xi operator flow plus the self-serve-station
+		// templates; quiz, slot, and non-inventory games keep failing closed
+		// while their participants use the reusable public link instead.
+		return (
+			<main className="station-status">
+				<section className="station-status__card">
+					<h1 className="station-status__title">Trò chơi tự phục vụ</h1>
+					<p className="station-status__text">
+						{context.campaignGame.name} dành cho khách tự vào chơi qua liên kết công khai. Hãy chia
+						se liên kết hoặc mã QR từ trang Phân phối; luồng trạm cho mẫu này sẽ ra mắt sau.
+					</p>
+					<Link
+						className="station-status__link"
+						params={{ campaignId: context.campaign.id }}
+						to="/campaigns/$campaignId/distribution"
+					>
+						Mở trang Phân phối
+					</Link>
+				</section>
+			</main>
+		);
+	}
+
+	return (
+		<main className="station-shell" data-template={templateId}>
+			<button
+				className="station-exit-trigger"
+				onClick={() => {
+					setExitError("");
+					setExitOpen(true);
+				}}
+				ref={exitTriggerRef}
+				type="button"
+			>
+				Thoát chế độ trạm
+			</button>
+			{legacyLiXiStation ? (
+				<LiXiStationPlay context={context} />
+			) : (
+				<StationSelfServePlay campaignGameId={campaignGameId} />
+			)}
+			{exitOpen ? (
+				<StationPinDialog
+					cancelLabel="Ở lại"
+					description="Nhập mã vận hành để quay lại bảng điều khiển."
+					error={exitError}
+					ids={{
+						title: "station-exit-title",
+						description: "station-exit-description",
+						input: "station-exit-pin",
+						error: "station-exit-error",
+					}}
+					submitLabel="Xác minh"
+					title="Xác minh Host PIN"
+					onClose={closeExitDialog}
+					onSubmit={async (pin) => {
+						setExitError("");
+						try {
+							await verifyHostPin({ pin });
+							void navigate({
+								to: "/operate/$campaignGameId",
+								params: { campaignGameId },
+								replace: true,
+							});
+						} catch (error) {
+							setExitError(error instanceof Error ? error.message : "Không thể xác minh PIN");
+						}
+					}}
+				/>
+			) : null}
+		</main>
+	);
+}
+
+/**
+ * Legacy li xi station flow: the host creates each session from the
+ * operator console under a verified Host PIN, and this component plays the
+ * pending draw session reactively. Behavior, copy, and data flow are
+ * unchanged — only its mounting point moved inside the shared station
+ * shell above.
+ */
+function LiXiStationPlay({
+	context,
+}: {
+	context: StationRouteContext;
+}) {
 	const station = useQuery(
 		api.draw.getStationState,
 		context?.campaign &&
 			context.campaign.status === "active" &&
-			context.campaignGame.status === "active"
+			context.campaignGame.status === "active" &&
+			context.campaignGame.templateId === "li-xi" &&
+			configRewardSource(context.campaignGame.config) === "campaign-budget"
 			? { campaignId: context.campaign.id }
 			: "skip",
 	);
 	const redeem = useMutation(api.draw.redeem);
-	const verifyHostPin = useMutation(api.auth.verifyHostPin);
 	const [revealing, setRevealing] = useState(false);
 	const [collected, setCollected] = useState(false);
-	const [exitOpen, setExitOpen] = useState(false);
-	const [hostPin, setHostPin] = useState("");
-	const [exitError, setExitError] = useState("");
-	const exitTriggerRef = useRef<HTMLButtonElement>(null);
-	const exitDialogRef = useRef<HTMLFormElement>(null);
 	const pendingSession = collected ? null : station?.pendingSession ?? null;
 	const campaign = pendingSession?.campaign ?? station?.activeCampaign ?? context?.campaign ?? null;
 	const rewardPool = useMemo(
@@ -51,93 +208,9 @@ export function StationPlayFeature({
 			: campaign.heroAsset?.url ?? null
 		: null;
 
-	if (context === undefined) {
-		return (
-			<main className="grid min-h-dvh place-items-center bg-black-ink text-gold-shine" role="status">
-				Đang tải trạm chơi…
-			</main>
-		);
-	}
-	if (!context?.campaign) {
-		return (
-			<main className="grid min-h-dvh place-items-center bg-black-ink p-6 text-gold-shine">
-				<section className="w-full max-w-md rounded-2xl border border-gold-base/40 bg-red-deep/80 p-6 text-center">
-					<h1 className="font-cinzel text-2xl">Không thể mở trạm chơi</h1>
-					<p className="mt-3 font-vn text-sm text-gold-shine/70">
-						Trò chơi không tồn tại hoặc bạn không có quyền truy cập.
-					</p>
-					<Link
-						className="mt-6 rounded-full border border-gold-base/50 px-5 py-2 font-vn"
-						to="/campaigns"
-					>
-						Quay lại Campaign Studio
-					</Link>
-				</section>
-			</main>
-		);
-	}
-	if (
-		context.campaign.status !== "active" ||
-		context.campaignGame.status !== "active"
-	) {
-		return (
-			<main className="grid min-h-dvh place-items-center bg-black-ink p-6 text-gold-shine">
-				<section className="w-full max-w-md rounded-2xl border border-gold-base/40 bg-red-deep/80 p-6 text-center">
-					<h1 className="font-cinzel text-2xl">Trạm chơi chưa hoạt động</h1>
-					<p className="mt-3 font-vn text-sm text-gold-shine/70">
-						Kích hoạt chiến dịch và trò chơi trước khi đón người tham gia.
-					</p>
-					<Link
-						className="mt-6 inline-flex rounded-full border border-gold-base/50 px-5 py-2 font-vn"
-						params={{
-							campaignGameId,
-							campaignId: context.campaign.id,
-						}}
-						to="/campaigns/$campaignId/games/$campaignGameId"
-					>
-						Mở cấu hình trò chơi
-					</Link>
-				</section>
-			</main>
-		);
-	}
-	if (
-		context.campaignGame.templateId !== "li-xi" ||
-		configRewardSource(context.campaignGame.config) !== "campaign-budget"
-	) {
-		// Station mode is a li xi operator flow in stage 1; self-serve templates
-		// like the lucky wheel run through the reusable public link instead.
-		return (
-			<main
-				className="grid min-h-dvh place-items-center p-6"
-				style={{ background: "#141433", color: "#fff6e8", fontFamily: "'Be Vietnam Pro', system-ui, sans-serif" }}
-			>
-				<section
-					className="w-full max-w-md rounded-3xl border p-8 text-center"
-					style={{ borderColor: "rgba(255,246,232,0.2)", background: "#1e1e4d" }}
-				>
-					<h1 className="text-2xl font-bold" style={{ fontFamily: "'Baloo 2', 'Be Vietnam Pro', system-ui, sans-serif" }}>
-						Trò chơi tự phục vụ
-					</h1>
-					<p className="mt-3 text-sm leading-6" style={{ color: "rgba(255,246,232,0.7)" }}>
-						{context.campaignGame.name} dành cho khách tự vào chơi qua liên kết công khai. Hãy chia
-						se liên kết hoặc mã QR từ trang Phân phối; luồng trạm cho mẫu này sẽ ra mắt sau.
-					</p>
-					<Link
-						className="mt-6 inline-flex rounded-full border px-5 py-2 text-sm font-semibold"
-						params={{ campaignId: context.campaign.id }}
-						style={{ borderColor: "rgba(255,246,232,0.4)", color: "#fff6e8" }}
-						to="/campaigns/$campaignId/distribution"
-					>
-						Mở trang Phân phối
-					</Link>
-				</section>
-			</main>
-		);
-	}
 	if (station === undefined) {
 		return (
-			<main className="grid min-h-dvh place-items-center bg-black-ink text-gold-shine" role="status">
+			<main className="station-status" role="status">
 				Đang tải trạng thái trạm chơi…
 			</main>
 		);
@@ -157,127 +230,29 @@ export function StationPlayFeature({
 			throw error;
 		}
 	};
-	const closeExitDialog = () => {
-		setExitOpen(false);
-		setHostPin("");
-		setExitError("");
-		requestAnimationFrame(() => exitTriggerRef.current?.focus());
-	};
 
 	return (
-		<main className="relative h-dvh w-screen overflow-hidden bg-black-ink">
-			<button
-				className="absolute right-3 top-3 z-50 rounded-full border border-gold-base/50 bg-black-ink/70 px-4 py-2 font-vn text-sm text-gold-shine backdrop-blur"
-				onClick={() => {
-					setHostPin("");
-					setExitError("");
-					setExitOpen(true);
-				}}
-				ref={exitTriggerRef}
-				type="button"
-			>
-				Thoát chế độ trạm
-			</button>
-			<Stage
-				canStart={canStart}
-				campaignSubtitle={
-					campaign?.claimSubtitle ?? campaign?.brandName ?? campaign?.description ?? undefined
-				}
-				campaignTitle={campaign?.claimHeadline ?? campaign?.name ?? undefined}
-				collectLabel={campaign?.claimCollectLabel ?? undefined}
-				ctaLabel={campaign?.claimCtaLabel ?? undefined}
-				disabled={revealing || !canStart}
-				guestName={pendingSession?.guestNameDisplay}
-				heroAssetUrl={heroAssetUrl}
-				onCollect={() => {
-					setCollected(true);
-					setRevealing(false);
-				}}
-				onRedeem={handleRedeem}
-				onRevealStateChange={setRevealing}
-				rewardPool={rewardPool}
-				sessionKey={pendingSession?.id ?? null}
-				statusMessage={canStart ? undefined : "Trạm đang chờ lượt chơi tiếp theo."}
-				waitingMessage={campaign?.claimWaitingMessage ?? "Đang chờ lượt chơi tiếp theo"}
-			/>
-			{exitOpen ? (
-				<div className="absolute inset-0 z-[60] grid place-items-center bg-black-ink/95 p-6">
-					<form
-						aria-describedby="station-exit-description"
-						aria-labelledby="station-exit-title"
-						aria-modal="true"
-						className="w-full max-w-sm rounded-2xl border border-gold-base/50 bg-red-deep p-6 text-gold-shine"
-						ref={exitDialogRef}
-						role="dialog"
-						onKeyDown={(event) => {
-							if (event.key === "Escape") {
-								event.preventDefault();
-								closeExitDialog();
-								return;
-							}
-							if (event.key !== "Tab") return;
-							const focusable = Array.from(
-								exitDialogRef.current?.querySelectorAll<HTMLElement>(
-									'input:not([disabled]), button:not([disabled])',
-								) ?? [],
-							);
-							const first = focusable[0];
-							const last = focusable.at(-1);
-							if (!first || !last) return;
-							if (event.shiftKey && document.activeElement === first) {
-								event.preventDefault();
-								last.focus();
-							} else if (!event.shiftKey && document.activeElement === last) {
-								event.preventDefault();
-								first.focus();
-							}
-						}}
-						onSubmit={async (event) => {
-							event.preventDefault();
-							setExitError("");
-							try {
-								await verifyHostPin({ pin: hostPin });
-								void navigate({
-									to: "/operate/$campaignGameId",
-									params: { campaignGameId },
-									replace: true,
-								});
-							} catch (error) {
-								setExitError(error instanceof Error ? error.message : "Không thể xác minh PIN");
-							}
-						}}
-					>
-						<h2 className="font-cinzel text-xl" id="station-exit-title">Xác minh Host PIN</h2>
-						<p className="mt-2 font-vn text-sm text-gold-shine/70" id="station-exit-description">
-							Nhập mã vận hành để quay lại bảng điều khiển.
-						</p>
-						<label className="mt-5 block font-vn text-sm" htmlFor="station-exit-pin">Host PIN</label>
-						<input
-							autoFocus
-							className="mt-2 w-full rounded-xl border border-gold-base/50 bg-black-ink/60 px-4 py-3 text-gold-shine outline-none focus:border-gold-base"
-							id="station-exit-pin"
-							inputMode="numeric"
-							maxLength={PIN_LENGTH}
-							aria-describedby={exitError ? "station-exit-error" : undefined}
-							aria-invalid={Boolean(exitError)}
-							onChange={(event) =>
-								setHostPin(event.currentTarget.value.replace(/\D/g, "").slice(0, PIN_LENGTH))
-							}
-							type="password"
-							value={hostPin}
-						/>
-						{exitError ? <p className="mt-2 text-sm text-gold-shine" id="station-exit-error" role="alert">{exitError}</p> : null}
-						<div className="mt-5 flex gap-3">
-							<button className="mag-btn flex-1" disabled={hostPin.length !== PIN_LENGTH} type="submit">
-								Xác minh
-							</button>
-							<button className="rounded-full border border-gold-base/50 px-4 py-2" onClick={closeExitDialog} type="button">
-								Ở lại
-							</button>
-						</div>
-					</form>
-				</div>
-			) : null}
-		</main>
+		<Stage
+			canStart={canStart}
+			campaignSubtitle={
+				campaign?.claimSubtitle ?? campaign?.brandName ?? campaign?.description ?? undefined
+			}
+			campaignTitle={campaign?.claimHeadline ?? campaign?.name ?? undefined}
+			collectLabel={campaign?.claimCollectLabel ?? undefined}
+			ctaLabel={campaign?.claimCtaLabel ?? undefined}
+			disabled={revealing || !canStart}
+			guestName={pendingSession?.guestNameDisplay}
+			heroAssetUrl={heroAssetUrl}
+			onCollect={() => {
+				setCollected(true);
+				setRevealing(false);
+			}}
+			onRedeem={handleRedeem}
+			onRevealStateChange={setRevealing}
+			rewardPool={rewardPool}
+			sessionKey={pendingSession?.id ?? null}
+			statusMessage={canStart ? undefined : "Trạm đang chờ lượt chơi tiếp theo."}
+			waitingMessage={campaign?.claimWaitingMessage ?? "Đang chờ lượt chơi tiếp theo"}
+		/>
 	);
 }

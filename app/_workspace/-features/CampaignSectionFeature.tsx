@@ -15,6 +15,7 @@ import {
 	type CampaignGameConfig,
 	type GameTemplateId,
 } from "@/lib/gameTemplates";
+import { ScheduleStatusChip } from "@/app/_workspace/-components/ScheduleStatusChip";
 
 const statusLabels = {
 	active: "Đang chạy",
@@ -188,12 +189,15 @@ export function CampaignSectionFeature({ campaignId }: { campaignId: string }) {
 									</ItemCard.Description>
 								</ItemCard.Content>
 								<ItemCard.Action>
-									<Chip
-										color={campaignGame.status === "active" ? "success" : "default"}
-										variant="soft"
-									>
-										{statusLabels[campaignGame.status]}
-									</Chip>
+									<div className="flex flex-wrap items-center justify-end gap-1.5">
+										<ScheduleStatusChip schedule={campaignGame.schedule} />
+										<Chip
+											color={campaignGame.status === "active" ? "success" : "default"}
+											variant="soft"
+										>
+											{statusLabels[campaignGame.status]}
+										</Chip>
+									</div>
 								</ItemCard.Action>
 							</ItemCard>
 						</Link>

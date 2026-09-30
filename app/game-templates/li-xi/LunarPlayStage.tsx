@@ -274,7 +274,7 @@ export default function LunarPlayStage({
 			<section
 				aria-live="polite"
 				inert={resultVisible ? true : undefined}
-				className="font-vn perspective-2000 relative h-dvh w-full overflow-hidden bg-[radial-gradient(circle_at_50%_30%,rgba(116,14,14,0.4),var(--color-black-ink))] transition-colors duration-700"
+				className="lunar-stage font-vn perspective-2000 relative h-dvh w-full overflow-hidden bg-[radial-gradient(circle_at_50%_30%,rgba(116,14,14,0.4),var(--color-black-ink))] transition-colors duration-700"
 			>
 				<svg aria-hidden="true" className="pointer-events-none absolute -z-10 h-0 w-0">
 					<filter id="paperRoughness">

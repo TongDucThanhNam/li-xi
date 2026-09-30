@@ -2,12 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+	Alert,
 	Button,
+	Checkbox,
 	Chip,
 	Description,
 	Input,
 	Label,
 	NumberField,
+	Switch,
 } from "@heroui/react";
 import { EmptyState, ItemCard, ItemCardGroup, NativeSelect, Widget } from "@heroui-pro/react";
 import { useMutation, useQuery } from "convex/react";
@@ -379,8 +382,8 @@ export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns
 												id={`reward-secret-${index}`}
 												placeholder={
 													row.hasSecretCode
-														? "Để trống để giữ nguyên mã đã lưu"
-														: "Nhập mã bí mật cho người thắng cuộc"
+														? "Giữ mã đã lưu"
+														: "Nhập mã bí mật"
 												}
 												value={row.secretCode}
 												variant="secondary"
@@ -392,17 +395,19 @@ export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns
 													: "Chỉ người chơi nhận voucher sau khi bấm nhận thưởng mới thấy mã này."}
 											</Description>
 											{row.hasSecretCode && row.existingItemId ? (
-												<label className="mt-1 flex items-center gap-2 text-xs text-muted">
-													<input
-														aria-label={`Xoá mã hiện tại của phần thưởng ${index + 1}`}
-														checked={row.removeSecret}
-														onChange={(event) =>
-															updateRow(row.key, { removeSecret: event.currentTarget.checked })
-														}
-														type="checkbox"
-													/>
-													Xoá mã hiện tại khi lưu (thay vì giữ nguyên)
-												</label>
+												<Checkbox
+													aria-label={`Xóa mã hiện tại của phần thưởng ${index + 1}`}
+													className="mt-1"
+													isSelected={row.removeSecret}
+													onChange={(checked) => updateRow(row.key, { removeSecret: checked })}
+												>
+													<Checkbox.Content className="text-xs text-muted">
+														<Checkbox.Control>
+															<Checkbox.Indicator />
+														</Checkbox.Control>
+														Xóa mã hiện tại khi lưu (thay vì giữ nguyên)
+													</Checkbox.Content>
+												</Checkbox>
 											) : null}
 										</div>
 									) : null}
@@ -420,15 +425,18 @@ export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns
 											Trò chơi chọn nhóm kho theo tên; để trống dùng nhóm mặc định.
 										</Description>
 									</div>
-									<label className="flex items-center gap-2 text-sm text-foreground">
-										<input
-											aria-label={`Kích hoạt phần thưởng ${index + 1}`}
-											checked={row.isActive}
-											onChange={(event) => updateRow(row.key, { isActive: event.currentTarget.checked })}
-											type="checkbox"
-										/>
-										Kích hoạt
-									</label>
+									<Switch
+										aria-label={`Kích hoạt phần thưởng ${index + 1}`}
+										isSelected={row.isActive}
+										onChange={(selected) => updateRow(row.key, { isActive: selected })}
+									>
+										<Switch.Content className="text-sm text-foreground">
+											<Switch.Control>
+												<Switch.Thumb />
+											</Switch.Control>
+											Kích hoạt
+										</Switch.Content>
+									</Switch>
 								</ItemCard.Content>
 								<ItemCard.Action>
 									<Button
@@ -473,8 +481,14 @@ function AlertInline({ error, info }: { error: string; info: string }) {
 		return null;
 	}
 	return (
-		<p aria-live="polite" className={error ? "text-sm text-danger" : "text-sm text-success"} role={error ? "alert" : "status"}>
-			{error || info}
-		</p>
+		<Alert
+			aria-live="polite"
+			status={error ? "danger" : "success"}
+		>
+			<Alert.Indicator />
+			<Alert.Content>
+				<Alert.Title>{error || info}</Alert.Title>
+			</Alert.Content>
+		</Alert>
 	);
 }

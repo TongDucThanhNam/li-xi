@@ -1,6 +1,7 @@
 "use client";
 
 import { Description, Input, Label, NumberField } from "@heroui/react";
+import { GamePublicCopyFields, type GamePublicCopyFieldKey } from "../GamePublicCopyFields";
 import { NativeSelect, Widget } from "@heroui-pro/react";
 import {
 	buildScratchCardGameConfig,
@@ -38,7 +39,7 @@ export function ScratchCardConfigEditor({
 				publicCopy: config.publicCopy,
 			})
 		: { ...scratchCardDefaultGameConfig, publicCopy: config.publicCopy };
-	const updateCopy = (key: "headline" | "subtitle", value: string) =>
+	const updateCopy = (key: GamePublicCopyFieldKey, value: string) =>
 		onChange({ ...scratchConfig, publicCopy: { ...scratchConfig.publicCopy, [key]: value } });
 	return (
 		<div className="grid gap-6">
@@ -161,26 +162,11 @@ export function ScratchCardConfigEditor({
 					<Widget.Description>Nội dung này xuất hiện trên liên kết chơi công khai.</Widget.Description>
 				</Widget.Header>
 				<Widget.Content className="gap-4">
-					<div className="admin-field">
-						<Label htmlFor="scratch-headline">Tiêu đề</Label>
-						<Input
-							fullWidth
-							id="scratch-headline"
-							value={scratchConfig.publicCopy.headline}
-							variant="secondary"
-							onChange={(event) => updateCopy("headline", event.currentTarget.value)}
-						/>
-					</div>
-					<div className="admin-field">
-						<Label htmlFor="scratch-subtitle">Mô tả ngắn</Label>
-						<Input
-							fullWidth
-							id="scratch-subtitle"
-							value={scratchConfig.publicCopy.subtitle}
-							variant="secondary"
-							onChange={(event) => updateCopy("subtitle", event.currentTarget.value)}
-						/>
-					</div>
+					<GamePublicCopyFields
+						copy={scratchConfig.publicCopy}
+						idPrefix="scratch"
+						onChange={updateCopy}
+					/>
 				</Widget.Content>
 			</Widget>
 		</div>

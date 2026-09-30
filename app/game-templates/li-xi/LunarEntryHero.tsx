@@ -20,7 +20,7 @@ export default function LunarEntryHero({
 	onStart,
 }: GameEntryHeroProps) {
 	return (
-		<main className="relative grid min-h-dvh place-items-center overflow-hidden bg-[radial-gradient(circle_at_50%_30%,rgba(116,14,14,0.4),var(--color-black-ink))] p-6">
+		<main className="lunar-stage relative grid min-h-dvh place-items-center overflow-hidden bg-[radial-gradient(circle_at_50%_30%,rgba(116,14,14,0.4),var(--color-black-ink))] p-6">
 			<div aria-hidden="true" className="noise-overlay pointer-events-none fixed inset-0 z-10 opacity-5" />
 			{heroAssetUrl ? (
 				<div

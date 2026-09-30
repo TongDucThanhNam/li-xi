@@ -24,7 +24,11 @@
 }
 
 @layer base {
-  body {
+  /* Scoped with :has() so this layer only paints the body of routes that
+     actually mount the wheel stage. Multiple guest layers ship on the same
+     page (station + /p), and an unscoped `body` rule would let the
+     last-defined layer restyle every other template's surface. */
+  body:has(.wheel-stage) {
     background: var(--color-wheel-bg);
     color: var(--color-wheel-cream);
     font-family: var(--font-wheel-body);
@@ -184,6 +188,16 @@
   font-family: var(--font-wheel-display);
   font-weight: 800;
   font-size: clamp(0.8rem, 2.4vw, 1.05rem);
+}
+
+/* Hub slot image (docs/design-lucky-wheel.md "Asset slots"): fills the fixed
+   circular hub, cropped cover — the hub ring and idle motion stay
+   template-owned and the layout never shifts. */
+.wheel-disc__hub-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .wheel-segment-label {

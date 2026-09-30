@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, Button } from "@heroui/react";
+import { Alert, Button, buttonVariants } from "@heroui/react";
 import { EmptyState } from "@heroui-pro/react";
 import { Link } from "@tanstack/react-router";
 import { CircleAlert, FileQuestion, RefreshCw } from "lucide-react";
@@ -40,7 +40,7 @@ export function WorkspaceRouteError({
 					<RefreshCw aria-hidden="true" size={16} />
 					Thử lại
 				</Button>
-				<Link className="inline-flex items-center rounded-xl px-4 py-2 text-sm font-medium text-foreground" to="/campaigns">
+				<Link className={buttonVariants({ variant: "secondary" })} to="/campaigns">
 					Quay lại chiến dịch
 				</Link>
 			</div>
@@ -63,7 +63,7 @@ export function WorkspaceNotFound() {
 					</EmptyState.Description>
 				</EmptyState.Header>
 				<EmptyState.Content>
-					<Link className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-accent-foreground" to="/campaigns">
+					<Link className={buttonVariants({ variant: "primary" })} to="/campaigns">
 						Quay lại chiến dịch
 					</Link>
 				</EmptyState.Content>

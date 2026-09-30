@@ -17,6 +17,20 @@
 	--scratch-line: rgba(255, 246, 232, 0.16);
 }
 
+@layer base {
+	/* Own scoped page backdrop (documented in docs/design-scratch-card.md as
+	   the #141433 family backdrop). It was previously provided accidentally by
+	   the lucky-wheel layer's unscoped `body` rule; that rule is now scoped
+	   with :has(), so each template carries its own page tokens. Scoped with
+	   :has() like the other layers so this skin only paints routes that
+	   actually mount the scratch stage. */
+	body:has(.scratch-stage) {
+		background: var(--scratch-bg);
+		color: var(--scratch-ink);
+		font-family: "Playfair Display", "Noto Serif", system-ui, sans-serif;
+	}
+}
+
 .scratch-stage {
 	position: relative;
 	min-height: 100dvh;

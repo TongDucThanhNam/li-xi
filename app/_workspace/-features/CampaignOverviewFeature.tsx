@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, Button, Input, Label, Spinner, TextArea } from "@heroui/react";
+import { Alert, Button, Chip, Input, Label, Spinner, TextArea } from "@heroui/react";
 import { EmptyState, NativeSelect, Widget } from "@heroui-pro/react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
@@ -8,9 +8,15 @@ import { FileQuestion, Save } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CampaignContextNav } from "@/app/_workspace/-components/CampaignContextNav";
 import { UnsavedChangesGuard } from "@/app/_workspace/-components/UnsavedChangesGuard";
+import {
+	CampaignBrandIdentityFields,
+	type CampaignBrandIdentityDraft,
+} from "@/app/_workspace/-components/CampaignBrandIdentityFields";
+import { CampaignLogoField } from "@/app/_workspace/-features/CampaignLogoField";
 import { AdminPageShell } from "@/app/components/AdminPageShell";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { campaignAudienceTagLabels, type CampaignAudienceTag } from "@/lib/brandIdentity";
 
 type OverviewDraft = {
 	name: string;
@@ -18,6 +24,7 @@ type OverviewDraft = {
 	brandName: string;
 	description: string;
 	status: "draft" | "active";
+	brand: CampaignBrandIdentityDraft;
 };
 
 export function CampaignOverviewFeature({ campaignId }: { campaignId: string }) {
@@ -32,7 +39,18 @@ export function CampaignOverviewFeature({ campaignId }: { campaignId: string }) 
 
 	useEffect(() => {
 		if (!campaign || loadedCampaignId === campaign.id) return;
-		const initial: OverviewDraft = { name: campaign.name, slug: campaign.slug, brandName: campaign.brandName, description: campaign.description, status: campaign.status === "active" ? "active" : "draft" };
+		const initial: OverviewDraft = {
+			name: campaign.name,
+			slug: campaign.slug,
+			brandName: campaign.brandName,
+			description: campaign.description,
+			status: campaign.status === "active" ? "active" : "draft",
+			brand: {
+				brandColor: campaign.brandColor ?? "",
+				audienceTags: [...campaign.audienceTags],
+				audienceNote: campaign.audienceNote ?? "",
+			},
+		};
 		setDraft(initial);
 		setBaseline(JSON.stringify(initial));
 		setLoadedCampaignId(campaign.id);
@@ -44,7 +62,27 @@ export function CampaignOverviewFeature({ campaignId }: { campaignId: string }) 
 		if (!campaign || !draft || draft.name.trim().length < 3) return false;
 		setSaving(true); setError(""); setFeedback("");
 		try {
-			await saveCampaign({ campaignId: campaign.id, ...draft, theme: campaign.theme, gameTemplateId: campaign.gameTemplateId, gameConfig: campaign.gameConfig, heroAssetId: campaign.heroAsset?.id, claimHeadline: campaign.claimHeadline || undefined, claimSubtitle: campaign.claimSubtitle || undefined, claimCtaLabel: campaign.claimCtaLabel || undefined, claimCollectLabel: campaign.claimCollectLabel || undefined, claimWaitingMessage: campaign.claimWaitingMessage || undefined });
+			await saveCampaign({
+				campaignId: campaign.id,
+				name: draft.name,
+				slug: draft.slug,
+				brandName: draft.brandName || undefined,
+				description: draft.description || undefined,
+				status: draft.status,
+				brandColor: draft.brand.brandColor || undefined,
+				audienceTags: draft.brand.audienceTags.length > 0 ? draft.brand.audienceTags : undefined,
+				audienceNote: draft.brand.audienceNote || undefined,
+				theme: campaign.theme,
+				gameTemplateId: campaign.gameTemplateId,
+				gameConfig: campaign.gameConfig,
+				heroAssetId: campaign.heroAsset?.id,
+				logoAssetId: campaign.logoAsset?.id,
+				claimHeadline: campaign.claimHeadline || undefined,
+				claimSubtitle: campaign.claimSubtitle || undefined,
+				claimCtaLabel: campaign.claimCtaLabel || undefined,
+				claimCollectLabel: campaign.claimCollectLabel || undefined,
+				claimWaitingMessage: campaign.claimWaitingMessage || undefined,
+			});
 			setBaseline(JSON.stringify(draft)); setFeedback("Đã lưu thông tin chiến dịch"); return true;
 		} catch (unknownError) { setError(unknownError instanceof Error ? unknownError.message : "Không thể lưu chiến dịch"); return false; }
 		finally { setSaving(false); }
@@ -61,6 +99,41 @@ export function CampaignOverviewFeature({ campaignId }: { campaignId: string }) 
 			{error || feedback ? <Alert status={error ? "danger" : "success"}><Alert.Indicator /><Alert.Content><Alert.Title>{error || feedback}</Alert.Title></Alert.Content></Alert> : null}
 			<CampaignContextNav campaignId={campaignId} />
 			{dirty ? <p className="mb-4 text-sm text-warning">Có thay đổi chưa lưu.</p> : null}
+			<Widget className="max-w-3xl"><Widget.Header><Widget.Title>Nhận diện thương hiệu</Widget.Title><Widget.Description>Metadata không gian làm việc: logo, màu và đối tượng dự kiến của chiến dịch.</Widget.Description></Widget.Header><Widget.Content className="gap-4">
+				<div className="flex flex-wrap items-center gap-2" data-testid="campaign-brand-metadata">
+					{campaign.logoAsset?.url ? (
+						<img
+							alt="Logo chiến dịch"
+							className="size-12 rounded-lg border border-border bg-surface-secondary object-contain"
+							src={campaign.logoAsset.url}
+						/>
+					) : null}
+					{campaign.brandColor ? (
+						<Chip variant="soft">
+							<span aria-hidden="true" className="mr-1 inline-block size-3 rounded-full border border-border align-middle" style={{ background: campaign.brandColor }} />
+							Màu {campaign.brandColor.toUpperCase()}
+						</Chip>
+					) : null}
+					{campaign.audienceTags.map((tag) => (
+						<Chip key={tag} variant="soft">
+							{campaignAudienceTagLabels[tag as CampaignAudienceTag] ?? tag}
+						</Chip>
+					))}
+					{!campaign.brandColor && campaign.audienceTags.length === 0 && !campaign.logoAsset?.url ? (
+						<p className="text-sm text-muted">Chưa có nhận diện thương hiệu nào được đặt.</p>
+					) : null}
+				</div>
+				<CampaignLogoField
+					campaignId={campaign.id}
+					logoAssetId={campaign.logoAsset?.id ?? null}
+					logoUrl={campaign.logoAsset?.url ?? null}
+				/>
+				<CampaignBrandIdentityFields
+					draft={draft.brand}
+					idPrefix="campaign-overview"
+					onChange={(brand) => update("brand", brand)}
+				/>
+			</Widget.Content></Widget>
 			<Widget className="max-w-3xl"><Widget.Header><Widget.Title>Thông tin chiến dịch</Widget.Title><Widget.Description>Các trường này mô tả chiến dịch trong không gian làm việc.</Widget.Description></Widget.Header><Widget.Content className="gap-4">
 				<div className="admin-field"><Label htmlFor="campaign-overview-name">Tên chiến dịch</Label><Input fullWidth id="campaign-overview-name" value={draft.name} variant="secondary" onChange={(event) => update("name", event.currentTarget.value)} /></div>
 				<div className="grid gap-4 md:grid-cols-2"><div className="admin-field"><Label htmlFor="campaign-overview-slug">Địa chỉ ngắn</Label><Input fullWidth id="campaign-overview-slug" value={draft.slug} variant="secondary" onChange={(event) => update("slug", event.currentTarget.value)} /></div><div className="admin-field"><Label htmlFor="campaign-overview-brand">Thương hiệu</Label><Input fullWidth id="campaign-overview-brand" value={draft.brandName} variant="secondary" onChange={(event) => update("brandName", event.currentTarget.value)} /></div></div>

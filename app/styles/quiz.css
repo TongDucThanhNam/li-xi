@@ -12,6 +12,9 @@
 	--quiz-accent-deep: #2c4bbf;
 	--quiz-pass: #2ec4b6;
 	--quiz-fail: #ef476f;
+	/* Lightened fail tone for error text on the dark stage (readable contrast
+	   without promoting the full-saturation --quiz-fail to body text). */
+	--quiz-fail-soft: #ff8fa3;
 	--quiz-line: rgba(242, 247, 255, 0.16);
 }
 
@@ -190,8 +193,22 @@
 	outline-offset: 2px;
 }
 
+.quiz-ready {
+	justify-items: center;
+	text-align: center;
+	gap: 0.9rem;
+}
+
+.quiz-ready__meta {
+	margin: 0;
+	font-size: 0.92rem;
+	color: var(--quiz-ink-soft);
+	overflow-wrap: anywhere;
+}
+
 .quiz-status {
 	margin: 0;
+	min-height: 1.2em;
 	font-size: 0.9rem;
 	color: var(--quiz-ink-soft);
 }
@@ -201,7 +218,7 @@
 	max-width: 100%;
 	font-size: 0.9rem;
 	text-align: center;
-	color: #ff8fa3;
+	color: var(--quiz-fail-soft);
 	overflow-wrap: anywhere;
 }
 

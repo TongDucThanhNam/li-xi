@@ -32,7 +32,11 @@
 }
 
 @layer base {
-  body {
+  /* Scoped with :has() so this layer only paints the body of routes that
+     actually mount a lunar stage. Multiple guest layers ship on the same
+     page (station + /p), and an unscoped `body` rule would let this layer
+     restyle every other template's surface. */
+  body:has(.lunar-stage) {
     background: var(--color-black-ink);
     color: var(--color-text-primary);
     font-family: var(--font-playfair);

@@ -7,6 +7,7 @@ import { useMutation, useQuery } from "convex/react";
 import { Clipboard, ExternalLink, Link2, Plus, QrCode, RotateCcw } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { api } from "@/convex/_generated/api";
+import { ScheduleStatusChip, scheduleRangeText } from "@/app/_workspace/-components/ScheduleStatusChip";
 import type { GameTemplateId } from "@/lib/gameTemplates";
 import type { Id } from "@/convex/_generated/dataModel";
 import { buildShareEntryUrlForCode } from "@/lib/publicAppUrl";
@@ -16,6 +17,7 @@ type ShareLinkGame = {
 	name: string;
 	templateId: GameTemplateId;
 	status: "draft" | "active" | "archived";
+	schedule: { startsAt: number | null; endsAt: number | null };
 };
 
 export function ShareLinksPanel({
@@ -39,6 +41,7 @@ export function ShareLinksPanel({
 	const [error, setError] = useState("");
 
 	const effectiveGameId = selectedGameId || activeGames[0]?.id || "";
+	const selectedGame = activeGames.find((game) => game.id === effectiveGameId);
 
 	const handleCreate = useCallback(async () => {
 		if (!effectiveGameId) {
@@ -125,6 +128,12 @@ export function ShareLinksPanel({
 										<NativeSelect.Indicator />
 									</NativeSelect.Trigger>
 								</NativeSelect>
+								{selectedGame ? (
+									<div className="mt-1.5 flex flex-wrap items-center gap-2">
+										<ScheduleStatusChip schedule={selectedGame.schedule} />
+										<span className="text-xs text-muted">{scheduleRangeText(selectedGame.schedule)}</span>
+									</div>
+								) : null}
 							</div>
 							<div className="admin-field">
 								<Label htmlFor="share-link-channel">Kênh</Label>

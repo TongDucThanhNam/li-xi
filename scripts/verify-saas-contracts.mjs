@@ -1504,7 +1504,7 @@ const ownerSession = read("lib/ownerSession.ts");
 const useOwnerSession = read("lib/useOwnerSession.ts");
 const authRoute = read("app/auth.tsx") + read("app/-auth/AuthFeature.tsx");
 const setupRoute = read("app/setup.tsx");
-const onboardingRoute = read("app/_workspace/onboarding.tsx");
+const onboardingRoute = read("app/_workspace/-features/OnboardingFeature.tsx");
 const rewardsSetupFeature = read("app/_workspace/-features/RewardsSetupFeature.tsx");
 const ownerSessionValidator = section(ownerSession, "function isLegacyOwnerSession", "let cachedSession");
 const readOwnerSessionSection = section(ownerSession, "export function readOwnerSession", "export function clearOwnerSession");
@@ -1929,6 +1929,77 @@ assert(
     !publicClaimRoute.includes('onCollect={() => void navigate({ to: "/" })') &&
     !publicClaimRoute.includes("useNavigate"),
   "Collect must return station guests to the waiting hero and close public play sessions without routing participants to host auth"
+);
+
+// Slice 3: station mode is now "li-xi legacy host-pin station plus
+// self-serve-station templates". The legacy branch above keeps every li-xi
+// literal; the self-serve branch must stay owner-authorized,
+// capability-gated, and fail closed for every other template.
+const stationSelfServe = read("app/station/-features/StationSelfServePlay.tsx");
+const stationPlayBackend = read("convex/stationPlay.ts");
+assert(
+  stationFeature.includes("legacyLiXiStation") &&
+    stationFeature.includes('templateId === "li-xi"') &&
+    stationFeature.includes("supportsSelfServeStationGame") &&
+    stationFeature.includes("<LiXiStationPlay context={context} />") &&
+    stationFeature.includes("<StationSelfServePlay campaignGameId={campaignGameId} />") &&
+    stationFeature.includes("Trò chơi tự phục vụ"),
+  "station shell must route li-xi budget games to the legacy draw flow, route self-serve-station templates to the capability-gated self-serve flow, and fail closed for every other template"
+);
+assert(
+  stationSelfServe.includes("api.stationPlay.getStationPlayState") &&
+    stationSelfServe.includes("api.stationPlay.startStationPlaySession") &&
+    stationSelfServe.includes("api.publicPlay.playSessionAction") &&
+    stationSelfServe.includes("api.publicPlay.claimPublicReward") &&
+    !stationSelfServe.includes("localStorage") &&
+    !stationSelfServe.includes("sessionStorage") &&
+    stationSelfServe.includes('"Trò chơi đã hết lượt tham gia."'),
+  "self-serve station must admit and recover through the owner-authorized station-state query, keep the session capability in React state only (never localStorage/sessionStorage), and surface the sold-out gate on the waiting hero"
+);
+assert(
+  stationPlayBackend.includes('STATION_CHANNEL_LABEL = "Trạm chơi"') &&
+    stationPlayBackend.includes("admitGenericPlaySession") &&
+    stationPlayBackend.includes("Mẫu trò chơi này chưa mở chế độ trạm tự phục vụ") &&
+    stationPlayBackend.includes("Trò chơi này không hỗ trợ chơi tự phục vụ qua kho phần thưởng") &&
+    stationPlayBackend.includes("Không tìm thấy trò chơi") &&
+    stationPlayBackend.includes("Chiến dịch hoặc trò chơi hiện không còn hoạt động"),
+  "station functions must authorize owner->campaign->game server-side, fail closed for non-station templates and non-inventory reward sources, and admit station sessions through the shared play-session core with the Trạm chơi channel"
+);
+assert(
+  stationPlayBackend.includes("recordStationPlayOpen") &&
+    stationPlayBackend.includes("assertOpenKey") &&
+    read("lib/analyticsPolicy.ts").includes("station-open:"),
+  "station waiting-screen opens must record exactly once per stable openKey through the idempotent station-open analytics event"
+);
+// Slice 4a: a completed station play whose rewarded outcome was never
+// collected (or claimed but never acknowledged) resurfaces as a recoverable
+// block on the owner-authorized query; collect acknowledges without a PIN,
+// and host dismissal abandons the reward behind the SAME server-side Host
+// PIN hash check as the station exit. Acknowledgment is additive only —
+// outcomes, claims, and burned stock are never rewritten.
+assert(
+  stationPlayBackend.includes("resultAcknowledgedAt") &&
+    stationPlayBackend.includes("recoverableStationSession") &&
+    stationPlayBackend.includes("publicOutcomeView") &&
+    stationPlayBackend.includes("claimDetailView") &&
+    stationPlayBackend.includes("acknowledgeStationPlayResult") &&
+    stationPlayBackend.includes("dismissStationPlayResult") &&
+    stationPlayBackend.includes("verifyPinHash") &&
+    stationPlayBackend.includes("PIN host không đúng"),
+  "station recovery must surface unhandled rewarded results through the owner-only state query, acknowledge collects without a PIN, and PIN-verify dismissals with the same server-side hash check as the station exit"
+);
+assert(
+  stationSelfServe.includes("recoverable") &&
+    stationSelfServe.includes("api.stationPlay.acknowledgeStationPlayResult") &&
+    stationSelfServe.includes("api.stationPlay.dismissStationPlayResult") &&
+    stationSelfServe.includes("Có phần thưởng chưa nhận") &&
+    stationSelfServe.includes("initialOutcome") &&
+    stationSelfServe.includes("initialClaim"),
+  "self-serve station must re-show recovered results through the template stage with an idempotent claim, keep Start blocked while a result pends, and acknowledge collect/dismiss so handled results never resurface"
+);
+assert(
+  read("convex/schema.ts").includes("resultAcknowledgedAt: v.optional(v.number())"),
+  "station result acknowledgment must stay an additive optional playSessions field with no destructive schema change"
 );
 
 const assets = read("convex/assets.ts");

@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import type { RewardPoolItem } from "@/app/draw/fortune/types";
+import type { CampaignAssetUsage } from "@/lib/assetPolicy";
 import type {
 	CampaignGameConfig,
 	CampaignStyleVariant,
@@ -8,6 +9,20 @@ import type {
 	GameTemplateId,
 } from "@/lib/gameTemplates";
 import type { Rarity } from "@/lib/lixiPolicy";
+
+/**
+ * One template-declared per-game asset slot (slice 4d-3). The id is the
+ * `campaignAssets.usage` kind; the owning campaign game binds the attached
+ * asset row. Slots are doc-first: each declared slot has its definition in
+ * the template's design doc (aspect, max size, placement, fallback).
+ */
+export type GameTemplateAssetSlot = {
+	id: Extract<CampaignAssetUsage, `game-${string}`>;
+	label: string;
+	description: string;
+	/** Operator-facing aspect hint, e.g. "1:1" or "16:9". */
+	aspectRatioLabel: string;
+};
 
 export type GameTemplateFontLink = {
 	crossOrigin?: string;
@@ -131,6 +146,12 @@ export type GamePlayStageProps = {
 		waitingMessage?: string;
 	};
 	heroAssetUrl?: string | null;
+	/**
+	 * Live per-game template slot URLs keyed by asset usage (e.g.
+	 * "game-wheel-hub"). Resolved server-side at read time; absent/missing
+	 * keys mean the stage renders its default visuals.
+	 */
+	assetUrls?: Record<string, string> | null;
 	playContext?: Record<string, unknown>;
 	/** Recovered state for a resumed session that already completed. */
 	initialOutcome?: GenericPlayOutcome | null;
@@ -177,6 +198,8 @@ export type GameEntryHeroProps = {
 	description?: string | null;
 	gameName?: string | null;
 	heroAssetUrl?: string | null;
+	/** Live per-game slot URLs; see GamePlayStageProps.assetUrls. */
+	assetUrls?: Record<string, string> | null;
 	onStart: () => void;
 };
 
@@ -213,6 +236,12 @@ export type GameTemplate = GameTemplateCatalogEntry & {
 	cssHref: string;
 	fonts: readonly GameTemplateFontLink[];
 	id: GameTemplateId;
+	/**
+	 * Doc-first per-game asset slots this template consumes on its guest
+	 * surfaces (empty for templates without adopted slots — the campaign hero
+	 * band is campaign-level and stays outside this list).
+	 */
+	assetSlots: readonly GameTemplateAssetSlot[];
 	normalizeConfig: (config: CampaignGameConfig) => CampaignGameConfig;
 	toLegacyCampaignPresentation: (
 		config: CampaignGameConfig,

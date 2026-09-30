@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, Button, Description, Input, Label, TextArea } from "@heroui/react";
+import { Alert, Button, Description, Input, Label, Radio, RadioGroup, TextArea } from "@heroui/react";
 import { NativeSelect, Widget } from "@heroui-pro/react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
@@ -8,6 +8,10 @@ import { Save } from "lucide-react";
 import { useCallback, useState } from "react";
 import { UnsavedChangesGuard } from "@/app/_workspace/-components/UnsavedChangesGuard";
 import { AdminPageShell } from "@/app/components/AdminPageShell";
+import {
+	CampaignBrandIdentityFields,
+	type CampaignBrandIdentityDraft,
+} from "@/app/_workspace/-components/CampaignBrandIdentityFields";
 import { api } from "@/convex/_generated/api";
 import {
 	gameTemplates as gameTemplateCatalog,
@@ -47,12 +51,27 @@ export function CampaignCreateFeature() {
 	const [name, setName] = useState("");
 	const [brandName, setBrandName] = useState("");
 	const [description, setDescription] = useState("");
+	const [brandIdentity, setBrandIdentity] = useState<CampaignBrandIdentityDraft>({
+		brandColor: "",
+		audienceTags: [],
+		audienceNote: "",
+	});
 	const [status, setStatus] = useState<"draft" | "active">("draft");
 	const [templateId, setTemplateId] = useState<GameTemplateId>("li-xi");
 	const [saving, setSaving] = useState(false);
 	const [saved, setSaved] = useState(false);
 	const [error, setError] = useState("");
-	const dirty = !saved && Boolean(name || brandName || description || status !== "draft");
+	const dirty =
+		!saved &&
+		Boolean(
+			name ||
+				brandName ||
+				description ||
+				brandIdentity.brandColor ||
+				brandIdentity.audienceTags.length > 0 ||
+				brandIdentity.audienceNote ||
+				status !== "draft",
+		);
 
 	const persist = useCallback(async () => {
 		if (name.trim().length < 3) return null;
@@ -64,6 +83,11 @@ export function CampaignCreateFeature() {
 			const result = await saveCampaign({
 				brandName: brandName || undefined,
 				description: description || undefined,
+				// Brand identity is workspace metadata; the logo attaches from the
+				// overview once the campaign exists (same as the hero asset).
+				brandColor: brandIdentity.brandColor || undefined,
+				audienceTags: brandIdentity.audienceTags.length > 0 ? brandIdentity.audienceTags : undefined,
+				audienceNote: brandIdentity.audienceNote || undefined,
 				gameConfig,
 				gameTemplateId: template.id,
 				name,
@@ -78,7 +102,7 @@ export function CampaignCreateFeature() {
 		} finally {
 			setSaving(false);
 		}
-	}, [brandName, description, name, saveCampaign, status, templateId]);
+	}, [brandIdentity, brandName, description, name, saveCampaign, status, templateId]);
 
 	return (
 		<AdminPageShell
@@ -94,35 +118,53 @@ export function CampaignCreateFeature() {
 					<div className="admin-field"><Label htmlFor="new-campaign-brand">Thương hiệu</Label><Input fullWidth id="new-campaign-brand" value={brandName} variant="secondary" onChange={(event) => setBrandName(event.currentTarget.value)} /></div>
 					<div className="admin-field"><Label htmlFor="new-campaign-description">Mô tả</Label><TextArea fullWidth id="new-campaign-description" value={description} variant="secondary" onChange={(event) => setDescription(event.currentTarget.value)} /></div>
 					<div className="admin-field"><Label htmlFor="new-campaign-status">Trạng thái ban đầu</Label><NativeSelect fullWidth variant="secondary"><NativeSelect.Trigger aria-label="Trạng thái ban đầu" id="new-campaign-status" value={status} onChange={(event) => setStatus(event.currentTarget.value as "draft" | "active")}><NativeSelect.Option value="draft">Bản nháp</NativeSelect.Option><NativeSelect.Option value="active">Đang chạy</NativeSelect.Option><NativeSelect.Indicator /></NativeSelect.Trigger></NativeSelect></div>
+					<div className="rounded-xl border border-border p-4">
+						<p className="mb-3 font-medium text-foreground">Nhận diện thương hiệu (tuỳ chọn)</p>
+						<div className="grid gap-4">
+							<CampaignBrandIdentityFields
+								draft={brandIdentity}
+								idPrefix="new-campaign"
+								onChange={setBrandIdentity}
+							/>
+						</div>
+						<p className="mt-3 text-xs text-muted">
+							Logo tải lên ở trang tổng quan sau khi lưu chiến dịch. Các trường này chỉ là
+							metadata không gian làm việc.
+						</p>
+					</div>
 				</Widget.Content>
 			</Widget>
 			<Widget className="max-w-3xl" >
 				<Widget.Header><Widget.Title>Chọn mẫu trò chơi đầu tiên</Widget.Title><Widget.Description>Mỗi mẫu trò chơi sở hữu cơ chế, hình ảnh và phần thưởng riêng.</Widget.Description></Widget.Header>
 				<Widget.Content className="gap-3">
-					{templateChoices.map((choice) => {
-						const template = gameTemplateCatalog[choice.id];
-						const selected = templateId === choice.id;
-						return (
-							<label
-								className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${selected ? "border-accent bg-accent/5" : "border-border bg-surface-secondary hover:border-accent/50"}`}
-								key={choice.id}
-							>
-								<input
+					<RadioGroup
+						className="grid gap-3"
+						value={templateId}
+						onChange={(value) => setTemplateId(value as GameTemplateId)}
+					>
+						{templateChoices.map((choice) => {
+							const template = gameTemplateCatalog[choice.id];
+							const selected = templateId === choice.id;
+							return (
+								<Radio
 									aria-label={`Chọn mẫu ${template.name}`}
-									checked={selected}
-									className="mt-1 size-4 accent-[var(--color-accent,#2563eb)]"
-									name="game-template-choice"
-									onChange={() => setTemplateId(choice.id)}
-									type="radio"
+									className={`cursor-pointer rounded-xl border p-4 transition-colors ${selected ? "border-accent bg-accent/5" : "border-border bg-surface-secondary hover:border-accent/50"}`}
+									key={choice.id}
 									value={choice.id}
-								/>
-								<span className="min-w-0">
-									<span className="block font-medium text-foreground">{template.name}</span>
-									<span className="mt-1 block text-sm text-muted">{choice.blurb || template.description}</span>
-								</span>
-							</label>
-						);
-					})}
+								>
+									<Radio.Content>
+										<Radio.Control>
+											<Radio.Indicator />
+										</Radio.Control>
+										<span className="min-w-0">
+											<span className="block font-medium text-foreground">{template.name}</span>
+											<span className="mt-1 block text-sm text-muted">{choice.blurb || template.description}</span>
+										</span>
+									</Radio.Content>
+								</Radio>
+							);
+						})}
+					</RadioGroup>
 					<p className="text-xs text-muted">Kho phần thưởng và liên kết chơi công khai được cấu hình ở các bước sau.</p>
 				</Widget.Content>
 			</Widget>

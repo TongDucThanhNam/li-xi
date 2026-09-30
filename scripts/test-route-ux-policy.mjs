@@ -258,6 +258,9 @@ const campaignCreateFeature = read("app/_workspace/-features/CampaignCreateFeatu
 const campaignSectionFeature = read("app/_workspace/-features/CampaignSectionFeature.tsx");
 const distributionFeature = read("app/_workspace/-features/DistributionFeature.tsx");
 const stationFeature = read("app/station/-features/StationPlayFeature.tsx");
+const stationPinDialog = read("app/station/-features/StationPinDialog.tsx");
+const stationSelfServePlay = read("app/station/-features/StationSelfServePlay.tsx");
+const stationShellCss = read("app/styles/station.css");
 const publicPlayFeature = read("app/play/-features/PublicPlayFeature.tsx");
 const gameRouteError = read("app/game-templates/GameRouteError.tsx");
 const templateRegistry = read("app/game-templates/registry.ts");
@@ -387,12 +390,21 @@ assert(
 );
 assert(
   operatorFeature.includes('templateId !== "li-xi"') &&
-    stationFeature.includes('templateId !== "li-xi"'),
-  "Operator console and station must fail over with clear guidance for non-li-xi self-serve templates",
+    operatorFeature.includes("supportsSelfServeStationGame") &&
+    stationFeature.includes('templateId === "li-xi"') &&
+    stationFeature.includes("legacyLiXiStation") &&
+    stationFeature.includes("supportsSelfServeStationGame") &&
+    stationFeature.includes("StationSelfServePlay"),
+  "Operator console fails over to the station launch card for self-serve-station games and keeps the notice for other templates; the station shell routes the legacy li-xi draw flow and capability-gated self-serve-station templates while everything else fails closed",
 );
 const analyticsRoute = read("app/_workspace/analytics.tsx");
-for (const view of ["overview", "games", "rewards", "channels"]) {
+for (const view of ["overview", "games", "rewards", "channels", "claims"]) {
   assert(analyticsRoute.includes('"' + view + '"'), "Analytics search must validate canonical view: " + view);
+}
+// Claims-view filter params are validated search state like the rest of the
+// route-ux contract, not ad-hoc component state.
+for (const claimParam of ["claimsStatus", "claimsChannel", "claimsRewardType", "claimsCode"]) {
+  assert(analyticsRoute.includes(claimParam), "Analytics search must validate claims filter: " + claimParam);
 }
 const analyticsFeature = read("app/_workspace/-features/AnalyticsFeature.tsx");
 assert(
@@ -403,6 +415,16 @@ assert(
     analyticsFeature.includes('search.view === "channels"') &&
     analyticsFeature.includes("channelSharePerformance.publicPlayLinkOpens"),
   "Each canonical analytics view must render URL-selected, scope-aware content instead of changing only the selected tab",
+);
+assert(
+  analyticsFeature.includes('search.view === "claims"') &&
+    analyticsFeature.includes("RewardClaimsPanel"),
+  "The claims view must render the URL-selected reward claims queue component",
+);
+assert(
+  read("app/_workspace/-features/RewardClaimsPanel.tsx").includes("api.rewardClaims.listRewardClaims") &&
+    read("app/_workspace/-features/RewardClaimsPanel.tsx").includes("maskedCode"),
+  "The claims queue must read the campaign-scoped claims query and show masked codes by default",
 );
 assert(
   analyticsFeature.includes('to="/operate/$campaignGameId"') &&
@@ -432,12 +454,46 @@ assert(
 );
 assert(
   stationFeature.includes("Không thể mở trạm chơi") &&
-    stationFeature.includes('role="dialog"') &&
-    stationFeature.includes('aria-modal="true"') &&
+    stationPinDialog.includes('role="dialog"') &&
+    stationPinDialog.includes('aria-modal="true"') &&
     stationFeature.includes("exitTriggerRef.current?.focus()") &&
-    stationFeature.includes('event.key === "Escape"') &&
-    stationFeature.includes('event.key !== "Tab"'),
+    stationPinDialog.includes('event.key === "Escape"') &&
+    stationPinDialog.includes('event.key !== "Tab"'),
   "Station mode must fail closed for invalid route identity and provide modal keyboard/focus semantics",
+);
+assert(
+  station.includes("stationShellCssHref") &&
+    station.includes("stationCssLayers") &&
+    !station.includes("admin.css"),
+  "Station route must ship the shell-owned station.css plus the registry's station-capable template layers and never the admin stylesheet",
+);
+assert(
+  templateRegistry.includes('import stationCss from "@/app/styles/station.css?url"') &&
+    templateRegistry.includes("export const stationShellCssHref = stationCss") &&
+    templateRegistry.includes("export function stationCssLayers()") &&
+    templateRegistry.includes('template.stationMode !== "public-self-serve"'),
+  "Game-template registry must own the station shell stylesheet and the ordered station-capable CSS layer list",
+);
+assert(
+  stationShellCss.includes(".station-shell") &&
+    stationShellCss.includes(".station-exit-trigger") &&
+    stationShellCss.includes(".station-overlay") &&
+    stationShellCss.includes(".station-dialog") &&
+    stationShellCss.includes(".station-status") &&
+    stationShellCss.includes(".station-recovery") &&
+    stationShellCss.includes('.station-shell[data-template="lucky-wheel"]') &&
+    stationShellCss.includes('.station-shell[data-template="scratch-card"]'),
+  "Station shell chrome must be styled by the shell-owned station.css with per-template token variables",
+);
+assert(
+  stationSelfServePlay.includes("api.stationPlay.acknowledgeStationPlayResult") &&
+    stationSelfServePlay.includes("api.stationPlay.dismissStationPlayResult") &&
+    stationSelfServePlay.includes("StationPinDialog") &&
+    stationSelfServePlay.includes("canStart: !blocked && !recovery") &&
+    stationSelfServePlay.includes("Có phần thưởng chưa nhận") &&
+    !stationSelfServePlay.includes("localStorage") &&
+    !stationSelfServePlay.includes("sessionStorage"),
+  "Station self-serve flow must resolve recoverable results through the owner-authorized query with a shared PIN dialog, keep Start blocked while a result pends, and never persist the capability to web storage",
 );
 assert(
   publicPlayFeature.includes('role="status"') &&
@@ -499,7 +555,7 @@ assert(
   "Account Host PIN must remain in operations settings instead of campaign reward inventory",
 );
 const rewardsFeature = read("app/_workspace/-features/RewardsSetupFeature.tsx");
-const onboardingRoute = read("app/_workspace/onboarding.tsx");
+const onboardingFeature = read("app/_workspace/-features/OnboardingFeature.tsx");
 const billingFeature = read("app/_workspace/-features/BillingSettingsFeature.tsx");
 const billingPolicy = read("lib/billingPolicy.ts");
 const publicAppUrlSource = read("lib/publicAppUrl.ts");
@@ -559,9 +615,15 @@ assert(
   "Billing must keep product actions pending until plan and configured products both resolve",
 );
 assert(
-  onboardingRoute.includes("isPending={pending}") &&
-    onboardingRoute.includes("Không thể chuẩn bị chiến dịch đầu tiên"),
+  onboardingFeature.includes("isPending={pending}") &&
+    onboardingFeature.includes("Không thể chuẩn bị chiến dịch đầu tiên"),
   "Onboarding mutations must expose pending and recoverable error states",
+);
+assert(
+  analyticsFeature.includes("rarityAsideViews") &&
+    analyticsFeature.includes('const rarityAsideViews = ["overview", "rewards"];') &&
+    analyticsFeature.includes("rarityAsideViews.includes(search.view"),
+  "Analytics aside must gate the legacy rarity breakdown to the overview/rewards views",
 );
 assert(
   rewardsFeature.includes('aria-label={`Giảm giá trị mức thưởng ${index + 1}`}') &&

@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, Button, Description, Input, Label } from "@heroui/react";
+import { Alert, Button, Description, Input, Label, Spinner, buttonVariants } from "@heroui/react";
 import { ItemCard, ItemCardGroup, NativeSelect, NumberValue, Widget } from "@heroui-pro/react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
@@ -11,7 +11,8 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { PIN_LENGTH } from "@/lib/lixiPolicy";
 import { buildPublicPlayUrl } from "@/lib/publicAppUrl";
-import { configRewardSource } from "@/lib/gameTemplates";
+import { configRewardSource, supportsSelfServeStationGame } from "@/lib/gameTemplates";
+import { formatScheduleTime } from "@/lib/schedulePolicy";
 
 type DeliveryMode = "station" | "link";
 
@@ -43,7 +44,11 @@ export function OperatorConsoleFeature({
 	const pendingLinks = useMemo(() => station?.pendingLinkSessions ?? [], [station]);
 
 	if (game === undefined) {
-		return <div className="grid min-h-[50vh] place-items-center" role="status">Đang tải bảng vận hành…</div>;
+		return (
+			<div className="grid min-h-[50vh] place-items-center" role="status">
+				<Spinner aria-label="Đang tải bảng vận hành" />
+			</div>
+		);
 	}
 	if (!game?.campaign) {
 		return (
@@ -76,7 +81,7 @@ export function OperatorConsoleFeature({
 				</Alert>
 				<div className="flex flex-wrap gap-3">
 					<Link
-						className="inline-flex rounded-xl bg-accent px-4 py-2 text-sm font-medium text-accent-foreground"
+						className={buttonVariants({ variant: "primary" })}
 						params={{
 							campaignGameId,
 							campaignId: game.campaign.id,
@@ -86,7 +91,7 @@ export function OperatorConsoleFeature({
 						Mở cấu hình trò chơi
 					</Link>
 					<Link
-						className="inline-flex rounded-xl px-4 py-2 text-sm font-medium text-foreground"
+						className={buttonVariants({ variant: "secondary" })}
 						params={{ campaignId: game.campaign.id }}
 						to="/campaigns/$campaignId"
 					>
@@ -100,8 +105,19 @@ export function OperatorConsoleFeature({
 		game.campaignGame.templateId !== "li-xi" ||
 		configRewardSource(game.campaignGame.config) !== "campaign-budget"
 	) {
-		// Non-li-xi templates are self-serve: participants start from the
-		// reusable public link, not from operator-created sessions.
+		if (supportsSelfServeStationGame(game.campaignGame.templateId, game.campaignGame.config)) {
+			return (
+				<StationLaunchCard
+					campaignGameId={campaignGameId}
+					campaignId={game.campaign.id}
+					campaignName={game.campaign.name}
+					gameName={game.campaignGame.name}
+				/>
+			);
+		}
+		// Non-station templates are self-serve through the reusable public
+		// link only: participants start from the shared link, not from
+		// operator-created sessions or a station screen.
 		return (
 			<AdminPageShell
 				breadcrumbContext={game.campaign.name}
@@ -121,14 +137,14 @@ export function OperatorConsoleFeature({
 				</Alert>
 				<div className="flex flex-wrap gap-3">
 					<Link
-						className="inline-flex rounded-xl bg-accent px-4 py-2 text-sm font-medium text-accent-foreground"
+						className={buttonVariants({ variant: "primary" })}
 						params={{ campaignId: game.campaign.id }}
 						to="/campaigns/$campaignId/distribution"
 					>
 						Mở trang Phân phối
 					</Link>
 					<Link
-						className="inline-flex rounded-xl px-4 py-2 text-sm font-medium text-foreground"
+						className={buttonVariants({ variant: "secondary" })}
 						params={{ campaignGameId, campaignId: game.campaign.id }}
 						to="/campaigns/$campaignId/games/$campaignGameId"
 					>
@@ -141,7 +157,7 @@ export function OperatorConsoleFeature({
 	if (station === undefined) {
 		return (
 			<div className="grid min-h-[50vh] place-items-center" role="status">
-				Đang tải trạng thái vận hành…
+				<Spinner aria-label="Đang tải trạng thái vận hành" />
 			</div>
 		);
 	}
@@ -184,7 +200,7 @@ export function OperatorConsoleFeature({
 									value={deliveryMode}
 									onChange={(event) => setDeliveryMode(event.currentTarget.value as DeliveryMode)}
 								>
-									<NativeSelect.Option value="station">Trạm tại sự kiện</NativeSelect.Option>
+									<NativeSelect.Option value="station">Trạm chơi</NativeSelect.Option>
 									<NativeSelect.Option value="link">Liên kết công khai</NativeSelect.Option>
 									<NativeSelect.Indicator />
 								</NativeSelect.Trigger>
@@ -308,6 +324,129 @@ export function OperatorConsoleFeature({
 						</Widget.Content>
 					</Widget>
 				</div>
+			</div>
+		</AdminPageShell>
+	);
+}
+
+/**
+ * Launch card for station-capable self-serve templates (lucky wheel,
+ * scratch card): the station screen link, the live inventory summary, the
+ * Host-PIN exit note, and the public-link entry point. The station screen
+ * itself self-admits sessions under the signed-in host, so no per-play
+ * form or PIN is needed here.
+ */
+function StationLaunchCard({
+	campaignGameId,
+	campaignId,
+	campaignName,
+	gameName,
+}: {
+	campaignGameId: string;
+	campaignId: string;
+	campaignName: string;
+	gameName: string;
+}) {
+	const stationPlayState = useQuery(api.stationPlay.getStationPlayState, {
+		campaignGameId: campaignGameId as Id<"campaignGames">,
+	});
+	const inventory = stationPlayState?.inventory ?? [];
+	const remainingUnits = inventory.reduce((sum, item) => sum + item.quantityRemaining, 0);
+	// Play-window status display; the window itself is enforced server-side at
+	// every admission (the station screen blocks Start from the same state).
+	const schedule = stationPlayState?.schedule;
+	const scheduleWarning =
+		schedule?.state === "not-started"
+			? `Chưa đến giờ — cửa sổ chơi mở lúc ${formatScheduleTime(schedule.startsAt ?? 0)}.`
+			: schedule?.state === "ended"
+				? "Đã kết thúc — cửa sổ chơi đã đóng, trạm không nhận lượt mới."
+				: null;
+
+	return (
+		<AdminPageShell
+			breadcrumbContext={campaignName}
+			description="Mở màn hình trạm; khách tự bắt đầu lượt chơi, phiên được nhận diện kênh “Trạm chơi”."
+			eyebrow={campaignName}
+			title="Trạm tự phục vụ"
+		>
+			<Alert status="accent">
+				<Alert.Indicator />
+				<Alert.Content>
+					<Alert.Title>{gameName} sẵn sàng đón khách tại trạm</Alert.Title>
+					<Alert.Description>
+						Mở màn hình trạm trên máy tại sự kiện (đã đăng nhập host). Khách nhấn bắt đầu để chơi
+						tại chỗ; thoát chế độ trạm luôn cần Host PIN.
+					</Alert.Description>
+				</Alert.Content>
+			</Alert>
+			{scheduleWarning ? (
+				<Alert status="warning">
+					<Alert.Indicator />
+					<Alert.Content>
+						<Alert.Title>Cửa sổ chơi</Alert.Title>
+						<Alert.Description>{scheduleWarning}</Alert.Description>
+					</Alert.Content>
+				</Alert>
+			) : null}
+			<div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+				<Widget>
+					<Widget.Header>
+						<Widget.Title>Khởi chạy trạm</Widget.Title>
+						<Widget.Description>Dành cho màn hình cảm ứng tại sự kiện.</Widget.Description>
+					</Widget.Header>
+					<Widget.Content className="gap-4">
+						<div className="flex flex-wrap items-center gap-3">
+							<Link
+								className={buttonVariants({ variant: "primary" })}
+								params={{ campaignGameId }}
+								to="/station/$campaignGameId"
+							>
+								<MonitorPlay aria-hidden="true" />
+								Mở màn hình trạm
+							</Link>
+							<Link
+								className={buttonVariants({ variant: "secondary" })}
+								params={{ campaignId }}
+								to="/campaigns/$campaignId/distribution"
+							>
+								<Link2 aria-hidden="true" />
+								Liên kết công khai và mã QR
+							</Link>
+						</div>
+						<Description>
+							Thoát khỏi màn hình trạm yêu cầu xác minh Host PIN; lượt chơi tại trạm được ghi nhận
+							riêng kênh "Trạm chơi" trong phân tích.
+						</Description>
+					</Widget.Content>
+				</Widget>
+				<Widget>
+					<Widget.Header>
+						<Widget.Title>Kho phần thưởng</Widget.Title>
+						<Widget.Description>Đồng bộ từ kho của chiến dịch.</Widget.Description>
+					</Widget.Header>
+					<Widget.Content>
+						<ItemCardGroup aria-label="Tình trạng kho phần thưởng trạm" variant="secondary">
+							<ItemCard variant="secondary">
+								<ItemCard.Icon><WalletCards aria-hidden="true" /></ItemCard.Icon>
+								<ItemCard.Content>
+									<ItemCard.Title>
+										<NumberValue value={remainingUnits} />
+									</ItemCard.Title>
+									<ItemCard.Description>Phần thưởng còn lại trong kho</ItemCard.Description>
+								</ItemCard.Content>
+							</ItemCard>
+							<ItemCard variant="secondary">
+								<ItemCard.Icon><MonitorPlay aria-hidden="true" /></ItemCard.Icon>
+								<ItemCard.Content>
+									<ItemCard.Title>
+										<NumberValue value={inventory.length} />
+									</ItemCard.Title>
+									<ItemCard.Description>Loại phần thưởng đang bật</ItemCard.Description>
+								</ItemCard.Content>
+							</ItemCard>
+						</ItemCardGroup>
+					</Widget.Content>
+				</Widget>
 			</div>
 		</AdminPageShell>
 	);

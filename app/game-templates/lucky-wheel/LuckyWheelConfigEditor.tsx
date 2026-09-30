@@ -1,5 +1,6 @@
-import { Input, Label, NumberField, TextArea } from "@heroui/react";
+import { Input, Label, NumberField } from "@heroui/react";
 import { NativeSelect, Widget } from "@heroui-pro/react";
+import { GamePublicCopyFields, type GamePublicCopyFieldKey } from "../GamePublicCopyFields";
 import {
 	REWARD_MODE_LABELS,
 	buildLuckyWheelGameConfig,
@@ -21,7 +22,7 @@ export function LuckyWheelConfigEditor({ config, onChange }: { config: CampaignG
 				publicCopy: config.publicCopy,
 			})
 		: { ...luckyWheelDefaultGameConfig, publicCopy: config.publicCopy };
-	const updateCopy = (key: keyof LuckyWheelConfigEditorCopy, value: string) =>
+	const updateCopy = (key: GamePublicCopyFieldKey, value: string) =>
 		onChange({ ...wheelConfig, publicCopy: { ...wheelConfig.publicCopy, [key]: value } });
 	return (
 		<div className="grid gap-6">
@@ -116,65 +117,13 @@ export function LuckyWheelConfigEditor({ config, onChange }: { config: CampaignG
 					<Widget.Description>Nội dung này xuất hiện trên liên kết chơi công khai.</Widget.Description>
 				</Widget.Header>
 				<Widget.Content className="gap-4">
-					<div className="admin-field">
-						<Label htmlFor="lucky-wheel-headline">Tiêu đề</Label>
-						<Input
-							fullWidth
-							id="lucky-wheel-headline"
-							value={wheelConfig.publicCopy.headline}
-							variant="secondary"
-							onChange={(event) => updateCopy("headline", event.currentTarget.value)}
-						/>
-					</div>
-					<div className="admin-field">
-						<Label htmlFor="lucky-wheel-subtitle">Mô tả ngắn</Label>
-						<TextArea
-							fullWidth
-							id="lucky-wheel-subtitle"
-							value={wheelConfig.publicCopy.subtitle}
-							variant="secondary"
-							onChange={(event) => updateCopy("subtitle", event.currentTarget.value)}
-						/>
-					</div>
-					<div className="grid gap-4 md:grid-cols-2">
-						<div className="admin-field">
-							<Label htmlFor="lucky-wheel-start-label">Nút bắt đầu</Label>
-							<Input
-								fullWidth
-								id="lucky-wheel-start-label"
-								value={wheelConfig.publicCopy.startCtaLabel}
-								variant="secondary"
-								onChange={(event) => updateCopy("startCtaLabel", event.currentTarget.value)}
-							/>
-						</div>
-						<div className="admin-field">
-							<Label htmlFor="lucky-wheel-collect-label">Nút nhận thưởng</Label>
-							<Input
-								fullWidth
-								id="lucky-wheel-collect-label"
-								value={wheelConfig.publicCopy.collectCtaLabel}
-								variant="secondary"
-								onChange={(event) => updateCopy("collectCtaLabel", event.currentTarget.value)}
-							/>
-						</div>
-					</div>
-					<div className="admin-field">
-						<Label htmlFor="lucky-wheel-waiting">Thông điệp chờ</Label>
-						<Input
-							fullWidth
-							id="lucky-wheel-waiting"
-							value={wheelConfig.publicCopy.waitingMessage}
-							variant="secondary"
-							onChange={(event) => updateCopy("waitingMessage", event.currentTarget.value)}
-						/>
-					</div>
+					<GamePublicCopyFields
+						copy={wheelConfig.publicCopy}
+						idPrefix="lucky-wheel"
+						onChange={updateCopy}
+					/>
 				</Widget.Content>
 			</Widget>
 		</div>
 	);
 }
-
-type LuckyWheelConfigEditorCopy = Record<
-	"headline" | "subtitle" | "startCtaLabel" | "collectCtaLabel" | "waitingMessage",
-	string
->;
