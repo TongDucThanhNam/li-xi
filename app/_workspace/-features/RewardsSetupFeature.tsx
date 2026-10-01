@@ -1,44 +1,34 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
 	Alert,
 	Button,
 	Chip,
 	CloseButton,
-	Description,
 	Label,
 	NumberField,
-	ProgressCircle,
 } from "@heroui/react";
 import {
 	EmptyState,
-	ItemCard,
-	ItemCardGroup,
-	KPI,
-	KPIGroup,
 	NativeSelect,
-	NumberStepper,
 	NumberValue,
 	Widget,
 } from "@heroui-pro/react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
-import {
-	ClipboardCheck,
-	FileQuestion,
-	LockKeyhole,
-	Plus,
-	Save,
-	ShieldCheck,
-	WalletCards,
-} from "lucide-react";
+import { FileQuestion, Plus } from "lucide-react";
+import { AdminDisclosure } from "@/app/components/AdminDisclosure";
 import { AdminPageShell, AdminRouteStatus } from "@/app/components/AdminPageShell";
+import { BudgetMeter, StockMeter } from "@/app/_workspace/-components/StockMeter";
 import { CampaignContextNav } from "@/app/_workspace/-components/CampaignContextNav";
 import { RewardInventoryPanel } from "@/app/_workspace/-features/RewardInventoryPanel";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { formatPercent } from "@/lib/campaignMetrics";
+import { configRewardSource, gameTemplates } from "@/lib/gameTemplates";
 import { RARITY_LABELS, RARITY_VALUES, Rarity } from "@/lib/lixiPolicy";
+import { rewardReadiness } from "@/lib/rewardReadiness";
 import { useOwnerSession } from "@/lib/useOwnerSession";
 
 type BudgetRow = {
@@ -62,6 +52,12 @@ function getNumberFieldValue(value: string) {
 	return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : undefined;
 }
 
+const vndFormat = new Intl.NumberFormat("vi-VN", {
+	currency: "VND",
+	maximumFractionDigits: 0,
+	style: "currency",
+});
+
 export function RewardsSetupFeature({
 	campaignId,
 }: {
@@ -73,6 +69,14 @@ export function RewardsSetupFeature({
 	const campaign = useQuery(api.campaigns.getCampaignRouteContext, {
 		campaignId,
 	});
+	const gamesContext = useQuery(
+		api.campaigns.getCampaignGamesRouteContext,
+		owner && campaign ? { campaignId } : "skip",
+	);
+	const inventory = useQuery(
+		api.rewardInventory.getRewardInventory,
+		owner && campaign ? { campaignId } : "skip",
+	);
 
 	const [rows, setRows] = useState<BudgetRow[]>([
 		createBudgetRow({ amount: "100000", quantity: "15", rarity: "common" }),
@@ -128,18 +132,6 @@ export function RewardsSetupFeature({
 			return Number.isInteger(quantity) && quantity > 0 ? sum + quantity : sum;
 		}, 0);
 	}, [rows]);
-	const highestRewardTier = useMemo(() => {
-		return rows.reduce<BudgetRow | null>((highest, row) => {
-			const amount = Number(row.amount);
-			if (!Number.isInteger(amount) || amount <= 0) {
-				return highest;
-			}
-			if (!highest || amount > Number(highest.amount)) {
-				return row;
-			}
-			return highest;
-		}, null);
-	}, [rows]);
 	const averageEnvelopeValue =
 		estimatedEnvelopeCount > 0
 			? Math.round(estimatedTotalBudget / estimatedEnvelopeCount)
@@ -179,7 +171,6 @@ export function RewardsSetupFeature({
 			});
 
 			setInfo("Đã cấu hình ngân sách thành công.");
-			void navigate({ to: "/campaigns", replace: true });
 		} catch (unknownError) {
 			setError(
 				unknownError instanceof Error
@@ -237,572 +228,365 @@ export function RewardsSetupFeature({
 	const hasSetup = setupState.hasSetup;
 	const selectedCampaignName = campaign.name;
 	const canSaveBudget = !submitting;
-	const setupReadinessRows = [
-		{
-			icon: WalletCards,
-			title: "Kho phần thưởng",
-			description: hasSetup
-				? "Kho phần thưởng đã sẵn sàng cho chiến dịch."
-				: "Lưu kho trước khi vận hành chiến dịch.",
-			chip: hasSetup ? "Đã cấu hình" : "Bản nháp",
-			color: hasSetup ? "success" : "warning",
-		},
-		{
-			icon: LockKeyhole,
-			title: "Khóa chỉnh sửa",
-			description: setupState.canConfigure
-				? "Có thể chỉnh sửa kho an toàn."
-				: "Kho đã khóa để bảo toàn lịch sử chơi.",
-			chip: setupState.canConfigure ? "Có thể sửa" : "Đã khóa",
-			color: setupState.canConfigure ? "success" : "default",
-		},
-	] as const;
-	const setupReadyCount = setupReadinessRows.filter(
-		(row) => row.color === "success",
-	).length;
-	const setupProgress = Math.round(
-		(setupReadyCount / setupReadinessRows.length) * 100,
-	);
-	const setupFeedback = error || info;
-	const nextSetupReadinessRow =
-		setupReadinessRows.find((row) => row.color !== "success") ??
-		setupReadinessRows[0];
-	const inventorySummaryRows = [
-		{
-			icon: WalletCards,
-			title: "Tổng phần thưởng",
-			description: "Số kết quả phần thưởng có trong kho hiện tại.",
-			value: estimatedEnvelopeCount,
-			valueProps: { maximumFractionDigits: 0 },
-			suffix: "lượt",
-			chip: `${rows.length} mức`,
-		},
-		{
-			icon: ClipboardCheck,
-			title: "Giá trị trung bình",
-			description: "Giá trị trung bình của mỗi kết quả trong bản nháp.",
-			value: averageEnvelopeValue,
-			valueProps: {
-				currency: "VND",
-				maximumFractionDigits: 0,
-				style: "currency",
-			},
-			suffix: "",
-			chip: "Mỗi lượt",
-		},
-		{
-			icon: ShieldCheck,
-			title: "Mức cao nhất",
-			description: highestRewardTier
-				? RARITY_LABELS[highestRewardTier.rarity]
-				: "Chưa có mệnh giá hợp lệ.",
-			value: highestRewardTier ? Number(highestRewardTier.amount) : 0,
-			valueProps: {
-				currency: "VND",
-				maximumFractionDigits: 0,
-				style: "currency",
-			},
-			suffix: "",
-			chip: highestRewardTier ? "Giải cao nhất" : "Chưa có",
-		},
-	] as const;
-	return (
-		<AdminPageShell
-			actions={
-				<Link
-					className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-foreground"
-					to="/campaigns"
-				>
-					<ClipboardCheck aria-hidden="true" size={16} strokeWidth={2} />
-					Campaign Studio
-				</Link>
-			}
-			breadcrumbContext={selectedCampaignName}
-			description="Cấu hình ngân sách và tồn kho phần thưởng riêng cho chiến dịch."
-			eyebrow="Phần thưởng chiến dịch"
-			title="Kho phần thưởng"
-		>
-			<CampaignContextNav campaignId={campaignId} />
-			<KPIGroup className="admin-kpi-strip">
-				<KPI>
-					<KPI.Header>
-						<KPI.Title>Ngân sách dự kiến</KPI.Title>
-					</KPI.Header>
-					<KPI.Content>
-						<KPI.Value
-							currency="VND"
-							maximumFractionDigits={0}
-							style="currency"
-							value={estimatedTotalBudget}
-						/>
-					</KPI.Content>
-				</KPI>
-				<KPIGroup.Separator />
-				<KPI>
-					<KPI.Header>
-						<KPI.Title>Ngân sách đã cấu hình</KPI.Title>
-					</KPI.Header>
-					<KPI.Content>
-						<KPI.Value
-							currency="VND"
-							maximumFractionDigits={0}
-							style="currency"
-							value={setupState.budget?.totalBudget ?? 0}
-						/>
-					</KPI.Content>
-				</KPI>
-				<KPIGroup.Separator />
-				<KPI>
-					<KPI.Header>
-						<KPI.Title>Còn lại</KPI.Title>
-					</KPI.Header>
-					<KPI.Content>
-						<KPI.Value
-							currency="VND"
-							maximumFractionDigits={0}
-							style="currency"
-							value={setupState.budget?.remainingBudget ?? 0}
-						/>
-					</KPI.Content>
-				</KPI>
-			</KPIGroup>
+	const campaignGames = gamesContext?.campaignGames ?? null;
+	const inventoryCount = inventory?.items.length ?? null;
+	const readiness =
+		campaignGames && inventoryCount !== null
+			? rewardReadiness(campaignGames, {
+					hasBudget: hasSetup,
+					inventoryCount,
+				})
+			: null;
+	const budgetGames =
+		campaignGames?.filter(
+			(game) => configRewardSource(game.config) === "campaign-budget",
+		) ?? null;
+	const inventoryGames =
+		campaignGames?.filter(
+			(game) => configRewardSource(game.config) === "campaign-inventory",
+		) ?? null;
+	const budgetLocked = hasSetup && !setupState.canConfigure;
+	// Budget meter figures (§11.4.4): remaining over total with the spent note.
+	const budgetTotal = setupState.budget?.totalBudget ?? 0;
+	const budgetRemaining = setupState.budget?.remainingBudget ?? 0;
+	const budgetPercent = budgetTotal > 0 ? (budgetRemaining / budgetTotal) * 100 : 0;
+	// Quiet-until-dirty save (§11.4.4/R6): the first configuration of an empty
+	// budget and any draft drift from the stored tiers turn the save primary.
+	const budgetDirty =
+		!hasSetup ||
+		rows.length !== setupState.items.length ||
+		rows.some((row, index) => {
+			const item = setupState.items[index];
+			return (
+				item !== undefined &&
+				`${row.amount}|${row.quantity}|${row.rarity}` !==
+					`${item.amount}|${item.initialQuantity}|${item.rarity}`
+			);
+		});
+	const budgetChip = !hasSetup
+		? { color: "warning" as const, label: "Chưa cấu hình" }
+		: budgetLocked
+			? { color: "default" as const, label: "Đã khoá" }
+			: { color: "success" as const, label: "Đã cấu hình" };
+	// A source with at least one game or saved data opens as a section; the
+	// unused-and-empty ones fold to the end so the page never shows two
+	// stretched empty states (§8.2).
+	const inventoryOpen =
+		inventoryGames === null || inventoryCount === null
+			? true
+			: inventoryGames.length > 0 || inventoryCount > 0;
+	const budgetOpen = budgetGames === null ? true : budgetGames.length > 0 || hasSetup;
 
-			{setupFeedback ? (
-				<Alert status={error ? "danger" : "success"}>
-					<Alert.Indicator />
-					<Alert.Content>
-						<Alert.Title>{setupFeedback}</Alert.Title>
-						<Alert.Description>
-							{error
-								? "Kiểm tra lại mệnh giá và số lượng trước khi lưu."
-								: "Kho phần thưởng đã được cập nhật."}
-						</Alert.Description>
-					</Alert.Content>
-				</Alert>
-			) : null}
+	const usedByNode = (games: NonNullable<typeof campaignGames>) => {
+		if (games.length === 0) {
+			return <p className="admin-usedby">Chưa có trò chơi nào dùng nguồn thưởng này.</p>;
+		}
+		return (
+			<p className="admin-usedby">
+				<span>Dùng cho:</span>
+				{games.map((game, index) => (
+					<Fragment key={game.id}>
+						{index > 0 ? <span aria-hidden="true">·</span> : null}
+						<Link
+							params={{ campaignGameId: game.id, campaignId }}
+							to="/campaigns/$campaignId/games/$campaignGameId"
+						>
+							{game.name}
+						</Link>
+					</Fragment>
+				))}
+			</p>
+		);
+	};
 
-			<Widget>
-				<Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
-					<div>
-						<Widget.Title>Trạng thái cấu hình</Widget.Title>
-						<Widget.Description>
-							Mức độ sẵn sàng của kho phần thưởng trong chiến dịch đã chọn.
-						</Widget.Description>
-					</div>
-					<Chip
-						color={setupProgress === 100 ? "success" : "warning"}
-						variant="soft"
-					>
-						{setupProgress === 100 ? "Sẵn sàng" : "Cần cấu hình"}
-					</Chip>
-				</Widget.Header>
-				<Widget.Content className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-					<ItemCardGroup
-						aria-label="Mức độ sẵn sàng của kho phần thưởng"
-						className="admin-card-grid--three"
-						layout="grid"
-						variant="secondary"
-					>
-						{setupReadinessRows.map((row) => (
-							<ItemCard className="items-start" key={row.title} variant="secondary">
-								<ItemCard.Icon
-									className={
-										row.color === "success"
-											? "text-success"
-											: row.color === "warning"
-												? "text-warning"
-												: "text-muted"
-									}
-								>
-									<row.icon
-										aria-hidden="true"
-										size={18}
-										strokeWidth={2}
+	const budgetSection = (
+		<Widget>
+			<Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
+				<div>
+					<Widget.Title>
+						Ngân sách tiền mặt {gameTemplates["li-xi"].name}
+					</Widget.Title>
+					<Widget.Description>
+						Các mức tiền mặt trao qua trò chơi dùng ngân sách, có Host PIN xác nhận.
+					</Widget.Description>
+				</div>
+				<Chip color={budgetChip.color} size="sm" variant="soft">
+					{budgetChip.label}
+				</Chip>
+			</Widget.Header>
+			<Widget.Content className="admin-stack">
+				{error || info ? (
+					<Alert status={error ? "danger" : "success"}>
+						<Alert.Indicator />
+						<Alert.Content>
+							<Alert.Title>{error || info}</Alert.Title>
+						</Alert.Content>
+					</Alert>
+				) : null}
+				{usedByNode(budgetGames ?? [])}
+				{hasSetup ? (
+					<BudgetMeter
+						label="Ngân sách còn lại"
+						note={
+							budgetTotal > 0 ? (
+								<>
+									Đã trao {vndFormat.format(budgetTotal - budgetRemaining)} (
+									{formatPercent(1 - budgetRemaining / budgetTotal)})
+								</>
+							) : undefined
+						}
+						percent={budgetPercent}
+						progressLabel="Ngân sách còn lại"
+						remaining={
+							<NumberValue
+								currency="VND"
+								maximumFractionDigits={0}
+								style="currency"
+								value={budgetRemaining}
+							/>
+						}
+						total={
+							<NumberValue
+								currency="VND"
+								maximumFractionDigits={0}
+								style="currency"
+								value={budgetTotal}
+							/>
+						}
+					/>
+				) : null}
+				{budgetLocked ? (
+					<>
+						<Alert status="warning">
+							<Alert.Indicator />
+							<Alert.Content>
+								<Alert.Title>Ngân sách đã khóa</Alert.Title>
+								<Alert.Description>
+									Đã có lượt chơi đang chờ hoặc đã hoàn tất, nên kho phần thưởng
+									được khóa để bảo toàn lịch sử.
+								</Alert.Description>
+							</Alert.Content>
+						</Alert>
+						<ul aria-label="Tồn kho theo mệnh giá" className="admin-stock-list">
+							{setupState.items.map((item) => (
+								<li className="admin-stock-list__row" key={item.amount}>
+									<span className="admin-stock-list__name">
+										{vndFormat.format(item.amount)}
+										<span className="text-muted"> · {RARITY_LABELS[item.rarity]}</span>
+									</span>
+									<StockMeter
+										ariaLabel={`Tồn kho mức ${vndFormat.format(item.amount)}`}
+										remaining={item.remainingQuantity}
+										total={item.initialQuantity}
 									/>
-								</ItemCard.Icon>
-								<ItemCard.Content>
-									<ItemCard.Title>{row.title}</ItemCard.Title>
-									<ItemCard.Description className="line-clamp-2 whitespace-normal">
-										{row.description}
-									</ItemCard.Description>
-								</ItemCard.Content>
-								<ItemCard.Action>
-									<Chip color={row.color} size="sm" variant="soft">
-										{row.chip}
-									</Chip>
-								</ItemCard.Action>
-							</ItemCard>
-						))}
-					</ItemCardGroup>
-					<div className="admin-command-summary">
-						{setupState.campaigns.length === 0 ? (
-							<ItemCard variant="secondary">
-								<ItemCard.Icon>
-									<ClipboardCheck aria-hidden="true" size={18} strokeWidth={2} />
-								</ItemCard.Icon>
-								<ItemCard.Content>
-									<ItemCard.Title>Chiến dịch mặc định</ItemCard.Title>
-									<ItemCard.Description>
-										Lưu kho phần thưởng sẽ tạo chiến dịch mặc định đầu tiên.
-									</ItemCard.Description>
-								</ItemCard.Content>
-							</ItemCard>
-						) : <p className="text-sm text-muted">Kho này thuộc chiến dịch {selectedCampaignName}.</p>}
-						<div className="flex items-center gap-4">
-							<ProgressCircle
-								aria-label="Tiến độ cấu hình kho phần thưởng"
-								color={setupProgress === 100 ? "success" : "accent"}
-								value={setupProgress}
-							>
-								<ProgressCircle.Track>
-									<ProgressCircle.TrackCircle />
-									<ProgressCircle.FillCircle />
-								</ProgressCircle.Track>
-							</ProgressCircle>
-							<div className="min-w-0">
-								<div className="flex items-baseline gap-2">
-									<NumberValue
-										className="text-2xl font-semibold tabular-nums text-foreground"
-										maximumFractionDigits={0}
-										value={setupProgress}
-									>
-										<NumberValue.Suffix>
-											<span className="ml-0.5 text-sm font-medium text-muted">%</span>
-										</NumberValue.Suffix>
-									</NumberValue>
-									<Chip
-										color={setupProgress === 100 ? "success" : "warning"}
-										size="sm"
-										variant="soft"
-									>
-										{setupReadyCount}/{setupReadinessRows.length}
-									</Chip>
-								</div>
-								<p className="mt-1 text-xs leading-5 text-muted">
-									Trạng thái tồn kho và khóa chỉnh sửa.
-								</p>
+								</li>
+							))}
+						</ul>
+					</>
+				) : (
+					<>
+						<div>
+							<div aria-hidden="true" className="admin-tier-head">
+								<span>Giá trị</span>
+								<span>Số lượng</span>
+								<span>Độ hiếm</span>
+								<span className="md:text-right">Tạm tính</span>
+								<span />
 							</div>
-						</div>
-						<div className="admin-command-summary__note">
-							<p className="admin-command-summary__note-label">
-								{setupProgress === 100 ? "Sẵn sàng vận hành" : "Bước tiếp theo"}
-							</p>
-							<div className="admin-command-summary__note-header">
-								<p className="admin-command-summary__note-title">
-									{nextSetupReadinessRow.title}
-								</p>
-								<Chip color={nextSetupReadinessRow.color} size="sm" variant="soft">
-									{nextSetupReadinessRow.chip}
-								</Chip>
-							</div>
-							<p className="admin-command-summary__note-copy line-clamp-2">
-								{nextSetupReadinessRow.description}
-							</p>
-						</div>
-						<div className="admin-command-summary__metric-list">
-							<div className="admin-command-summary__metric-row">
-								<span className="text-muted">Chiến dịch ngân sách</span>
-								<span className="truncate font-medium text-foreground">
-									{selectedCampaignName}
-								</span>
-							</div>
-							<div className="admin-command-summary__metric-row">
-								<span className="text-muted">Số mức thưởng</span>
-								<NumberValue
-									className="font-medium tabular-nums text-foreground"
-									value={rows.length}
-								/>
-							</div>
-							<div className="admin-command-summary__metric-row">
-								<span className="text-muted">Ngân sách dự kiến</span>
-								<NumberValue
-									className="font-medium tabular-nums text-foreground"
-									currency="VND"
-									maximumFractionDigits={0}
-									style="currency"
-									value={estimatedTotalBudget}
-								/>
-							</div>
-						</div>
-					</div>
-				</Widget.Content>
-			</Widget>
-
-			<Widget>
-				<Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
-					<div>
-						<Widget.Title>Kho phần thưởng</Widget.Title>
-						<Widget.Description>
-							Cấu hình giá trị, số lượng và độ hiếm cho từng mức kết quả phần thưởng.
-						</Widget.Description>
-					</div>
-					<Chip size="sm" variant="soft">
-						{rows.length} mức
-					</Chip>
-				</Widget.Header>
-				<Widget.Content className="gap-5">
-					<ItemCardGroup
-						aria-label="Tóm tắt kho phần thưởng"
-						className="admin-card-grid--three"
-						layout="grid"
-						variant="secondary"
-					>
-						{inventorySummaryRows.map((row) => (
-							<ItemCard className="items-start" key={row.title} variant="secondary">
-								<ItemCard.Icon>
-									<row.icon aria-hidden="true" size={18} strokeWidth={2} />
-								</ItemCard.Icon>
-								<ItemCard.Content>
-									<ItemCard.Description>{row.title}</ItemCard.Description>
-									<ItemCard.Title>
-										<NumberValue
-											className="tabular-nums"
-											value={row.value}
-											{...row.valueProps}
-										/>
-										{row.suffix ? (
-											<span className="ml-1 text-xs font-medium text-muted">
-												{row.suffix}
-											</span>
-										) : null}
-									</ItemCard.Title>
-									<ItemCard.Description className="line-clamp-2 whitespace-normal">
-										{row.description}
-									</ItemCard.Description>
-								</ItemCard.Content>
-								<ItemCard.Action>
-									<Chip size="sm" variant="soft">
-										{row.chip}
-									</Chip>
-								</ItemCard.Action>
-							</ItemCard>
-						))}
-					</ItemCardGroup>
-
-					{hasSetup && !setupState.canConfigure ? (
-						<>
-							<Alert status="warning">
-								<Alert.Indicator />
-								<Alert.Content>
-									<Alert.Title>Ngân sách đã khóa</Alert.Title>
-									<Alert.Description>
-										Đã có lượt chơi đang chờ hoặc đã hoàn tất, nên kho phần thưởng
-										được khóa để bảo toàn lịch sử.
-									</Alert.Description>
-								</Alert.Content>
-							</Alert>
-							<ItemCardGroup aria-label="Trạng thái khóa kho phần thưởng" className="admin-card-grid--two" layout="grid" variant="secondary">
-								<ItemCard variant="secondary">
-									<ItemCard.Icon>
-										<WalletCards aria-hidden="true" size={18} strokeWidth={2} />
-									</ItemCard.Icon>
-									<ItemCard.Content>
-										<ItemCard.Title>Ngân sách đã cấu hình</ItemCard.Title>
-										<ItemCard.Description>
-											<NumberValue
-												className="tabular-nums"
-												currency="VND"
-												maximumFractionDigits={0}
-												style="currency"
-												value={setupState.budget?.totalBudget ?? 0}
-											/>
-										</ItemCard.Description>
-									</ItemCard.Content>
-								</ItemCard>
-								<ItemCard variant="secondary">
-									<ItemCard.Icon>
-										<ShieldCheck aria-hidden="true" size={18} strokeWidth={2} />
-									</ItemCard.Icon>
-									<ItemCard.Content>
-										<ItemCard.Title>Trạng thái kho</ItemCard.Title>
-										<ItemCard.Description>
-											Kho đã khóa; hoạt động vận hành lượt chơi vẫn có thể tiếp tục.
-										</ItemCard.Description>
-									</ItemCard.Content>
-									<ItemCard.Action>
-										<Link
-											className="inline-flex items-center rounded-xl border border-border px-3 py-2 text-sm font-medium text-foreground"
-											to="/campaigns"
-										>
-											Campaign Studio
-										</Link>
-									</ItemCard.Action>
-								</ItemCard>
-							</ItemCardGroup>
-						</>
-					) : (
-						<>
-							<ItemCardGroup aria-label="Các bậc phần thưởng" variant="secondary">
+							<ul aria-label="Các bậc phần thưởng">
 								{rows.map((row, index) => {
 									const amount = getNumberFieldValue(row.amount);
 									const quantity = getNumberFieldValue(row.quantity);
 									const subtotal = amount && quantity ? amount * quantity : 0;
 
 									return (
-										<ItemCard className="items-start" key={row.id} variant="secondary">
-											<ItemCard.Content className="min-w-0 gap-4">
-												<div className="flex flex-wrap items-start justify-between gap-4">
-													<div className="min-w-0">
-														<ItemCard.Title>Mức thưởng {index + 1}</ItemCard.Title>
-														<ItemCard.Description>
-															Tạm tính được cập nhật theo giá trị và số lượng.
-														</ItemCard.Description>
-													</div>
-													<div className="flex min-w-0 items-start gap-3">
-														<div className="min-w-24 text-right">
-															<p className="text-xs text-muted">Tạm tính</p>
-															<NumberValue
-																className="text-sm font-medium tabular-nums text-foreground"
-																currency="VND"
-																maximumFractionDigits={0}
-																style="currency"
-																value={subtotal}
-															/>
-														</div>
-														<CloseButton
-												aria-label={`Xóa mức thưởng ${index + 1}`}
-															isDisabled={rows.length <= 1}
-															onPress={() =>
-																setRows((current) =>
-																	current.filter((item) => item.id !== row.id),
-																)
-															}
+										<li className="admin-tier-row" key={row.id}>
+											<div className="admin-field col-span-2 md:col-span-1">
+												<NumberField
+													aria-label={`Giá trị mức thưởng ${index + 1}`}
+													fullWidth
+													minValue={1}
+													value={amount}
+													variant="secondary"
+													onChange={(value) => {
+														setRows((current) =>
+															current.map((item) =>
+																item.id === row.id
+																	? { ...item, amount: value ? String(value) : "" }
+																	: item,
+															),
+														);
+													}}
+												>
+													<Label className="md:sr-only">Giá trị phần thưởng</Label>
+													<NumberField.Group>
+														<NumberField.DecrementButton
+															aria-label={`Giảm giá trị mức thưởng ${index + 1}`}
 														/>
-													</div>
-												</div>
-												<div className="grid items-end gap-3 lg:grid-cols-[minmax(180px,1fr)_auto_minmax(150px,0.8fr)]">
-													<NumberField
-														fullWidth
-											aria-label={`Giá trị mức thưởng ${index + 1}`}
-														minValue={1}
-														value={amount}
-														variant="secondary"
-														onChange={(value) => {
+														<NumberField.Input className="w-full tabular-nums" />
+														<NumberField.IncrementButton
+															aria-label={`Tăng giá trị mức thưởng ${index + 1}`}
+														/>
+													</NumberField.Group>
+												</NumberField>
+											</div>
+											<div className="admin-field">
+												<NumberField
+													aria-label={`Số lượng mức thưởng ${index + 1}`}
+													fullWidth
+													minValue={1}
+													value={quantity}
+													variant="secondary"
+													onChange={(value) => {
+														setRows((current) =>
+															current.map((item) =>
+																item.id === row.id
+																	? { ...item, quantity: value ? String(value) : "" }
+																	: item,
+															),
+														);
+													}}
+												>
+													<Label className="md:sr-only">Số lượng</Label>
+													<NumberField.Group>
+														<NumberField.DecrementButton
+															aria-label={`Giảm số lượng mức thưởng ${index + 1}`}
+														/>
+														<NumberField.Input className="w-full tabular-nums" />
+														<NumberField.IncrementButton
+															aria-label={`Tăng số lượng mức thưởng ${index + 1}`}
+														/>
+													</NumberField.Group>
+												</NumberField>
+											</div>
+											<div className="admin-field">
+												<NativeSelect fullWidth variant="secondary">
+													<Label className="md:sr-only">Độ hiếm</Label>
+													<NativeSelect.Trigger
+														aria-label={`Độ hiếm mức thưởng ${index + 1}`}
+														value={row.rarity}
+														onChange={(event) => {
+															const rarity = event.currentTarget.value as Rarity;
 															setRows((current) =>
 																current.map((item) =>
-																	item.id === row.id
-																		? { ...item, amount: value ? String(value) : "" }
-																		: item,
+																	item.id === row.id ? { ...item, rarity } : item,
 																),
 															);
 														}}
 													>
-												<Label>Giá trị phần thưởng</Label>
-														<NumberField.Group>
-															<NumberField.DecrementButton
-																aria-label={`Giảm giá trị mức thưởng ${index + 1}`}
-															/>
-															<NumberField.Input className="w-full tabular-nums" />
-															<NumberField.IncrementButton
-																aria-label={`Tăng giá trị mức thưởng ${index + 1}`}
-															/>
-														</NumberField.Group>
-													</NumberField>
-													<NumberStepper
-											aria-label={`Số lượng mức thưởng ${index + 1}`}
-														className="flex-col items-start gap-1.5"
-														minValue={1}
-														value={quantity ?? 1}
-														onChange={(value) => {
-															setRows((current) =>
-																current.map((item) =>
-																	item.id === row.id
-																		? { ...item, quantity: String(value ?? 1) }
-																		: item,
-																),
-															);
-														}}
-													>
-												<Label>Số lượng</Label>
-														<NumberStepper.Group>
-															<NumberStepper.DecrementButton
-																aria-label={`Giảm số lượng mức thưởng ${index + 1}`}
-															/>
-															<NumberStepper.Value />
-															<NumberStepper.IncrementButton
-																aria-label={`Tăng số lượng mức thưởng ${index + 1}`}
-															/>
-														</NumberStepper.Group>
-													</NumberStepper>
-													<NativeSelect fullWidth variant="secondary">
-												<Label>Độ hiếm</Label>
-														<NativeSelect.Trigger
-													aria-label={`Độ hiếm mức thưởng ${index + 1}`}
-															value={row.rarity}
-															onChange={(event) => {
-																const rarity = event.currentTarget.value as Rarity;
-																setRows((current) =>
-																	current.map((item) =>
-																		item.id === row.id ? { ...item, rarity } : item,
-																	),
-																);
-															}}
-														>
-															{RARITY_VALUES.map((rarity) => (
-																<NativeSelect.Option key={rarity} value={rarity}>
-																	{RARITY_LABELS[rarity]}
-																</NativeSelect.Option>
-															))}
-															<NativeSelect.Indicator />
-														</NativeSelect.Trigger>
-														<Description>Ảnh hưởng nhãn hiển thị trong kết quả.</Description>
-													</NativeSelect>
-												</div>
-											</ItemCard.Content>
-										</ItemCard>
+														{RARITY_VALUES.map((rarity) => (
+															<NativeSelect.Option key={rarity} value={rarity}>
+																{RARITY_LABELS[rarity]}
+															</NativeSelect.Option>
+														))}
+														<NativeSelect.Indicator />
+													</NativeSelect.Trigger>
+												</NativeSelect>
+											</div>
+											<div className="col-span-2 flex items-center justify-between gap-3 md:contents">
+												<p className="text-sm tabular-nums text-muted md:self-center md:text-right">
+													<span className="md:sr-only">Tạm tính </span>
+													{vndFormat.format(subtotal)}
+												</p>
+												<CloseButton
+													aria-label={`Xóa mức thưởng ${index + 1}`}
+													className="md:self-center"
+													isDisabled={rows.length <= 1}
+													onPress={() =>
+														setRows((current) =>
+															current.filter((item) => item.id !== row.id),
+														)
+													}
+												/>
+											</div>
+										</li>
 									);
 								})}
-							</ItemCardGroup>
+							</ul>
+							<p className="admin-field__hint">
+								Ảnh hưởng nhãn hiển thị trong kết quả.
+							</p>
+						</div>
+						<div className="flex flex-wrap items-center gap-3">
+							<Button
+								type="button"
+								variant="outline"
+								onPress={() =>
+									setRows((current) => [
+										...current,
+										createBudgetRow({ quantity: "1" }),
+									])
+								}
+							>
+								<Plus aria-hidden="true" size={16} strokeWidth={2} />
+								Thêm mệnh giá
+							</Button>
+							{hasSetup && budgetDirty ? (
+								<p className="text-sm text-warning" role="status">
+									Có thay đổi chưa lưu.
+								</p>
+							) : null}
+							<p className="ml-auto text-sm tabular-nums text-muted">
+								{estimatedEnvelopeCount.toLocaleString("vi-VN")} lượt · Trung bình{" "}
+								{vndFormat.format(averageEnvelopeValue)} · Tổng{" "}
+								{vndFormat.format(estimatedTotalBudget)}
+							</p>
+							<Button
+								isDisabled={!canSaveBudget}
+								isPending={submitting}
+								type="button"
+								variant={budgetDirty ? "primary" : "secondary"}
+								onPress={handleSubmit}
+							>
+								Lưu cấu hình ngân sách
+							</Button>
+						</div>
+					</>
+				)}
+			</Widget.Content>
+		</Widget>
+	);
 
-							<div className="flex flex-wrap items-center justify-between gap-3">
-								<Button
-									type="button"
-									variant="outline"
-									onPress={() =>
-										setRows((current) => [
-											...current,
-											createBudgetRow({ quantity: "1" }),
-										])
-									}
-								>
-									<Plus aria-hidden="true" size={16} strokeWidth={2} />
-									Thêm mệnh giá
-								</Button>
+	const inventorySection = (
+		<RewardInventoryPanel campaignId={campaignId} usedBy={usedByNode(inventoryGames ?? [])} />
+	);
 
-								<div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-sm tabular-nums text-muted">
-									<span>
-										{estimatedEnvelopeCount.toLocaleString("vi-VN")} đơn vị phần thưởng
-									</span>
-									<span>
-										Tổng dự kiến:{" "}
-										<NumberValue
-											currency="VND"
-											maximumFractionDigits={0}
-											style="currency"
-											value={estimatedTotalBudget}
-										/>
-									</span>
-								</div>
-							</div>
-						</>
-					)}
-
-					{!hasSetup || setupState.canConfigure ? (
-						<Button
-							fullWidth
-							isDisabled={!canSaveBudget}
-							isPending={submitting}
-							type="button"
-							onPress={handleSubmit}
-						>
-							<Save aria-hidden="true" size={16} strokeWidth={2} />
-							Lưu cấu hình ngân sách
-						</Button>
-					) : null}
-					</Widget.Content>
-				</Widget>
-
-			<RewardInventoryPanel campaignId={campaignId} />
+	return (
+		<AdminPageShell
+			breadcrumbContext={selectedCampaignName}
+			description="Phần thưởng mà các trò chơi trong chiến dịch này có thể trao."
+			status={
+				readiness ? (
+					readiness.ready ? (
+						<Chip color="success" size="sm" variant="soft">
+							Sẵn sàng
+						</Chip>
+					) : (
+						<Chip color="warning" size="sm" variant="soft">
+							Cần thiết lập
+						</Chip>
+					)
+				) : undefined
+			}
+			tabs={<CampaignContextNav campaignId={campaignId} />}
+			title="Kho phần thưởng"
+		>
+			{inventoryOpen ? inventorySection : null}
+			{!inventoryOpen ? (
+				<AdminDisclosure bare summary="Chưa có trò chơi nào dùng" title="Kho phần thưởng dùng chung">
+					{inventorySection}
+				</AdminDisclosure>
+			) : null}
+			{budgetOpen ? budgetSection : null}
+			{!budgetOpen ? (
+				<AdminDisclosure
+					bare
+					summary="Chưa có trò chơi nào dùng"
+					title={`Ngân sách tiền mặt ${gameTemplates["li-xi"].name}`}
+				>
+					{budgetSection}
+				</AdminDisclosure>
+			) : null}
 		</AdminPageShell>
 	);
 }

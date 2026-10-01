@@ -212,11 +212,21 @@ export type LegacyCampaignPresentationPatch = {
 	theme: CampaignStyleVariant;
 };
 
+/**
+ * Which slice of a template's config editor the caller wants (workspace UX
+ * redesign §11.3.2): "rules" is the gameplay/rules widgets on the editor's
+ * "Thiết lập" tab, "content" is the guest-copy widget on the "Nội dung" tab.
+ */
+export type GameConfigEditorSection = "rules" | "content";
+
+export type GameConfigEditorProps = {
+	config: CampaignGameConfig;
+	onChange: (config: CampaignGameConfig) => void;
+	section: GameConfigEditorSection;
+};
+
 export type GameTemplate = GameTemplateCatalogEntry & {
-	ConfigEditor: ComponentType<{
-		config: CampaignGameConfig;
-		onChange: (config: CampaignGameConfig) => void;
-	}>;
+	ConfigEditor: ComponentType<GameConfigEditorProps>;
 	Preview: ComponentType<{
 		config: CampaignGameConfig;
 		heroUrl?: string | null;

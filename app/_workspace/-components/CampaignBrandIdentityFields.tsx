@@ -2,6 +2,7 @@
 
 import { Input, Label, TextArea } from "@heroui/react";
 import { Button } from "@heroui/react";
+import { Check } from "lucide-react";
 import { campaignAudienceTagLabels, campaignAudienceTags } from "@/lib/brandIdentity";
 
 /**
@@ -50,6 +51,7 @@ export function CampaignBrandIdentityFields({
 						}}
 					/>
 					<Input
+						className="admin-control--sm"
 						fullWidth
 						id={`${idPrefix}-brand-color`}
 						placeholder="#FF0000"
@@ -58,7 +60,7 @@ export function CampaignBrandIdentityFields({
 						onChange={(event) => onChange({ ...draft, brandColor: event.currentTarget.value })}
 					/>
 				</div>
-				<p className="mt-1 text-xs text-muted">
+				<p className="admin-field__hint">
 					Mã hex (#RGB hoặc #RRGGBB). Chỉ hiển thị trong không gian làm việc, không áp
 					dụng lên màn chơi của khách.
 				</p>
@@ -72,10 +74,12 @@ export function CampaignBrandIdentityFields({
 							<Button
 								aria-pressed={selected}
 								key={tag}
+								size="sm"
 								type="button"
-								variant={selected ? "primary" : "outline"}
+								variant={selected ? "secondary" : "outline"}
 								onPress={() => toggleTag(tag)}
 							>
+								{selected ? <Check aria-hidden="true" size={14} /> : null}
 								{campaignAudienceTagLabels[tag]}
 							</Button>
 						);

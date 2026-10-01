@@ -9,6 +9,10 @@ type OtpPinInputProps = {
   disabled?: boolean;
   autoFocus?: boolean;
   variant?: "draw" | "admin";
+  /** Id for the hidden input instead of the generated one (admin surfaces). */
+  inputId?: string;
+  /** Accessible name for the hidden input (admin surfaces with a visible label). */
+  ariaLabel?: string;
 };
 
 function toDigits(value: string, length: number) {
@@ -23,6 +27,8 @@ export default function OtpPinInput({
   disabled = false,
   autoFocus = false,
   variant = "draw",
+  inputId,
+  ariaLabel,
 }: OtpPinInputProps) {
   const uniqueId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -116,7 +122,8 @@ export default function OtpPinInput({
     >
       <legend className="sr-only">Nhập mã PIN {length} chữ số</legend>
       <input
-        id={`otp-${uniqueId}`}
+        id={inputId ?? `otp-${uniqueId}`}
+        aria-label={ariaLabel}
         ref={inputRef}
         className="absolute inset-0 h-full w-full cursor-text opacity-0 caret-transparent"
         type="tel"

@@ -3,7 +3,7 @@
 import { Alert, Button, ProgressBar } from "@heroui/react";
 import { Widget } from "@heroui-pro/react";
 import { useMutation } from "convex/react";
-import { ImageUp, Trash2 } from "lucide-react";
+import { Image as ImageIcon, ImageUp, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -35,11 +35,12 @@ type SlotView = {
 };
 
 /**
- * Generalized campaign-game assets panel: the campaign hero card (unchanged)
- * plus one card per template-declared asset slot. Every upload follows the
- * R2 flow generateUploadUrl → PUT → syncMetadata → attachUploadedAsset with
- * the 4-attempt "metadata R2" retry; slots carry their usage kind and owning
- * game so the server can validate and bind them.
+ * Generalized campaign-game assets panel: one "Hình ảnh" section with a
+ * compact row for the campaign hero and one row per template-declared asset
+ * slot. Every upload follows the R2 flow generateUploadUrl → PUT →
+ * syncMetadata → attachUploadedAsset with the 4-attempt "metadata R2" retry;
+ * slots carry their usage kind and owning game so the server can validate and
+ * bind them.
  */
 export function CampaignGameAssetsPanel({
 	campaignId,
@@ -61,12 +62,16 @@ export function CampaignGameAssetsPanel({
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
 	const slotInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 	const [uploading, setUploading] = useState(false);
+	// Which row ("hero" or a slot id) is uploading, so the progress bar
+	// renders under that row.
+	const [uploadTarget, setUploadTarget] = useState<string | null>(null);
 	const [progress, setProgress] = useState(0);
 	const [feedback, setFeedback] = useState("");
 	const [error, setError] = useState("");
 
 	const handleFileChosen = async (file: File, slot?: GameTemplateAssetSlot) => {
 		setUploading(true);
+		setUploadTarget(slot ? slot.id : "hero");
 		setProgress(0);
 		setError("");
 		setFeedback("");
@@ -114,6 +119,7 @@ export function CampaignGameAssetsPanel({
 			setError(unknownError instanceof Error ? unknownError.message : "Không thể tải ảnh");
 		} finally {
 			setUploading(false);
+			setUploadTarget(null);
 			setProgress(0);
 			// Reset via the refs: the change event's currentTarget is detached
 			// after the awaits above.
@@ -142,139 +148,152 @@ export function CampaignGameAssetsPanel({
 	return (
 		<Widget>
 			<Widget.Header>
-				<div>
-					<Widget.Title>Ảnh chủ đạo</Widget.Title>
-					<Widget.Description>
-						Tài nguyên thương hiệu thuộc chiến dịch và được lưu trên Cloudflare R2.
-					</Widget.Description>
-				</div>
+				<Widget.Title>Hình ảnh</Widget.Title>
+				<Widget.Description>JPEG, PNG hoặc WebP.</Widget.Description>
 			</Widget.Header>
-			<Widget.Content className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+			<Widget.Content className="admin-stack">
 				{error || feedback ? (
-					<Alert className="lg:col-span-full" status={error ? "danger" : "success"}>
+					<Alert status={error ? "danger" : "success"}>
 						<Alert.Indicator />
 						<Alert.Content>
 							<Alert.Title>{error || feedback}</Alert.Title>
 						</Alert.Content>
 					</Alert>
 				) : null}
-				{heroUrl ? (
-					<img
-						alt="Ảnh chủ đạo hiện tại"
-						className="aspect-video w-full rounded-xl object-cover"
-						src={heroUrl}
-					/>
-				) : (
-					<div className="grid aspect-video w-full place-items-center rounded-xl bg-surface-secondary text-sm text-muted">
-						Chưa có ảnh chủ đạo
-					</div>
-				)}
-				<div className="grid content-start gap-3">
-					<Button
-						isDisabled={uploading}
-						type="button"
-						variant="outline"
-						onPress={() => fileInputRef.current?.click()}
-					>
-						<ImageUp aria-hidden="true" size={16} />
-						{uploading ? "Đang tải ảnh" : "Chọn ảnh"}
-					</Button>
-					<p className="text-xs text-muted">Định dạng hỗ trợ: JPEG, PNG hoặc WebP.</p>
-					{uploading ? (
-						<ProgressBar aria-label="Tiến độ tải ảnh" value={progress}>
-							<ProgressBar.Track>
-								<ProgressBar.Fill />
-							</ProgressBar.Track>
-						</ProgressBar>
-					) : null}
-				</div>
-				<input
-					accept="image/jpeg,image/png,image/webp"
-					className="sr-only"
-					disabled={uploading}
-					ref={fileInputRef}
-					tabIndex={-1}
-					type="file"
-					aria-hidden="true"
-					onChange={(event) => {
-						const file = event.currentTarget.files?.[0];
-						if (file) {
-							void handleFileChosen(file);
-						}
-					}}
-				/>
-			</Widget.Content>
-			{slots.length > 0 && campaignGameId ? (
-				<Widget.Content className="gap-4">
-					{slots.map((slot) => {
-						const current = assets.find((asset) => asset.usage === slot.id) ?? null;
-						const inputId = `campaign-game-slot-${slot.id}`;
-						return (
-							<div
-								className="grid items-start gap-4 rounded-xl border border-border p-4 lg:grid-cols-[minmax(0,1fr)_280px]"
-								key={slot.id}
+				<div className="admin-rows">
+					<div className="admin-row flex-wrap items-start py-3" key="hero">
+						{heroUrl ? (
+							<img
+								alt="Ảnh chủ đạo hiện tại"
+								className="aspect-video w-28 shrink-0 rounded-lg object-cover"
+								src={heroUrl}
+							/>
+						) : (
+							<div className="grid aspect-video w-28 shrink-0 place-items-center rounded-lg bg-surface-secondary text-muted">
+								<ImageIcon aria-hidden="true" size={16} />
+							</div>
+						)}
+						<div className="admin-row__text">
+							<span className="admin-row__title">Ảnh chủ đạo</span>
+							{heroUrl ? null : (
+								<span className="text-xs leading-4 text-muted">Chưa có ảnh chủ đạo</span>
+							)}
+						</div>
+						<div className="flex shrink-0 gap-2">
+							<Button
+								isDisabled={uploading}
+								size="sm"
+								type="button"
+								variant="secondary"
+								onPress={() => fileInputRef.current?.click()}
 							>
-								<div className="grid gap-2">
-									<p className="font-medium text-foreground">{slot.label}</p>
-									<p className="text-sm text-muted">{slot.description}</p>
+								<ImageUp aria-hidden="true" size={16} />
+								{uploading ? "Đang tải ảnh" : "Chọn ảnh"}
+							</Button>
+						</div>
+						{uploading && uploadTarget === "hero" ? (
+							<ProgressBar aria-label="Tiến độ tải ảnh" className="min-w-full" value={progress}>
+								<ProgressBar.Track>
+									<ProgressBar.Fill />
+								</ProgressBar.Track>
+							</ProgressBar>
+						) : null}
+						<input
+							accept="image/jpeg,image/png,image/webp"
+							className="sr-only"
+							disabled={uploading}
+							ref={fileInputRef}
+							tabIndex={-1}
+							type="file"
+							aria-hidden="true"
+							onChange={(event) => {
+								const file = event.currentTarget.files?.[0];
+								if (file) {
+									void handleFileChosen(file);
+								}
+							}}
+						/>
+					</div>
+					{slots.length > 0 && campaignGameId
+						? slots.map((slot) => {
+							const current = assets.find((asset) => asset.usage === slot.id) ?? null;
+							const inputId = `campaign-game-slot-${slot.id}`;
+							return (
+								<div className="admin-row flex-wrap items-start py-3" key={slot.id}>
 									{current?.url ? (
 										<img
 											alt={`${slot.label} hiện tại`}
-											className="aspect-video w-full rounded-lg object-cover"
+											className="aspect-video w-28 shrink-0 rounded-lg object-cover"
 											src={current.url}
 										/>
 									) : (
-										<div className="grid aspect-video w-full place-items-center rounded-lg bg-surface-secondary text-sm text-muted">
-											Chưa có ảnh (dùng hình mặc định)
+										<div className="grid aspect-video w-28 shrink-0 place-items-center rounded-lg bg-surface-secondary text-muted">
+											<ImageIcon aria-hidden="true" size={16} />
 										</div>
 									)}
-								</div>
-								<div className="grid content-start gap-3">
-									<Button
-										isDisabled={uploading}
-										type="button"
-										variant="outline"
-										onPress={() => slotInputRefs.current?.[slot.id]?.click()}
-									>
-										<ImageUp aria-hidden="true" size={16} />
-										{uploading ? "Đang tải ảnh" : "Chọn ảnh"}
-									</Button>
-									{current ? (
+									<div className="admin-row__text">
+										<span className="admin-row__title">{slot.label}</span>
+										<span className="text-xs leading-4 text-muted">
+											{current
+												? slot.description
+												: "Chưa có ảnh (dùng hình mặc định)"}
+										</span>
+									</div>
+									<div className="flex shrink-0 gap-2">
 										<Button
 											isDisabled={uploading}
+											size="sm"
 											type="button"
-											variant="ghost"
-											onPress={() => void handleRemove(slot, current.assetId)}
+											variant="secondary"
+											onPress={() => slotInputRefs.current?.[slot.id]?.click()}
 										>
-											<Trash2 aria-hidden="true" size={16} />
-											Gỡ ảnh
+											<ImageUp aria-hidden="true" size={16} />
+											{uploading ? "Đang tải ảnh" : "Chọn ảnh"}
 										</Button>
+										{current ? (
+											<Button
+												isDisabled={uploading}
+												size="sm"
+												type="button"
+												variant="ghost"
+												onPress={() => void handleRemove(slot, current.assetId)}
+											>
+												<Trash2 aria-hidden="true" size={16} />
+												Gỡ ảnh
+											</Button>
+										) : null}
+									</div>
+									{uploading && uploadTarget === slot.id ? (
+										<ProgressBar aria-label="Tiến độ tải ảnh" className="min-w-full" value={progress}>
+											<ProgressBar.Track>
+												<ProgressBar.Fill />
+											</ProgressBar.Track>
+										</ProgressBar>
 									) : null}
-									<p className="text-xs text-muted">Tỉ lệ {slot.aspectRatioLabel}.</p>
+									<input
+										accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+										aria-hidden="true"
+										className="sr-only"
+										disabled={uploading}
+										id={inputId}
+										ref={(node) => {
+											slotInputRefs.current[slot.id] = node;
+										}}
+										tabIndex={-1}
+										type="file"
+										onChange={(event) => {
+											const file = event.currentTarget.files?.[0];
+											if (file) {
+												void handleFileChosen(file, slot);
+											}
+										}}
+									/>
 								</div>
-								<input
-									accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
-									aria-hidden="true"
-									className="sr-only"
-									disabled={uploading}
-									id={inputId}
-									ref={(node) => {
-										slotInputRefs.current[slot.id] = node;
-									}}
-									tabIndex={-1}
-									type="file"
-									onChange={(event) => {
-										const file = event.currentTarget.files?.[0];
-										if (file) {
-											void handleFileChosen(file, slot);
-										}
-									}}
-								/>
-							</div>
-						);
-					})}
-				</Widget.Content>
-			) : null}
+							);
+						})
+						: null}
+				</div>
+			</Widget.Content>
 		</Widget>
 	);
 }

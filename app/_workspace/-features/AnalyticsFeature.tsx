@@ -3,28 +3,37 @@
 import type { DataGridColumn } from "@heroui-pro/react";
 
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { buttonVariants, Chip, Description, Label, ProgressCircle, Tabs } from "@heroui/react";
+import { Button, Chip, Tabs, buttonVariants } from "@heroui/react";
 import {
-	BarChart,
 	DataGrid,
 	EmptyState,
-	ItemCard,
-	ItemCardGroup,
-	KPI,
-	KPIGroup,
 	NativeSelect,
 	NumberValue,
 	Widget,
 } from "@heroui-pro/react";
 import { useQuery } from "convex/react";
-import { BarChart3, FileText, Gamepad2, History, Link2, MonitorPlay, MoveHorizontal, Ticket, Trophy } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowRight, BarChart3, Gamepad2, History, Link2, MoveHorizontal, Ticket, Trophy } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AdminPageShell, AdminRouteStatus } from "@/app/components/AdminPageShell";
+import { GameTemplateIcon } from "@/app/_workspace/-components/GameTemplateIcon";
+import { PerformanceSummary } from "@/app/_workspace/-components/PerformanceSummary";
+import { RateBar, ShareBars, type ShareBarRow } from "@/app/_workspace/-components/ShareBars";
 import { api } from "@/convex/_generated/api";
-import { gameTemplates } from "@/lib/gameTemplates";
+import {
+	conversionRate,
+	formatPercent,
+	groupRowsByCampaign,
+	sumFunnelRows,
+} from "@/lib/campaignMetrics";
+import { gameTemplates, type GameTemplateId } from "@/lib/gameTemplates";
 import { RARITY_LABELS, type Rarity } from "@/lib/lixiPolicy";
 import { useOwnerSession } from "@/lib/useOwnerSession";
 import { RewardClaimsPanel } from "./RewardClaimsPanel";
+
+const viNumberFormat = new Intl.NumberFormat("vi-VN");
+
+const sectionActionLinkClass =
+	"inline-flex items-center gap-1 rounded-sm text-sm font-medium text-accent outline-none focus-visible:ring-2 focus-visible:ring-focus";
 
 function formatDateTimeParts(timestamp: number) {
 	const date = new Date(timestamp);
@@ -51,19 +60,15 @@ function getRarityStatus(rarity: Rarity) {
 	return variants[rarity];
 }
 
-function getRarityChartColor(rarity: Rarity) {
-	const colors: Record<Rarity, string> = {
-		common: "var(--chart-1)",
-		rare: "var(--chart-3)",
-		legend: "var(--chart-4)",
-	};
-	return colors[rarity];
-}
-
 /** Legacy li xi delivery channel label for read-only redemption rows. */
 function deliveryModeLabel(mode: "station" | "link") {
 	return mode === "station" ? "Trạm chơi" : "Liên kết công khai";
 }
+
+/** Backend keeps the key "legacy" + label "li xi (legacy)"; the UI names it
+ * in Vietnamese instead (§10.5) while convex and the fixture keep the key. */
+const channelLabel = (row: { key: string; label: string }) =>
+	row.key === "legacy" ? "Li xì chưa gắn kênh" : row.label;
 
 /** Narrow-screen affordance for data grids that scroll horizontally. */
 function TableScrollHint({ inset = false }: { inset?: boolean }) {
@@ -78,6 +83,56 @@ function TableScrollHint({ inset = false }: { inset?: boolean }) {
 			<MoveHorizontal aria-hidden="true" size={14} />
 			Vuốt ngang bảng để xem các cột còn lại
 		</p>
+	);
+}
+
+/** One overview ranked card (§11.5.2): title, optional "Xem chi tiết" link,
+ * and a share-bar list — or the shared empty sentence when no rows. */
+function RankCard({
+	label,
+	linkView,
+	rows,
+	title,
+}: {
+	label: string;
+	linkView?: "games" | "channels";
+	rows: ShareBarRow[];
+	title: string;
+}) {
+	return (
+		<Widget>
+			<Widget.Header>
+				<Widget.Title>{title}</Widget.Title>
+				{linkView ? (
+					<Link
+						className={sectionActionLinkClass}
+						search={(previous) => ({ ...previous, view: linkView })}
+						to="/analytics"
+					>
+						Xem chi tiết
+						<ArrowRight aria-hidden="true" size={14} />
+					</Link>
+				) : null}
+			</Widget.Header>
+			<Widget.Content>
+				{rows.length === 0 ? (
+					<p className="text-sm leading-5 text-muted">Chưa có dữ liệu.</p>
+				) : (
+					<ShareBars label={label} rateLabel="Chuyển đổi" rows={rows} valueLabel="Lượt mở" />
+				)}
+			</Widget.Content>
+		</Widget>
+	);
+}
+
+/** One stat in an `.admin-stats` row, with an optional muted step note. */
+function StatItem({ label, note, value }: { label: string; note?: string; value: ReactNode }) {
+	return (
+		<div>
+			<dt>{label}</dt>
+			<dd>{value}</dd>
+			{note ? <dd className="admin-stats__note">{note}</dd> : null}
+		</div>
 	);
 }
 
@@ -214,51 +269,22 @@ export function AnalyticsFeature() {
 
 	const totalRedeemed = history.reduce((sum, item) => sum + item.amount, 0);
 	const legendCount = history.filter((item) => item.rarity === "legend").length;
-	const selectedScopeLabel = selectedCampaign
-		? selectedCampaign.name
-		: "Tất cả chiến dịch";
+	const averageReward =
+		history.length > 0 ? Math.round(totalRedeemed / history.length) : 0;
 	const rarityBreakdown = (["common", "rare", "legend"] as const).map(
 		(rarity) => {
 			const items = history.filter((item) => item.rarity === rarity);
-			const amount = items.reduce((sum, item) => sum + item.amount, 0);
 
 			return {
-				amount,
-				color: getRarityChartColor(rarity),
 				label: RARITY_LABELS[rarity],
 				rarity,
 				redemptions: items.length,
-				share: history.length > 0 ? Math.round((items.length / history.length) * 100) : 0,
 			};
 		},
 	);
 	const hasRarityBreakdown = rarityBreakdown.some(
 		(item) => item.redemptions > 0,
 	);
-	const topReward = leaderboard[0];
-	const latestRedemption =
-		history.length > 0
-			? history.reduce((latest, item) =>
-					item.createdAt > latest.createdAt ? item : latest,
-				)
-			: null;
-	const averageReward =
-		history.length > 0 ? Math.round(totalRedeemed / history.length) : 0;
-	const dominantRarity = rarityBreakdown.reduce(
-		(current, item) =>
-			item.redemptions > current.redemptions ? item : current,
-		rarityBreakdown[0],
-	);
-	const analyticsReadyCount = [
-		history.length > 0,
-		leaderboard.length > 0,
-		hasRarityBreakdown,
-	].filter(Boolean).length;
-	const analyticsSignalPercent = Math.round((analyticsReadyCount / 3) * 100);
-	const conversionPercent =
-		analytics.gameMetrics.conversion === null
-			? null
-			: Math.round(analytics.gameMetrics.conversion * 100);
 	const viewCopy = {
 		overview: {
 			description: "Tổng hợp lượt chơi, phần thưởng và hiệu quả trong phạm vi đã chọn.",
@@ -281,8 +307,8 @@ export function AnalyticsFeature() {
 			title: "Hàng đợi trao thưởng",
 		},
 	}[search.view];
-	const formatConversionPercent = (conversion: number | null) =>
-		conversion === null ? "—" : `${Math.round(conversion * 100)}%`;
+	/** Sorted nulls first, so "—" rows group below every measured row. */
+	const rateSortValue = (rate: number | null) => (rate === null ? -1 : rate);
 	const gameTemplateBadgeLabel = (templateId: string | null) =>
 		templateId
 			? gameTemplates[templateId as keyof typeof gameTemplates]?.name ?? templateId
@@ -290,11 +316,30 @@ export function AnalyticsFeature() {
 	type GameBreakdownRow = NonNullable<typeof campaignGameBreakdown>["rows"][number];
 	type ChannelBreakdownRow = NonNullable<typeof campaignChannelBreakdown>["rows"][number];
 	type ShareLinkBreakdownRow = NonNullable<typeof campaignShareLinkBreakdown>["rows"][number];
-	const funnelColumns = <Row extends Record<string, unknown>>(
+	const allScope = !selectedCampaignId;
+	const campaignNameById = new Map(
+		workspace.campaigns.map((campaign) => [campaign.id, campaign.name]),
+	);
+	/** Meta line under a game name: template label (when renamed) and, in
+	 * the all-campaign scope, the owning campaign. */
+	const gameMeta = (row: GameBreakdownRow) => {
+		const label = gameTemplateBadgeLabel(row.gameTemplateId);
+		const name = row.gameName ?? "Trò chơi";
+		return (
+			[
+				label !== name ? label : null,
+				allScope ? campaignNameById.get(row.campaignId) ?? null : null,
+			]
+				.filter((part): part is string => part !== null)
+				.join(" · ") || null
+		);
+	};
+	const funnelColumns = <Row extends { opens: number; claims: number }>(
 		labels: Array<{ id: keyof Row & string; header: string }>,
 	): DataGridColumn<Row>[] => [
 		...labels.map<DataGridColumn<Row>>((label) => ({
 			align: "end",
+			allowsSorting: true,
 			cell: (item) => (
 				<NumberValue
 					className="tabular-nums text-foreground"
@@ -305,37 +350,49 @@ export function AnalyticsFeature() {
 			header: label.header,
 			id: label.id,
 			minWidth: 88,
+			sortFn: (a, b) => (a[label.id] as number) - (b[label.id] as number),
 		})),
 		{
 			align: "end",
-			cell: (item) => (
-				<span className="tabular-nums text-foreground">
-					{formatConversionPercent(
-						"conversion" in item && typeof item.conversion === "number"
-							? item.conversion
-							: null,
-					)}
-				</span>
-			),
+			allowsSorting: true,
+			cell: (item) => <RateBar rate={conversionRate(item)} />,
 			header: "Chuyển đổi",
 			id: "conversion",
-			minWidth: 88,
+			minWidth: 132,
+			sortFn: (a, b) => rateSortValue(conversionRate(a)) - rateSortValue(conversionRate(b)),
 		},
 	];
 	const gameBreakdownColumns: DataGridColumn<GameBreakdownRow>[] = [
 		{
-			cell: (item) => (
-				<span className="flex min-w-0 flex-col items-start gap-1">
-					<span className="truncate font-medium text-foreground">{item.gameName ?? "Trò chơi"}</span>
-					<Chip className="max-w-full" size="sm" variant="soft">
-						<Chip.Label className="truncate">{gameTemplateBadgeLabel(item.gameTemplateId)}</Chip.Label>
-					</Chip>
-				</span>
-			),
+			cell: (item) => {
+				const name = item.gameName ?? "Trò chơi";
+				const meta = gameMeta(item);
+				const known = Boolean(
+					item.gameTemplateId && gameTemplates[item.gameTemplateId as GameTemplateId],
+				);
+				return (
+					<span className="flex min-w-0 items-center gap-3">
+						<span className="admin-icon-tile">
+							{known && item.gameTemplateId ? (
+								<GameTemplateIcon templateId={item.gameTemplateId as GameTemplateId} />
+							) : (
+								<Gamepad2 aria-hidden="true" size={20} />
+							)}
+						</span>
+						<span className="flex min-w-0 flex-col">
+							<span className="truncate font-medium text-foreground">{name}</span>
+							{meta ? <span className="truncate text-xs text-muted">{meta}</span> : null}
+						</span>
+					</span>
+				);
+			},
 			header: "Trò chơi",
 			id: "game",
 			isRowHeader: true,
-			minWidth: 170,
+			minWidth: 220,
+			// Names share the flexible rest three-to-one against the number
+			// columns, so nothing truncates at 1440 (§11.6.6/Q11).
+			width: "3fr",
 		},
 		...funnelColumns<GameBreakdownRow>([
 			{ header: "Mở", id: "opens" },
@@ -348,7 +405,7 @@ export function AnalyticsFeature() {
 	const channelBreakdownColumns: DataGridColumn<ChannelBreakdownRow>[] = [
 		{
 			cell: (item) => (
-				<span className="truncate font-medium text-foreground">{item.label}</span>
+				<span className="truncate font-medium text-foreground">{channelLabel(item)}</span>
 			),
 			header: "Kênh",
 			id: "channel",
@@ -368,20 +425,28 @@ export function AnalyticsFeature() {
 			cell: (item) => (
 				<span className="flex min-w-0 flex-col items-start gap-1">
 					<span className="truncate font-medium text-foreground">{item.label ?? "Liên kết"}</span>
-					<span className="flex max-w-full items-center gap-2">
-						<Chip className="max-w-full" size="sm" variant="soft">
-							<Chip.Label className="truncate">{item.channel}</Chip.Label>
-						</Chip>
-						<span className="truncate text-xs tabular-nums text-muted">
-							{item.linkOpens.toLocaleString("vi-VN")} mở liên kết
-						</span>
-					</span>
+					<span className="truncate text-xs text-muted">Kênh: {item.channel}</span>
 				</span>
 			),
 			header: "Liên kết",
 			id: "link",
 			isRowHeader: true,
 			minWidth: 160,
+		},
+		{
+			align: "end",
+			allowsSorting: true,
+			cell: (item) => (
+				<NumberValue
+					className="tabular-nums text-foreground"
+					maximumFractionDigits={0}
+					value={item.linkOpens}
+				/>
+			),
+			header: "Lượt truy cập",
+			id: "linkOpens",
+			minWidth: 88,
+			sortFn: (a, b) => a.linkOpens - b.linkOpens,
 		},
 		...funnelColumns<ShareLinkBreakdownRow>([
 			{ header: "Mở trò chơi", id: "opens" },
@@ -540,709 +605,474 @@ export function AnalyticsFeature() {
 			sortFn: (a, b) => a.createdAt - b.createdAt,
 		},
 	];
-		// Legacy rarity widget only rides next to overview/rewards summaries.
-		const rarityAsideViews = ["overview", "rewards"];
-		const leaderboardContextPanel = (
-			<div className="admin-aside">
-			<Widget>
-				<Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
-					<div>
-						<Widget.Title>Phạm vi chiến dịch</Widget.Title>
-						<Widget.Description>
-							Chọn phạm vi để đối chiếu bảng xếp hạng và lịch sử trao thưởng.
-						</Widget.Description>
-					</div>
-					<Chip className="max-w-full" variant="soft">
-						<Chip.Label className="truncate">{selectedScopeLabel}</Chip.Label>
-					</Chip>
-				</Widget.Header>
-				<Widget.Content className="gap-4">
-					<NativeSelect fullWidth variant="secondary">
-						<Label>Chiến dịch</Label>
-						<NativeSelect.Trigger
-							aria-label="Phạm vi phân tích chiến dịch"
-							value={selectedCampaignId ?? "all"}
-							onChange={(event) => {
-								const nextValue = event.currentTarget.value;
-								void navigate({
-									to: "/analytics",
-									search: (previous) => ({
-										campaign: nextValue === "all" ? undefined : nextValue,
-										view: previous.view ?? "overview",
-									}),
-								});
-							}}
-						>
-							<NativeSelect.Option value="all">Tất cả chiến dịch</NativeSelect.Option>
-							{workspace.campaigns.map((campaign) => (
-								<NativeSelect.Option key={campaign.id} value={campaign.id}>
-									{campaign.name}
-								</NativeSelect.Option>
-							))}
-							<NativeSelect.Indicator />
-						</NativeSelect.Trigger>
-						<Description>
-							Chọn toàn bộ không gian làm việc hoặc khoanh vùng một chiến dịch cụ thể.
-						</Description>
-					</NativeSelect>
-					<ItemCardGroup aria-label="Phạm vi phân tích" variant="secondary">
-						<ItemCard variant="secondary">
-							<ItemCard.Content>
-								<ItemCard.Title>{selectedScopeLabel}</ItemCard.Title>
-								<ItemCard.Description>
-									{selectedCampaign
-										? selectedCampaign.brandName || owner.username
-										: `${workspace.campaigns.length.toLocaleString("vi-VN")} chiến dịch`}
-								</ItemCard.Description>
-							</ItemCard.Content>
-							<ItemCard.Action>
-								<Chip size="sm" variant="soft">
-									{selectedCampaignId ? "Chiến dịch" : "Toàn bộ"}
-								</Chip>
-							</ItemCard.Action>
-						</ItemCard>
-					</ItemCardGroup>
-				</Widget.Content>
-			</Widget>
-
-			{rarityAsideViews.includes(search.view ?? "overview") ? (
-			<Widget>
-				<Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
-					<div>
-						<Widget.Title>Cơ cấu phần thưởng</Widget.Title>
-						<Widget.Description>
-							Phân bố độ hiếm và giá trị thưởng trong phạm vi đang chọn.
-						</Widget.Description>
-					</div>
-					<Widget.Legend>
-						<Widget.LegendItem color="var(--chart-3)">
-							Lượt trao thưởng
-						</Widget.LegendItem>
-					</Widget.Legend>
-				</Widget.Header>
-				{hasRarityBreakdown ? (
-					<Widget.Content className="gap-5">
-						<BarChart data={rarityBreakdown} height={200}>
-							<BarChart.Grid vertical={false} />
-							<BarChart.XAxis dataKey="label" tickMargin={8} />
-							<BarChart.YAxis width={36} />
-							<BarChart.Bar
-								barSize={26}
-								dataKey="redemptions"
-								fill="var(--chart-3)"
-								name="Lượt trao thưởng"
-								radius={[4, 4, 0, 0]}
-							/>
-							<BarChart.Tooltip
-								content={
-									<BarChart.TooltipContent
-										valueFormatter={(value) =>
-											`${Number(value).toLocaleString("vi-VN")} lượt`
-										}
-									/>
-								}
-							/>
-						</BarChart>
-						<ItemCardGroup aria-label="Cơ cấu phần thưởng theo độ hiếm" variant="secondary">
-							{rarityBreakdown.map((item) => (
-								<ItemCard className="items-start" key={item.rarity} variant="secondary">
-									<ItemCard.Content className="gap-2">
-										<div className="flex items-center justify-between gap-3">
-											<ItemCard.Title>{item.label}</ItemCard.Title>
-											<span className="text-sm tabular-nums text-muted">
-												{item.share}%
-											</span>
-										</div>
-										<div className="flex items-end justify-between gap-3">
-											<NumberValue
-												className="text-lg font-semibold tabular-nums text-foreground"
-												maximumFractionDigits={0}
-												value={item.redemptions}
-											>
-												<NumberValue.Suffix>
-													<span className="ml-1 text-xs font-normal text-muted">
-														lượt
-													</span>
-												</NumberValue.Suffix>
-											</NumberValue>
-											<NumberValue
-												className="text-sm tabular-nums text-muted"
-												currency="VND"
-												maximumFractionDigits={0}
-												style="currency"
-												value={item.amount}
-											/>
-										</div>
-									</ItemCard.Content>
-								</ItemCard>
-							))}
-						</ItemCardGroup>
-					</Widget.Content>
-				) : (
-					<Widget.Content>
-						<EmptyState size="sm">
-							<EmptyState.Header>
-								<EmptyState.Media variant="icon">
-									<BarChart3 aria-hidden="true" size={22} strokeWidth={2} />
-								</EmptyState.Media>
-								<EmptyState.Title>Chưa có dữ liệu cơ cấu phần thưởng</EmptyState.Title>
-								<EmptyState.Description>
-									Cơ cấu sẽ xuất hiện sau lượt trao thưởng đầu tiên.
-								</EmptyState.Description>
-						</EmptyState.Header>
-					</EmptyState>
-				</Widget.Content>
-			)}
-			</Widget>
-			) : null}
-		</div>
-	);
+	const gameMetrics = analytics.gameMetrics;
+	/** Overview rank rows (§11.5.2): one ShareBars row per campaign, summed
+	 * from the game breakdown; callers sort by opens and cap the list. */
+	const rowsByCampaign = groupRowsByCampaign(campaignGameBreakdown?.rows ?? []);
+	const campaignShareRows =
+		campaignGameBreakdown && campaignChannelBreakdown && allScope
+			? workspace.campaigns
+					.map((campaign) => {
+						const rows = rowsByCampaign.get(campaign.id) ?? [];
+						const totals = sumFunnelRows(rows);
+						return {
+							key: campaign.id,
+							meta: `${rows.length} trò chơi`,
+							name: campaign.name,
+							rate: conversionRate(totals),
+							value: totals.opens,
+						};
+					})
+					.sort((a, b) => b.value - a.value)
+					.slice(0, 5)
+			: [];
+	const gameShareRows = [...(campaignGameBreakdown?.rows ?? [])]
+		.sort((a, b) => b.opens - a.opens)
+		.slice(0, 5)
+		.map((row) => ({
+			key: row.campaignGameId,
+			meta: gameMeta(row),
+			name: row.gameName ?? "Trò chơi",
+			rate: conversionRate(row),
+			value: row.opens,
+		}));
+	const channelShareRows = [...(campaignChannelBreakdown?.rows ?? [])]
+		.sort((a, b) => b.opens - a.opens)
+		.map((row) => ({
+			key: row.key,
+			name: channelLabel(row),
+			rate: conversionRate(row),
+			value: row.opens,
+		}));
+	const rarityShareRows = rarityBreakdown.map((item) => ({
+		key: item.rarity,
+		name: item.label,
+		rate: history.length > 0 ? item.redemptions / history.length : 0,
+		value: item.redemptions,
+	}));
 
 	return (
 		<AdminPageShell
-			description={
-				selectedCampaign
-					? `${selectedCampaign.name} · ${selectedCampaign.brandName || owner.username}`
-					: `Tất cả chiến dịch · ${owner.username}`
+			actions={
+				<NativeSelect className="admin-control--sm" variant="secondary">
+					<NativeSelect.Trigger
+						aria-label="Phạm vi phân tích chiến dịch"
+						value={selectedCampaignId ?? "all"}
+						onChange={(event) => {
+							const nextValue = event.currentTarget.value;
+							void navigate({
+								to: "/analytics",
+								search: (previous) => ({
+									campaign: nextValue === "all" ? undefined : nextValue,
+									view: previous.view ?? "overview",
+								}),
+							});
+						}}
+					>
+						<NativeSelect.Option value="all">Tất cả chiến dịch</NativeSelect.Option>
+						{workspace.campaigns.map((campaign) => (
+							<NativeSelect.Option key={campaign.id} value={campaign.id}>
+								{campaign.name}
+							</NativeSelect.Option>
+						))}
+						<NativeSelect.Indicator />
+					</NativeSelect.Trigger>
+				</NativeSelect>
 			}
-			aside={leaderboardContextPanel}
+			description={viewCopy.description}
+			tabs={
+				<Tabs
+					className="admin-view-tabs"
+					selectedKey={search.view}
+					variant="secondary"
+					onSelectionChange={(key) => void navigate({ to: "/analytics", search: (previous) => ({ ...previous, view: String(key) as "overview" | "games" | "rewards" | "channels" | "claims" }) })}
+				>
+						<Tabs.ListContainer>
+							<Tabs.List aria-label="Góc nhìn phân tích">
+								<Tabs.Tab className="min-w-max" id="overview">Tổng quan<Tabs.Indicator /></Tabs.Tab>
+								<Tabs.Tab className="min-w-max" id="games">Trò chơi<Tabs.Indicator /></Tabs.Tab>
+								<Tabs.Tab className="min-w-max" id="rewards">Phần thưởng<Tabs.Indicator /></Tabs.Tab>
+								<Tabs.Tab className="min-w-max" id="channels">Kênh chia sẻ<Tabs.Indicator /></Tabs.Tab>
+								<Tabs.Tab className="min-w-max" id="claims">Trao thưởng<Tabs.Indicator /></Tabs.Tab>
+							</Tabs.List>
+						</Tabs.ListContainer>
+				</Tabs>
+			}
 			title={viewCopy.title}
 		>
-			<Tabs
-				className="mb-6"
-				selectedKey={search.view}
-				variant="secondary"
-				onSelectionChange={(key) => void navigate({ to: "/analytics", search: (previous) => ({ ...previous, view: String(key) as "overview" | "games" | "rewards" | "channels" | "claims" }) })}
-			>
-				<Tabs.ListContainer>
-					<Tabs.List aria-label="Góc nhìn phân tích">
-					<Tabs.Tab className="min-w-max" id="overview">Tổng quan<Tabs.Indicator /></Tabs.Tab>
-					<Tabs.Tab className="min-w-max" id="games">Trò chơi<Tabs.Indicator /></Tabs.Tab>
-					<Tabs.Tab className="min-w-max" id="rewards">Phần thưởng<Tabs.Indicator /></Tabs.Tab>
-					<Tabs.Tab className="min-w-max" id="channels">Kênh chia sẻ<Tabs.Indicator /></Tabs.Tab>
-					<Tabs.Tab className="min-w-max" id="claims">Trao thưởng<Tabs.Indicator /></Tabs.Tab>
-				</Tabs.List>
-				</Tabs.ListContainer>
-			</Tabs>
 			{search.view === "claims" ? (
 				selectedCampaign ? (
 					<RewardClaimsPanel campaignId={selectedCampaign.id} />
 				) : (
-					<Widget>
-						<Widget.Header>
-							<div>
-								<Widget.Title>Hàng đợi trao thưởng</Widget.Title>
-								<Widget.Description>
-									Hàng đợi trao thưởng được khoanh vùng theo từng chiến dịch.
-								</Widget.Description>
+					<EmptyState size="sm">
+						<EmptyState.Header>
+							<EmptyState.Media variant="icon">
+								<Ticket aria-hidden="true" size={22} strokeWidth={2} />
+							</EmptyState.Media>
+							<EmptyState.Title>Chọn một chiến dịch để xem hàng đợi</EmptyState.Title>
+							<EmptyState.Description>
+								Hàng đợi trao thưởng được xem theo từng chiến dịch.
+							</EmptyState.Description>
+						</EmptyState.Header>
+						<EmptyState.Content>
+							<div className="flex flex-wrap justify-center gap-2">
+								{workspace.campaigns.slice(0, 6).map((campaign) => (
+									<Button
+										key={campaign.id}
+										size="sm"
+										variant="secondary"
+										onPress={() =>
+											void navigate({
+												to: "/analytics",
+												search: { campaign: campaign.id, view: "claims" },
+											})
+										}
+									>
+										{campaign.name}
+									</Button>
+								))}
 							</div>
-						</Widget.Header>
-						<Widget.Content>
-							<EmptyState size="sm">
-								<EmptyState.Header>
-									<EmptyState.Media variant="icon">
-										<Ticket aria-hidden="true" size={22} strokeWidth={2} />
-									</EmptyState.Media>
-									<EmptyState.Title>Chọn một chiến dịch để xem hàng đợi</EmptyState.Title>
-									<EmptyState.Description>
-										Dùng bộ chọn phạm vi chiến dịch ở cột bên cạnh, sau đó quay lại tab này.
-									</EmptyState.Description>
-								</EmptyState.Header>
-							</EmptyState>
-						</Widget.Content>
-					</Widget>
+						</EmptyState.Content>
+					</EmptyState>
 				)
 			) : (
-			<>
-			<Widget>
-				<Widget.Header>
-					<div>
-						<Widget.Title>{viewCopy.title}</Widget.Title>
-						<Widget.Description>{viewCopy.description}</Widget.Description>
-					</div>
-				</Widget.Header>
-				<Widget.Content>
-					{search.view === "games" ? (
-						<ItemCardGroup aria-label="Chỉ số hiệu quả trò chơi" className="admin-card-grid--three" layout="grid" variant="secondary">
-							<ItemCard variant="secondary"><ItemCard.Icon><Gamepad2 aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Lượt mở trò chơi</ItemCard.Title><ItemCard.Description>{analytics.gameMetrics.opens.toLocaleString("vi-VN")} lượt</ItemCard.Description></ItemCard.Content></ItemCard>
-							<ItemCard variant="secondary"><ItemCard.Icon><MonitorPlay aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Lượt bắt đầu</ItemCard.Title><ItemCard.Description>{analytics.gameMetrics.starts.toLocaleString("vi-VN")} lượt</ItemCard.Description></ItemCard.Content></ItemCard>
-							<ItemCard variant="secondary"><ItemCard.Icon><Trophy aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Lượt hoàn tất</ItemCard.Title><ItemCard.Description>{analytics.gameMetrics.completions.toLocaleString("vi-VN")} lượt</ItemCard.Description></ItemCard.Content></ItemCard>
-						</ItemCardGroup>
-					) : search.view === "channels" ? (
-						<ItemCardGroup aria-label="Chỉ số hiệu quả kênh chia sẻ" className="admin-card-grid--three" layout="grid" variant="secondary">
-							<ItemCard variant="secondary"><ItemCard.Icon><Link2 aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Lượt mở liên kết công khai</ItemCard.Title><ItemCard.Description>{analytics.gameMetrics.channelSharePerformance.publicPlayLinkOpens.toLocaleString("vi-VN")} lượt</ItemCard.Description></ItemCard.Content></ItemCard>
-							<ItemCard variant="secondary"><ItemCard.Icon><Trophy aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Lượt nhận thưởng</ItemCard.Title><ItemCard.Description>{analytics.gameMetrics.claims.toLocaleString("vi-VN")} lượt</ItemCard.Description></ItemCard.Content></ItemCard>
-							<ItemCard variant="secondary"><ItemCard.Icon><BarChart3 aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Tỷ lệ chuyển đổi</ItemCard.Title><ItemCard.Description>{conversionPercent === null ? "Chưa đủ dữ liệu" : `${conversionPercent}%`}</ItemCard.Description></ItemCard.Content></ItemCard>
-						</ItemCardGroup>
-					) : search.view === "rewards" ? (
-						<ItemCardGroup aria-label="Chỉ số hiệu quả phần thưởng" className="admin-card-grid--three" layout="grid" variant="secondary">
-							<ItemCard variant="secondary"><ItemCard.Icon><Trophy aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Kết quả phần thưởng</ItemCard.Title><ItemCard.Description>{analytics.gameMetrics.rewardOutcomes.toLocaleString("vi-VN")} kết quả</ItemCard.Description></ItemCard.Content></ItemCard>
-							<ItemCard variant="secondary"><ItemCard.Icon><History aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Lượt nhận thưởng</ItemCard.Title><ItemCard.Description>{analytics.gameMetrics.claims.toLocaleString("vi-VN")} lượt</ItemCard.Description></ItemCard.Content></ItemCard>
-							<ItemCard variant="secondary"><ItemCard.Icon><BarChart3 aria-hidden="true" /></ItemCard.Icon><ItemCard.Content><ItemCard.Title>Tỷ lệ nhận thưởng</ItemCard.Title><ItemCard.Description>{conversionPercent === null ? "Chưa đủ dữ liệu" : `${conversionPercent}%`}</ItemCard.Description></ItemCard.Content></ItemCard>
-						</ItemCardGroup>
-					) : (
-						<p className="text-sm text-muted">Dữ liệu tổng quan bên dưới kết hợp hiệu quả trò chơi, phần thưởng và phân phối trong {selectedScopeLabel.toLocaleLowerCase()}.</p>
-					)}
-				</Widget.Content>
-			</Widget>
-			{search.view === "games" && campaignGameBreakdown ? (
-				<Widget>
-					<Widget.Header>
-						<div>
-							<Widget.Title>Phân tích theo trò chơi</Widget.Title>
-							<Widget.Description>
-								Phễu chơi và chuyển đổi của từng trò chơi trong phạm vi đang chọn.
-							</Widget.Description>
-						</div>
-					</Widget.Header>
-					{campaignGameBreakdown.rows.length === 0 ? (
-						<Widget.Content>
-							<EmptyState size="sm">
-								<EmptyState.Header>
-									<EmptyState.Media variant="icon">
-										<Gamepad2 aria-hidden="true" size={22} strokeWidth={2} />
-									</EmptyState.Media>
-									<EmptyState.Title>Chưa có trò chơi nào</EmptyState.Title>
-									<EmptyState.Description>
-										Thêm trò chơi vào chiến dịch để xem phân tích theo trò chơi.
-									</EmptyState.Description>
-								</EmptyState.Header>
-							</EmptyState>
-						</Widget.Content>
-						) : (
-							<Widget.Content className="p-0">
+				<>
+					{search.view === "overview" ? (
+						<>
+							<Widget>
+								<Widget.Header>
+									<div>
+										<Widget.Title>Phễu chuyển đổi</Widget.Title>
+										<Widget.Description>
+											{selectedCampaign?.name ?? "Tất cả chiến dịch"}
+										</Widget.Description>
+									</div>
+								</Widget.Header>
+								<Widget.Content>
+									{gameMetrics.opens === 0 && gameMetrics.starts === 0 ? (
+										<p className="text-sm leading-5 text-muted">
+											Chưa có lượt chơi nào trong phạm vi này.
+										</p>
+									) : (
+										<PerformanceSummary funnelLabel="Phễu chuyển đổi" metrics={gameMetrics} />
+									)}
+								</Widget.Content>
+							</Widget>
+							{campaignGameBreakdown && campaignChannelBreakdown ? (
+								<div className={allScope ? "admin-rank-grid admin-rank-grid--3" : "admin-rank-grid"}>
+									{allScope ? (
+										<RankCard
+											label="Chiến dịch theo lượt mở"
+											rows={campaignShareRows}
+											title="Chiến dịch"
+										/>
+									) : null}
+									<RankCard
+										label="Trò chơi theo lượt mở"
+										linkView="games"
+										rows={gameShareRows}
+										title="Trò chơi"
+									/>
+									<RankCard
+										label="Kênh theo lượt mở"
+										linkView="channels"
+										rows={channelShareRows}
+										title="Kênh"
+									/>
+								</div>
+							) : null}
+						</>
+					) : null}
+					{search.view === "games" && campaignGameBreakdown ? (
+						<Widget>
+							<Widget.Header>
+								<div>
+									<Widget.Title>Phân tích theo trò chơi</Widget.Title>
+									<Widget.Description>
+										Phễu chơi và chuyển đổi của từng trò chơi trong phạm vi đang chọn.
+									</Widget.Description>
+								</div>
+							</Widget.Header>
+							{campaignGameBreakdown.rows.length === 0 ? (
+								<Widget.Content>
+									<EmptyState size="sm">
+										<EmptyState.Header>
+											<EmptyState.Media variant="icon">
+												<Gamepad2 aria-hidden="true" size={22} strokeWidth={2} />
+											</EmptyState.Media>
+											<EmptyState.Title>Chưa có trò chơi nào</EmptyState.Title>
+											<EmptyState.Description>
+												Thêm trò chơi vào chiến dịch để xem phân tích theo trò chơi.
+											</EmptyState.Description>
+										</EmptyState.Header>
+									</EmptyState>
+								</Widget.Content>
+								) : (
+									<Widget.Content className="admin-grid-section">
+									<DataGrid
+										allowsColumnResize
+										aria-label="Bảng phân tích theo trò chơi"
+										columns={gameBreakdownColumns}
+										contentClassName="min-w-[760px]"
+										data={campaignGameBreakdown.rows}
+										defaultSortDescriptor={{ column: "opens", direction: "descending" }}
+										getRowId={(item) => item.campaignGameId}
+										scrollContainerClassName="max-h-[560px] overflow-auto"
+										variant="secondary"
+									/>
+										<TableScrollHint inset />
+									</Widget.Content>
+								)}
+						</Widget>
+					) : null}
+					{search.view === "channels" && campaignChannelBreakdown ? (
+						<Widget>
+							<Widget.Header>
+								<div>
+									<Widget.Title>Phân tích theo kênh</Widget.Title>
+									<Widget.Description>
+										So sánh liên kết công khai và trạm chơi; lượt li xì chưa gắn kênh được hiển thị riêng.
+									</Widget.Description>
+								</div>
+							</Widget.Header>
+							<Widget.Content className="admin-grid-section">
 								<DataGrid
 									allowsColumnResize
-									aria-label="Bảng phân tích theo trò chơi"
-									columns={gameBreakdownColumns}
+									aria-label="Bảng phân tích theo kênh"
+									columns={channelBreakdownColumns}
 									contentClassName="min-w-[700px]"
-									data={campaignGameBreakdown.rows}
-									getRowId={(item) => item.campaignGameId}
-									scrollContainerClassName="max-h-[560px] overflow-auto"
+									data={campaignChannelBreakdown.rows}
+									defaultSortDescriptor={{ column: "opens", direction: "descending" }}
+									getRowId={(item) => item.key}
+									scrollContainerClassName="max-h-[420px] overflow-auto"
 									variant="secondary"
 								/>
 								<TableScrollHint inset />
 							</Widget.Content>
-						)}
-				</Widget>
-			) : null}
-			{search.view === "channels" && campaignChannelBreakdown ? (
-				<Widget>
-					<Widget.Header>
-						<div>
-							<Widget.Title>Phân tích theo kênh</Widget.Title>
-							<Widget.Description>
-								So sánh liên kết công khai và trạm chơi; lưu lượng li xi (legacy) không mang kênh nên hiển thị riêng.
-							</Widget.Description>
-						</div>
-					</Widget.Header>
-					<Widget.Content className="p-0">
-						<DataGrid
-							allowsColumnResize
-							aria-label="Bảng phân tích theo kênh"
-							columns={channelBreakdownColumns}
-							contentClassName="min-w-[700px]"
-							data={campaignChannelBreakdown.rows}
-							getRowId={(item) => item.key}
-							scrollContainerClassName="max-h-[420px] overflow-auto"
-							variant="secondary"
-						/>
-						<TableScrollHint inset />
-					</Widget.Content>
-				</Widget>
-			) : null}
-			{search.view === "channels" && campaignShareLinkBreakdown ? (
-				<Widget>
-					<Widget.Header>
-						<div>
-							<Widget.Title>Liên kết chia sẻ</Widget.Title>
-							<Widget.Description>
-								Phễu theo từng liên kết; lưu lượng li xi (legacy) không gán theo liên kết.
-							</Widget.Description>
-						</div>
-					</Widget.Header>
-					{campaignShareLinkBreakdown.rows.length === 0 ? (
-						<Widget.Content>
-							<EmptyState size="sm">
-								<EmptyState.Header>
-									<EmptyState.Media variant="icon">
-										<Link2 aria-hidden="true" size={22} strokeWidth={2} />
-									</EmptyState.Media>
-									<EmptyState.Title>Chưa có liên kết chia sẻ</EmptyState.Title>
-									<EmptyState.Description>
-										Tạo liên kết chơi trong chiến dịch để theo dõi hiệu quả từng kênh phân phối.
-									</EmptyState.Description>
-								</EmptyState.Header>
-							</EmptyState>
-						</Widget.Content>
-					) : (
-						<Widget.Content className="p-0">
-							<DataGrid
-								allowsColumnResize
-								aria-label="Bảng liên kết chia sẻ"
-								columns={shareLinkBreakdownColumns}
-								contentClassName="min-w-[700px]"
-								data={campaignShareLinkBreakdown.rows}
-								getRowId={(item) => item.shareLinkId}
-								scrollContainerClassName="max-h-[420px] overflow-auto"
-								variant="secondary"
-							/>
-							<TableScrollHint inset />
-						</Widget.Content>
-					)}
-				</Widget>
-			) : null}
-			<KPIGroup className="admin-kpi-strip">
-				<KPI>
-					<KPI.Header>
-						<KPI.Title>Lượt trao thưởng</KPI.Title>
-					</KPI.Header>
-					<KPI.Content>
-						<KPI.Value maximumFractionDigits={0} value={history.length} />
-					</KPI.Content>
-				</KPI>
-				<KPIGroup.Separator />
-				<KPI>
-					<KPI.Header>
-						<KPI.Title>Giá trị đã trao</KPI.Title>
-					</KPI.Header>
-					<KPI.Content>
-						<KPI.Value
-							currency="VND"
-							maximumFractionDigits={0}
-							style="currency"
-							value={totalRedeemed}
-						/>
-					</KPI.Content>
-				</KPI>
-				<KPIGroup.Separator />
-				<KPI>
-					<KPI.Header>
-						<KPI.Title>Phần thưởng huyền thoại</KPI.Title>
-						<KPI.Trend trend={legendCount > 0 ? "up" : "neutral"}>
-							{legendCount > 0 ? "Đã có" : "Chưa có"}
-						</KPI.Trend>
-					</KPI.Header>
-					<KPI.Content>
-						<KPI.Value maximumFractionDigits={0} value={legendCount} />
-					</KPI.Content>
-				</KPI>
-				<KPIGroup.Separator />
-				<KPI>
-					<KPI.Header>
-						<KPI.Title>Chiến dịch</KPI.Title>
-					</KPI.Header>
-					<KPI.Content>
-						<KPI.Value maximumFractionDigits={0} value={workspace.campaigns.length} />
-					</KPI.Content>
-				</KPI>
-			</KPIGroup>
-
-			<Widget>
-				<Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
-					<div>
-						<Widget.Title>Tóm tắt phân tích</Widget.Title>
-						<Widget.Description>
-							Tổng quan phạm vi đang xem và hành động vận hành gần nhất.
-						</Widget.Description>
-					</div>
-					<Chip color={analyticsReadyCount === 3 ? "success" : "default"} variant="soft">
-						{analyticsReadyCount}/3 tín hiệu
-					</Chip>
-				</Widget.Header>
-				<Widget.Content className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-					<ItemCardGroup
-						aria-label="Tóm tắt tín hiệu phân tích"
-						className="admin-card-grid--three"
-						layout="grid"
-						variant="secondary"
-					>
-						<ItemCard className="items-start" variant="secondary">
-							<ItemCard.Icon className="text-accent">
-								<FileText aria-hidden="true" size={18} strokeWidth={2} />
-							</ItemCard.Icon>
-							<ItemCard.Content>
-								<ItemCard.Title>Phạm vi</ItemCard.Title>
-								<ItemCard.Description className="whitespace-normal">
-									{selectedScopeLabel}
-								</ItemCard.Description>
-							</ItemCard.Content>
-							<ItemCard.Action>
-								<Chip size="sm" variant="soft">
-									{selectedCampaignId ? "Chiến dịch" : "Toàn bộ"}
-								</Chip>
-							</ItemCard.Action>
-						</ItemCard>
-						<ItemCard className="items-start" variant="secondary">
-							<ItemCard.Icon className={topReward ? "text-success" : "text-muted"}>
-								<Trophy aria-hidden="true" size={18} strokeWidth={2} />
-							</ItemCard.Icon>
-							<ItemCard.Content>
-								<ItemCard.Title>Phần thưởng cao nhất</ItemCard.Title>
-								<ItemCard.Description className="whitespace-normal">
-									{topReward ? topReward.guestNameDisplay : "Chưa có người nhận"}
-								</ItemCard.Description>
-							</ItemCard.Content>
-							<ItemCard.Action>
-								{topReward ? (
-									<NumberValue
-										className="text-sm font-medium tabular-nums text-foreground"
-										currency="VND"
-										maximumFractionDigits={0}
-										style="currency"
-										value={topReward.amount}
-									/>
-								) : (
-									<Chip size="sm" variant="soft">
-										Chưa có
-									</Chip>
-								)}
-							</ItemCard.Action>
-						</ItemCard>
-						<ItemCard className="items-start" variant="secondary">
-							<ItemCard.Icon className={hasRarityBreakdown ? "text-success" : "text-muted"}>
-								<BarChart3 aria-hidden="true" size={18} strokeWidth={2} />
-							</ItemCard.Icon>
-							<ItemCard.Content>
-								<ItemCard.Title>Cơ cấu phần thưởng</ItemCard.Title>
-								<ItemCard.Description className="whitespace-normal">
-									{hasRarityBreakdown
-										? "Cơ cấu độ hiếm đã có dữ liệu."
-										: "Đợi lượt trao thưởng đầu tiên để có cơ cấu."}
-								</ItemCard.Description>
-							</ItemCard.Content>
-							<ItemCard.Action>
-								<Chip
-									color={hasRarityBreakdown ? "success" : "default"}
-									size="sm"
-									variant="soft"
-								>
-									{hasRarityBreakdown ? "Sẵn sàng" : "Đang chờ"}
-								</Chip>
-							</ItemCard.Action>
-						</ItemCard>
-					</ItemCardGroup>
-					<div className="admin-command-summary">
-						<div className="flex items-center gap-4">
-							<ProgressCircle
-								aria-label="Mức độ sẵn sàng của dữ liệu phân tích"
-								color={analyticsReadyCount === 3 ? "success" : "accent"}
-								value={analyticsSignalPercent}
-							>
-								<ProgressCircle.Track>
-									<ProgressCircle.TrackCircle />
-									<ProgressCircle.FillCircle />
-								</ProgressCircle.Track>
-							</ProgressCircle>
-							<div className="min-w-0">
-								<div className="flex items-baseline gap-2">
-									<NumberValue
-										className="text-2xl font-semibold tabular-nums text-foreground"
-										maximumFractionDigits={0}
-										value={analyticsSignalPercent}
-									>
-										<NumberValue.Suffix>
-											<span className="ml-0.5 text-sm font-medium text-muted">%</span>
-										</NumberValue.Suffix>
-									</NumberValue>
-									<Chip
-										color={analyticsReadyCount === 3 ? "success" : "accent"}
-										size="sm"
-										variant="soft"
-									>
-										{analyticsReadyCount}/3
-									</Chip>
+						</Widget>
+					) : null}
+					{search.view === "channels" && campaignShareLinkBreakdown ? (
+						<Widget>
+							<Widget.Header>
+								<div>
+									<Widget.Title>Liên kết chia sẻ</Widget.Title>
+									<Widget.Description>
+										{`${viNumberFormat.format(gameMetrics.channelSharePerformance.publicPlayLinkOpens)} lượt truy cập qua liên kết công khai. Lượt li xì chưa gắn kênh không nằm trong bảng này.`}
+									</Widget.Description>
 								</div>
-								<p className="mt-1 text-xs leading-5 text-muted">
-									Tín hiệu từ lịch sử, phần thưởng cao nhất và cơ cấu độ hiếm.
-								</p>
-							</div>
-						</div>
-						<div className="admin-command-summary__metric-list">
-							<div className="admin-command-summary__metric-row">
-								<span className="text-muted">Lịch sử trao thưởng</span>
-								<NumberValue
-									className="font-medium tabular-nums text-foreground"
-									value={history.length}
-								/>
-							</div>
-							<div className="admin-command-summary__metric-row">
-								<span className="text-muted">Lượt huyền thoại</span>
-								<NumberValue
-									className="font-medium tabular-nums text-foreground"
-									value={legendCount}
-								/>
-							</div>
-							<div className="admin-command-summary__metric-row">
-								<span className="text-muted">Giá trị trung bình</span>
-								<NumberValue
-									className="font-medium tabular-nums text-foreground"
-									currency="VND"
-									maximumFractionDigits={0}
-									style="currency"
-									value={averageReward}
-								/>
-							</div>
-							<div className="admin-command-summary__metric-row">
-								<span className="text-muted">Độ hiếm phổ biến</span>
-								<Chip
-									color={getRarityStatus(dominantRarity.rarity)}
-									size="sm"
-									variant="soft"
-								>
-									{dominantRarity.redemptions > 0 ? dominantRarity.label : "Chưa có"}
-								</Chip>
-							</div>
-						</div>
-						<div className="admin-command-summary__note">
-							<p className="admin-command-summary__note-label">Lượt trao thưởng mới nhất</p>
-							<div className="admin-command-summary__note-header">
-								<p className="admin-command-summary__note-title">
-									{latestRedemption
-										? latestRedemption.guestNameDisplay
-										: "Chưa có lượt trao thưởng"}
-								</p>
-								{latestRedemption ? (
-									<NumberValue
-										className="text-sm font-medium tabular-nums text-foreground"
-										currency="VND"
-										maximumFractionDigits={0}
-										style="currency"
-										value={latestRedemption.amount}
+							</Widget.Header>
+							{campaignShareLinkBreakdown.rows.length === 0 ? (
+								<Widget.Content>
+									<EmptyState size="sm">
+										<EmptyState.Header>
+											<EmptyState.Media variant="icon">
+												<Link2 aria-hidden="true" size={22} strokeWidth={2} />
+											</EmptyState.Media>
+											<EmptyState.Title>Chưa có liên kết chia sẻ</EmptyState.Title>
+											<EmptyState.Description>
+												Tạo liên kết chơi trong chiến dịch để theo dõi hiệu quả từng kênh phân phối.
+											</EmptyState.Description>
+										</EmptyState.Header>
+									</EmptyState>
+								</Widget.Content>
+							) : (
+								<Widget.Content className="admin-grid-section">
+									<DataGrid
+										allowsColumnResize
+										aria-label="Bảng liên kết chia sẻ"
+										columns={shareLinkBreakdownColumns}
+										contentClassName="min-w-[840px]"
+										data={campaignShareLinkBreakdown.rows}
+										defaultSortDescriptor={{ column: "opens", direction: "descending" }}
+										getRowId={(item) => item.shareLinkId}
+										scrollContainerClassName="max-h-[420px] overflow-auto"
+										variant="secondary"
 									/>
-								) : (
-									<Chip size="sm" variant="soft">
-										Trống
-									</Chip>
-								)}
-							</div>
-							<p className="admin-command-summary__note-copy line-clamp-2">
-								{latestRedemption
-									? `${latestRedemption.campaignName ?? selectedScopeLabel} · ${
-											formatDateTimeParts(latestRedemption.createdAt).date
-										} ${formatDateTimeParts(latestRedemption.createdAt).time}`
-									: "Các lượt nhận thưởng mới sẽ xuất hiện tại đây."}
-							</p>
-						</div>
-						<div className="flex flex-wrap gap-2">
-							<Link
-								className={buttonVariants({ variant: "outline" })}
-								to="/campaigns"
-							>
-								<FileText aria-hidden="true" size={16} strokeWidth={2} />
-								Chiến dịch
-							</Link>
-							{operationCampaignGameId ? (
-								<Link
-									className={buttonVariants({ variant: "secondary" })}
-									params={{ campaignGameId: operationCampaignGameId }}
-									to="/operate/$campaignGameId"
-								>
-									<MonitorPlay aria-hidden="true" size={16} strokeWidth={2} />
-									Vận hành trò chơi
-								</Link>
-							) : null}
-						</div>
-					</div>
-				</Widget.Content>
-			</Widget>
-
-				<Widget>
-					<Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
-						<div>
-							<Widget.Title>Dữ liệu trao thưởng</Widget.Title>
-							<Widget.Description>
-								Bảng li xi (legacy) chỉ đọc — hàng đợi trao thưởng mới nằm ở tab Trao thưởng.
-							</Widget.Description>
-						</div>
-						<Chip variant="soft">
-							<Chip.Label>li xi (legacy)</Chip.Label>
-						</Chip>
-					</Widget.Header>
-					<div className="px-4 pt-3">
-						<Tabs
-							selectedKey={recordsView}
-							variant="secondary"
-							onSelectionChange={(key) => setRecordsView(String(key) === "history" ? "history" : "leaderboard")}
-						>
-							<Tabs.ListContainer>
-								<Tabs.List aria-label="Cách xem dữ liệu trao thưởng">
-									<Tabs.Tab className="min-w-max" id="leaderboard">
-										Giá trị thưởng cao nhất
-										<Tabs.Indicator />
-									</Tabs.Tab>
-									<Tabs.Tab className="min-w-max" id="history">
-										Lịch sử gần đây
-										<Tabs.Indicator />
-									</Tabs.Tab>
-								</Tabs.List>
-							</Tabs.ListContainer>
-						</Tabs>
-					</div>
-				{recordsView === "leaderboard" ? (
-					leaderboard.length === 0 ? (
-						<Widget.Content>
-							<EmptyState size="sm">
-								<EmptyState.Header>
-									<EmptyState.Media variant="icon">
-										<Trophy aria-hidden="true" size={22} strokeWidth={2} />
-									</EmptyState.Media>
-									<EmptyState.Title>Chưa có lượt nhận thưởng nào.</EmptyState.Title>
-									<EmptyState.Description>
-										Dữ liệu sẽ xuất hiện sau khi khách nhận thưởng.
-									</EmptyState.Description>
-								</EmptyState.Header>
-							</EmptyState>
-						</Widget.Content>
-					) : (
-						<Widget.Content className="p-0">
-							<DataGrid
-								allowsColumnResize
-								aria-label="Bảng phần thưởng cao nhất"
-								columns={leaderboardColumns}
-								contentClassName="min-w-[620px]"
-								data={leaderboard}
-								defaultSortDescriptor={{ column: "amount", direction: "descending" }}
-								getRowId={(item) => item.id}
-								scrollContainerClassName="max-h-[560px] overflow-auto"
-								variant="secondary"
-							/>
-							<TableScrollHint inset />
-						</Widget.Content>
-					)
-				) : history.length === 0 ? (
-					<Widget.Content>
-						<EmptyState size="sm">
-							<EmptyState.Header>
-								<EmptyState.Media variant="icon">
-									<History aria-hidden="true" size={22} strokeWidth={2} />
-								</EmptyState.Media>
-								<EmptyState.Title>Chưa có lịch sử trao thưởng</EmptyState.Title>
-								<EmptyState.Description>
-									Lịch sử trao thưởng sẽ được ghi theo từng chiến dịch.
-								</EmptyState.Description>
-							</EmptyState.Header>
-						</EmptyState>
-					</Widget.Content>
-				) : (
-					<Widget.Content className="p-0">
-						<DataGrid
-							allowsColumnResize
-							aria-label="Lịch sử trao thưởng gần đây"
-							columns={historyColumns}
-							contentClassName="min-w-[660px]"
-							data={history}
-							defaultSortDescriptor={{ column: "time", direction: "descending" }}
-							getRowId={(item) => item.id}
-							scrollContainerClassName="max-h-[560px] overflow-auto"
-							variant="secondary"
-						/>
-						<TableScrollHint inset />
-					</Widget.Content>
-					)}
-				</Widget>
+									<TableScrollHint inset />
+								</Widget.Content>
+							)}
+						</Widget>
+					) : null}
+					{search.view === "rewards" ? (
+						<>
+							<Widget>
+								<Widget.Content>
+									<dl className="admin-stats">
+										<StatItem label="Kết quả phần thưởng" value={viNumberFormat.format(gameMetrics.rewardOutcomes)} />
+										<StatItem label="Lượt nhận thưởng" value={viNumberFormat.format(gameMetrics.claims)} />
+										<StatItem
+											label="Tỉ lệ nhận thưởng"
+											note="Nhận thưởng / kết quả phần thưởng"
+											value={formatPercent(
+												gameMetrics.rewardOutcomes > 0
+													? gameMetrics.claims / gameMetrics.rewardOutcomes
+													: null,
+											)}
+										/>
+									</dl>
+								</Widget.Content>
+							</Widget>
+							<Widget>
+								<Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
+									<div>
+										<Widget.Title>Trao thưởng {gameTemplates["li-xi"].name}</Widget.Title>
+									<Widget.Description>
+										Chỉ gồm lượt trao từ trò chơi dùng ngân sách tiền mặt.
+									</Widget.Description>
+								</div>
+								<div className="flex flex-wrap items-center gap-2">
+									<Link
+										className={buttonVariants({ size: "sm", variant: "secondary" })}
+										to="/campaigns"
+									>
+										Chiến dịch
+									</Link>
+									{operationCampaignGameId ? (
+										<Link
+											className={buttonVariants({ size: "sm", variant: "secondary" })}
+											params={{ campaignGameId: operationCampaignGameId }}
+											to="/operate/$campaignGameId"
+										>
+											Vận hành trò chơi
+										</Link>
+									) : null}
+								</div>
+							</Widget.Header>
+							<Widget.Content className="admin-stack">
+								<dl className="admin-stats">
+									<StatItem label="Lượt trao thưởng" value={viNumberFormat.format(history.length)} />
+									<StatItem
+										label="Giá trị đã trao"
+										value={
+											<NumberValue
+												currency="VND"
+												maximumFractionDigits={0}
+												style="currency"
+												value={totalRedeemed}
+											/>
+										}
+									/>
+									<StatItem
+										label="Giá trị trung bình"
+										value={
+											<NumberValue
+												currency="VND"
+												maximumFractionDigits={0}
+												style="currency"
+												value={averageReward}
+											/>
+										}
+									/>
+									<StatItem label="Phần thưởng huyền thoại" value={viNumberFormat.format(legendCount)} />
+								</dl>
+								<div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+									<div className="min-w-0">
+										<Tabs
+											selectedKey={recordsView}
+											variant="secondary"
+											onSelectionChange={(key) => setRecordsView(String(key) === "history" ? "history" : "leaderboard")}
+										>
+											<Tabs.ListContainer>
+												<Tabs.List aria-label="Cách xem dữ liệu trao thưởng">
+													<Tabs.Tab className="min-w-max" id="leaderboard">
+														Giá trị thưởng cao nhất
+														<Tabs.Indicator />
+													</Tabs.Tab>
+													<Tabs.Tab className="min-w-max" id="history">
+														Lịch sử gần đây
+														<Tabs.Indicator />
+													</Tabs.Tab>
+												</Tabs.List>
+											</Tabs.ListContainer>
+										</Tabs>
+										{recordsView === "leaderboard" ? (
+											leaderboard.length === 0 ? (
+												<EmptyState size="sm">
+													<EmptyState.Header>
+														<EmptyState.Media variant="icon">
+															<Trophy aria-hidden="true" size={22} strokeWidth={2} />
+														</EmptyState.Media>
+														<EmptyState.Title>Chưa có lượt nhận thưởng nào.</EmptyState.Title>
+														<EmptyState.Description>
+															Dữ liệu sẽ xuất hiện sau khi khách nhận thưởng.
+														</EmptyState.Description>
+													</EmptyState.Header>
+												</EmptyState>
+											) : (
+												<div>
+													<DataGrid
+														allowsColumnResize
+														aria-label="Bảng phần thưởng cao nhất"
+														columns={leaderboardColumns}
+														contentClassName="min-w-[620px]"
+														data={leaderboard}
+														defaultSortDescriptor={{ column: "amount", direction: "descending" }}
+														getRowId={(item) => item.id}
+														scrollContainerClassName="max-h-[560px] overflow-auto"
+														variant="secondary"
+													/>
+													<TableScrollHint inset />
+												</div>
+											)
+										) : history.length === 0 ? (
+											<EmptyState size="sm">
+												<EmptyState.Header>
+													<EmptyState.Media variant="icon">
+														<History aria-hidden="true" size={22} strokeWidth={2} />
+													</EmptyState.Media>
+													<EmptyState.Title>Chưa có lịch sử trao thưởng</EmptyState.Title>
+													<EmptyState.Description>
+														Lịch sử trao thưởng sẽ được ghi theo từng chiến dịch.
+													</EmptyState.Description>
+												</EmptyState.Header>
+											</EmptyState>
+										) : (
+											<div>
+												<DataGrid
+													allowsColumnResize
+													aria-label="Lịch sử trao thưởng gần đây"
+													columns={historyColumns}
+													contentClassName="min-w-[660px]"
+													data={history}
+													defaultSortDescriptor={{ column: "time", direction: "descending" }}
+													getRowId={(item) => item.id}
+													scrollContainerClassName="max-h-[560px] overflow-auto"
+													variant="secondary"
+												/>
+												<TableScrollHint inset />
+											</div>
+										)}
+									</div>
+									<div className="flex min-w-0 flex-col gap-3">
+										<h2 className="text-base font-semibold leading-6">Cơ cấu phần thưởng</h2>
+										{hasRarityBreakdown ? (
+											<ShareBars
+												label="Cơ cấu phần thưởng theo độ hiếm"
+												rateLabel="Tỉ trọng"
+												rows={rarityShareRows}
+												valueLabel="Lượt trao"
+											/>
+										) : (
+											<EmptyState size="sm">
+												<EmptyState.Header>
+													<EmptyState.Media variant="icon">
+														<BarChart3 aria-hidden="true" size={22} strokeWidth={2} />
+													</EmptyState.Media>
+													<EmptyState.Title>Chưa có dữ liệu cơ cấu phần thưởng</EmptyState.Title>
+													<EmptyState.Description>
+														Cơ cấu sẽ xuất hiện sau lượt trao thưởng đầu tiên.
+													</EmptyState.Description>
+												</EmptyState.Header>
+											</EmptyState>
+										)}
+									</div>
+								</div>
+							</Widget.Content>
+						</Widget>
+						</>
+					) : null}
 				</>
-				)}
-			</AdminPageShell>
+			)}
+		</AdminPageShell>
 	);
 }

@@ -17,6 +17,7 @@ import {
 import { AdminWorkspaceContext } from "@/app/components/AdminPageShell";
 import { useHostLogout } from "@/lib/useHostLogout";
 import { useOwnerSession } from "@/lib/useOwnerSession";
+import { WorkspacePlanCard } from "./WorkspacePlanCard";
 import { WorkspacePending } from "./WorkspaceRouteStates";
 
 const navigation = [
@@ -95,6 +96,7 @@ export function WorkspaceLayout() {
 	const owner = useOwnerSession();
 	const logout = useHostLogout();
 	const [asideHost, setAsideHost] = useState<HTMLDivElement | null>(null);
+	const [breadcrumbHost, setBreadcrumbHost] = useState<HTMLDivElement | null>(null);
 	const [hasAside, setHasAside] = useState(false);
 	const [asideOpen, setAsideOpen] = useState(false);
 	const desktopAsideHostRef = useRef<HTMLDivElement | null>(null);
@@ -107,7 +109,10 @@ export function WorkspaceLayout() {
 		mobileAsideHostRef.current = node;
 		setAsideHost(node ?? desktopAsideHostRef.current);
 	}, []);
-	const workspaceContext = useMemo(() => ({ asideHost, setHasAside }), [asideHost]);
+	const workspaceContext = useMemo(
+		() => ({ asideHost, breadcrumbHost, setHasAside }),
+		[asideHost, breadcrumbHost],
+	);
 	const current = navigation.find((item) =>
 		item.href === "/settings/billing"
 			? location.pathname.startsWith("/settings")
@@ -133,11 +138,8 @@ export function WorkspaceLayout() {
 						<Sparkles aria-hidden="true" size={18} />
 					</span>
 					<span className="admin-sidebar-brand__copy">
-						<span className="block truncate text-base font-semibold text-foreground">
+						<span className="block truncate text-sm font-semibold text-foreground">
 							Campaign Game Studio
-						</span>
-						<span className="block truncate text-xs text-muted">
-							Nền tảng trò chơi marketing
 						</span>
 					</span>
 				</div>
@@ -164,6 +166,7 @@ export function WorkspaceLayout() {
 				</Sidebar.Group>
 			</Sidebar.Content>
 			<Sidebar.Footer>
+				<WorkspacePlanCard />
 				<div className="flex items-center gap-3 px-3 py-2">
 					<Avatar size="sm" variant="soft">
 						<Avatar.Fallback>{owner?.username?.[0]?.toUpperCase() ?? "H"}</Avatar.Fallback>
@@ -196,11 +199,7 @@ export function WorkspaceLayout() {
 					<Navbar.Header>
 						<AppLayout.MenuToggle aria-label="Mở điều hướng" />
 						<Sidebar.Trigger aria-label="Thu gọn điều hướng" />
-						<Navbar.Content>
-							<Navbar.Item className="text-sm font-medium">
-								{current?.label ?? "Không gian làm việc"}
-							</Navbar.Item>
-						</Navbar.Content>
+						<div className="min-w-0 flex-1" ref={setBreadcrumbHost} />
 						{hasAside ? (
 							<>
 								<AppLayout.AsideTrigger

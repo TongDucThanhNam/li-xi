@@ -1,22 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
 	Alert,
 	Button,
 	Checkbox,
 	Chip,
-	Description,
 	Input,
 	Label,
 	NumberField,
 	Switch,
 } from "@heroui/react";
-import { EmptyState, ItemCard, ItemCardGroup, NativeSelect, Widget } from "@heroui-pro/react";
+import { EmptyState, NativeSelect, Widget } from "@heroui-pro/react";
 import { useMutation, useQuery } from "convex/react";
-import { Gift, Plus, Save, Trash2 } from "lucide-react";
+import { Banknote, Coins, Gift, Plus, Save, Ticket, Trash2 } from "lucide-react";
+import { StockMeter, rewardTypeLabels } from "@/app/_workspace/-components/StockMeter";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { formatPercent } from "@/lib/campaignMetrics";
+import { DEFAULT_REWARD_POOL_TAG } from "@/lib/gameTemplates";
 import {
 	buildInventoryPayload,
 	captureSubmittedIntentions,
@@ -32,11 +34,11 @@ import {
 	type InventoryRewardType,
 } from "@/lib/rewardInventoryForm";
 
-const rewardTypeLabels: Record<InventoryRewardType, string> = {
-	cash: "Tiền mặt",
-	voucher: "Voucher / mã quà",
-	physical: "Quà tặng",
-	points: "Điểm",
+const rewardTypeIcons: Record<InventoryRewardType, typeof Gift> = {
+	cash: Banknote,
+	voucher: Ticket,
+	physical: Gift,
+	points: Coins,
 };
 
 const inventoryAmountTypes = new Set<InventoryRewardType>(["cash", "points"]);
@@ -52,6 +54,13 @@ function numericEditValue(value: number): string {
 	return Number.isFinite(value) ? String(value) : "";
 }
 
+/** A custom pool tag on any row pins the pool switch on (§8.3). */
+function rowsHaveCustomPoolTags(rows: InventoryFormRow[]): boolean {
+	return rows.some(
+		(row) => row.poolTag.trim() !== "" && row.poolTag.trim() !== DEFAULT_REWARD_POOL_TAG,
+	);
+}
+
 /**
  * Generic reward inventory for the self-serve play flow (lucky wheel and
  * future templates). The legacy cash budget editor stays untouched for the
@@ -59,7 +68,14 @@ function numericEditValue(value: number): string {
  * inventory ids so an unchanged save preserves stored voucher codes and pool
  * tags, and all draft state is isolated per campaign.
  */
-export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns"> }) {
+export function RewardInventoryPanel({
+	campaignId,
+	usedBy,
+}: {
+	campaignId: Id<"campaigns">;
+	/** "Dùng cho" line rendered under the section header (rewards page). */
+	usedBy?: ReactNode;
+}) {
 	const inventory = useQuery(api.rewardInventory.getRewardInventory, { campaignId });
 	const configureRewardInventory = useMutation(api.rewardInventory.configureRewardInventory);
 	const [rows, setRows] = useState<InventoryFormRow[]>([]);
@@ -67,6 +83,9 @@ export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns
 	const [saving, setSaving] = useState(false);
 	const [savedStatus, setSavedStatus] = useState<string | null>(null);
 	const [error, setError] = useState("");
+	// Pool tags are an advanced feature: hidden until switched on, forced on
+	// while any row carries a custom tag.
+	const [poolsEnabled, setPoolsEnabled] = useState(false);
 	// Latest committed rows for async save continuations.
 	const rowsRef = useRef<InventoryFormRow[]>([]);
 	rowsRef.current = rows;
@@ -74,6 +93,10 @@ export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns
 	// save; any later user edit (field, add or remove) makes the draft count
 	// as unsaved and clears the stale saved status.
 	const savedSnapshotRef = useRef<string | null>(null);
+	// Whole-draft snapshot of the STORED items at hydration (§11.4.3): before
+	// the first completed save it plays the saved-baseline role, so a freshly
+	// hydrated stored inventory counts as clean and its save stays quiet.
+	const hydratedSnapshotRef = useRef<string | null>(null);
 	// Async form state is scoped to the mounted campaign instance: a campaign
 	// switch bumps the epoch and a new save bumps the sequence, so success,
 	// error AND finally work from an older request can never populate, mark
@@ -90,14 +113,16 @@ export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns
 		setError("");
 		setSavedStatus(null);
 		setSaving(false);
+		setPoolsEnabled(false);
 		savedSnapshotRef.current = null;
+		hydratedSnapshotRef.current = null;
 	}, [campaignId]);
 
 	useEffect(() => {
 		if (!inventory || hydratedCampaignId === campaignId) {
 			return;
 		}
-		setRows(
+		const nextRows =
 			inventory.items.length > 0
 				? inventory.items.map((item) => inventoryRowFromItem(item))
 				: [
@@ -114,18 +139,43 @@ export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns
 							quantity: "50",
 							weight: "60",
 						}),
-					],
-		);
+					];
+		hydratedSnapshotRef.current =
+			inventory.items.length > 0 ? serializeInventoryDraft(nextRows) : null;
+		setRows(nextRows);
 		setHydratedCampaignId(campaignId);
 	}, [campaignId, hydratedCampaignId, inventory]);
 
 	const inventoryReady = Boolean(inventory) && hydratedCampaignId === campaignId;
+
+	// Dirty against the strongest available baseline: the last completed save,
+	// or the stored items at hydration before the first save of this visit.
+	const unsaved = hasUnsavedInventoryEdits(
+		rows,
+		savedSnapshotRef.current ?? hydratedSnapshotRef.current,
+	);
+	// The suggested starter rows of an empty inventory still need their first
+	// save, so that state stays loud even though nothing is "unsaved" yet.
+	const saveLoud =
+		unsaved || (savedSnapshotRef.current === null && hydratedSnapshotRef.current === null);
 
 	const totalUnits = useMemo(
 		() =>
 			rows.reduce((sum, row) => {
 				const quantity = Number(row.quantity);
 				return Number.isInteger(quantity) && quantity > 0 ? sum + quantity : sum;
+			}, 0),
+		[rows],
+	);
+
+	// Weight share denominators: the valid weights of the active rows (§11.4.3).
+	const activeWeightSum = useMemo(
+		() =>
+			rows.reduce((sum, row) => {
+				const weight = Number(row.weight);
+				return row.isActive && Number.isInteger(weight) && weight > 0
+					? sum + weight
+					: sum;
 			}, 0),
 		[rows],
 	);
@@ -241,8 +291,11 @@ export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns
 		}
 	}, [campaignId, configureRewardInventory, inventoryReady, rows, saving, totalUnits]);
 
+	const poolFieldsForced = rowsHaveCustomPoolTags(rows);
+	const showPoolFields = poolsEnabled || poolFieldsForced;
+
 	return (
-		<Widget className="mt-6">
+		<Widget>
 			<Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
 				<div className="grid min-w-0 gap-1">
 					<Widget.Title>Kho phần thưởng dùng chung</Widget.Title>
@@ -255,8 +308,20 @@ export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns
 					{inventory && inventory.items.length > 0 ? `${inventory.items.length} phần thưởng` : "Chưa có"}
 				</Chip>
 			</Widget.Header>
-			<Widget.Content className="gap-4">
-				{hasUnsavedInventoryEdits(rows, savedSnapshotRef.current) ? (
+			<Widget.Content className="admin-stack">
+				{usedBy}
+				<div className="flex flex-col gap-1">
+					<p className="admin-field__hint">
+						Trọng số càng cao, phần thưởng càng dễ trúng so với các phần thưởng khác và với
+						trọng số lượt không trúng của trò chơi.
+					</p>
+					{showPoolFields ? (
+						<p className="admin-field__hint">
+							Trò chơi chọn nhóm kho theo tên; để trống dùng nhóm mặc định.
+						</p>
+					) : null}
+				</div>
+				{unsaved ? (
 					<p className="text-sm text-warning" role="status">
 						Có thay đổi chưa lưu.
 					</p>
@@ -273,22 +338,59 @@ export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns
 						</EmptyState.Header>
 					</EmptyState>
 				) : (
-					<ItemCardGroup aria-label="Danh sách phần thưởng dùng chung" variant="secondary">
-						{rows.map((row, index) => (
-							<ItemCard className="items-start" key={row.key} variant="secondary">
-								<ItemCard.Icon><Gift aria-hidden="true" size={18} /></ItemCard.Icon>
-								<ItemCard.Content className="gap-3">
-									<div className="admin-field">
-										<Label htmlFor={`reward-name-${index}`}>Tên hiển thị</Label>
-										<Input
-											fullWidth
-											id={`reward-name-${index}`}
-											value={row.name}
-											variant="secondary"
-											onChange={(event) => updateRow(row.key, { name: event.currentTarget.value })}
-										/>
+					<ul aria-label="Danh sách phần thưởng dùng chung" className="flex flex-col gap-4">
+						{rows.map((row, index) => {
+							const hasAmount = inventoryAmountTypes.has(row.rewardType);
+							const Icon = rewardTypeIcons[row.rewardType];
+							const headTitle = row.name.trim() || "Phần thưởng chưa đặt tên";
+							const rowWeight = Number(row.weight);
+							const headMeta =
+								row.isActive &&
+								Number.isInteger(rowWeight) &&
+								rowWeight > 0 &&
+								activeWeightSum > 0
+									? `${rewardTypeLabels[row.rewardType]} · Tỉ trọng ${formatPercent(rowWeight / activeWeightSum)}`
+									: `${rewardTypeLabels[row.rewardType]} · Đang tắt`;
+							const storedItem = inventory?.items.find(
+								(candidate) => candidate.id === row.existingItemId,
+							);
+							return (
+								<li className="admin-item-card" key={row.key}>
+									<div className="admin-item-card__head">
+										<span className="admin-icon-tile">
+											<Icon aria-hidden="true" size={20} />
+										</span>
+										<span className="admin-row__text">
+											<span className="admin-row__title">{headTitle}</span>
+											<span className="admin-row__meta">{headMeta}</span>
+										</span>
+										{storedItem ? (
+											<StockMeter
+												ariaLabel={`Tồn kho ${headTitle}`}
+												remaining={storedItem.quantityRemaining}
+												total={storedItem.quantityTotal}
+											/>
+										) : (
+											<Chip size="sm" variant="soft">Chưa lưu</Chip>
+										)}
 									</div>
-									<div className="grid gap-3 md:grid-cols-2">
+									<div
+										className={`grid gap-4 ${
+											hasAmount
+												? "sm:grid-cols-[minmax(0,1fr)_11rem_10rem]"
+												: "sm:grid-cols-[minmax(0,1fr)_11rem]"
+										}`}
+									>
+										<div className="admin-field">
+											<Label htmlFor={`reward-name-${index}`}>Tên hiển thị</Label>
+											<Input
+												fullWidth
+												id={`reward-name-${index}`}
+												value={row.name}
+												variant="secondary"
+												onChange={(event) => updateRow(row.key, { name: event.currentTarget.value })}
+											/>
+										</div>
 										<div className="admin-field">
 											<Label htmlFor={`reward-type-${index}`}>Loại</Label>
 											<NativeSelect fullWidth variant="secondary">
@@ -315,7 +417,7 @@ export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns
 												</NativeSelect.Trigger>
 											</NativeSelect>
 										</div>
-										{inventoryAmountTypes.has(row.rewardType) ? (
+										{hasAmount ? (
 											<div className="admin-field">
 												<NumberField
 													aria-label={`Giá trị phần thưởng ${index + 1}`}
@@ -335,8 +437,8 @@ export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns
 											</div>
 										) : null}
 									</div>
-									<div className="grid gap-3 md:grid-cols-2">
-										<div className="admin-field">
+									<div className="flex flex-wrap items-end gap-4">
+										<div className="admin-field w-36">
 											<NumberField
 												aria-label={`Số lượng phần thưởng ${index + 1}`}
 												fullWidth
@@ -353,7 +455,7 @@ export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns
 												</NumberField.Group>
 											</NumberField>
 										</div>
-										<div className="admin-field">
+										<div className="admin-field w-36">
 											<NumberField
 												aria-label={`Trọng số phần thưởng ${index + 1}`}
 												fullWidth
@@ -371,9 +473,44 @@ export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns
 												</NumberField.Group>
 											</NumberField>
 										</div>
+										{showPoolFields ? (
+											<div className="admin-field w-44">
+												<Label htmlFor={`reward-pool-${index}`}>Nhóm kho phần thưởng</Label>
+												<Input
+													fullWidth
+													id={`reward-pool-${index}`}
+													placeholder="Mặc định"
+													value={row.poolTag}
+													variant="secondary"
+													onChange={(event) => updateRow(row.key, { poolTag: event.currentTarget.value })}
+												/>
+											</div>
+										) : null}
+										<div className="ml-auto flex items-center gap-3">
+											<Switch
+												aria-label={`Kích hoạt phần thưởng ${index + 1}`}
+												isSelected={row.isActive}
+												onChange={(selected) => updateRow(row.key, { isActive: selected })}
+											>
+												<Switch.Content className="text-sm text-foreground">
+													<Switch.Control>
+														<Switch.Thumb />
+													</Switch.Control>
+													Kích hoạt
+												</Switch.Content>
+											</Switch>
+											<Button
+												aria-label={`Xóa phần thưởng ${index + 1}`}
+												isIconOnly
+												variant="danger-soft"
+												onPress={() => removeRow(row.key)}
+											>
+												<Trash2 aria-hidden="true" size={16} />
+											</Button>
+										</div>
 									</div>
 									{row.rewardType === "voucher" ? (
-										<div className="admin-field">
+										<div className="admin-field max-w-md">
 											<Label htmlFor={`reward-secret-${index}`}>
 												Mã voucher (bí mật){row.hasSecretCode ? " — đã có mã" : ""}
 											</Label>
@@ -389,16 +526,17 @@ export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns
 												variant="secondary"
 												onChange={(event) => updateRow(row.key, { secretCode: event.currentTarget.value })}
 											/>
-											<Description>
+											<p className="admin-field__hint">
 												{row.hasSecretCode
 													? "Đã cấu hình mã cho voucher này. Để trống là giữ nguyên; nhập mã mới để thay thế."
 													: "Chỉ người chơi nhận voucher sau khi bấm nhận thưởng mới thấy mã này."}
-											</Description>
+											</p>
 											{row.hasSecretCode && row.existingItemId ? (
 												<Checkbox
 													aria-label={`Xóa mã hiện tại của phần thưởng ${index + 1}`}
 													className="mt-1"
 													isSelected={row.removeSecret}
+													variant="secondary"
 													onChange={(checked) => updateRow(row.key, { removeSecret: checked })}
 												>
 													<Checkbox.Content className="text-xs text-muted">
@@ -411,60 +549,40 @@ export function RewardInventoryPanel({ campaignId }: { campaignId: Id<"campaigns
 											) : null}
 										</div>
 									) : null}
-									<div className="admin-field">
-										<Label htmlFor={`reward-pool-${index}`}>Nhóm kho phần thưởng</Label>
-										<Input
-											fullWidth
-											id={`reward-pool-${index}`}
-											placeholder="Mặc định"
-											value={row.poolTag}
-											variant="secondary"
-											onChange={(event) => updateRow(row.key, { poolTag: event.currentTarget.value })}
-										/>
-										<Description>
-											Trò chơi chọn nhóm kho theo tên; để trống dùng nhóm mặc định.
-										</Description>
-									</div>
-									<Switch
-										aria-label={`Kích hoạt phần thưởng ${index + 1}`}
-										isSelected={row.isActive}
-										onChange={(selected) => updateRow(row.key, { isActive: selected })}
-									>
-										<Switch.Content className="text-sm text-foreground">
-											<Switch.Control>
-												<Switch.Thumb />
-											</Switch.Control>
-											Kích hoạt
-										</Switch.Content>
-									</Switch>
-								</ItemCard.Content>
-								<ItemCard.Action>
-									<Button
-										aria-label={`Xóa phần thưởng ${index + 1}`}
-										isIconOnly
-										variant="danger-soft"
-										onPress={() => removeRow(row.key)}
-									>
-										<Trash2 aria-hidden="true" size={16} />
-									</Button>
-								</ItemCard.Action>
-							</ItemCard>
-						))}
-					</ItemCardGroup>
+								</li>
+							);
+						})}
+					</ul>
 				)}
 				<div className="flex flex-wrap items-center justify-between gap-3">
-					<Button
-						type="button"
-						variant="outline"
-						onPress={() => addRow(createInventoryRow())}
-					>
-						<Plus aria-hidden="true" size={16} />
-						Thêm phần thưởng
-					</Button>
+					<div className="flex flex-wrap items-center gap-3">
+						<Button
+							type="button"
+							variant="outline"
+							onPress={() => addRow(createInventoryRow())}
+						>
+							<Plus aria-hidden="true" size={16} />
+							Thêm phần thưởng
+						</Button>
+						<Switch
+							isDisabled={poolFieldsForced}
+							isSelected={showPoolFields}
+							size="sm"
+							onChange={setPoolsEnabled}
+						>
+							<Switch.Content className="text-sm text-foreground">
+								<Switch.Control>
+									<Switch.Thumb />
+								</Switch.Control>
+								Chia theo nhóm kho
+							</Switch.Content>
+						</Switch>
+					</div>
 					<Button
 						isDisabled={!inventoryReady}
 						isPending={saving}
 						type="button"
+						variant={saveLoud ? "primary" : "secondary"}
 						onPress={() => void handleSave()}
 					>
 						<Save aria-hidden="true" size={16} />

@@ -31,6 +31,7 @@ import { Route as WorkspaceOperateCampaignGameIdRouteImport } from './app/_works
 import { Route as WorkspaceCampaignsNewRouteImport } from './app/_workspace/campaigns/new'
 import { Route as WorkspaceCampaignsCampaignIdRouteRouteImport } from './app/_workspace/campaigns/$campaignId/route'
 import { Route as WorkspaceCampaignsCampaignIdIndexRouteImport } from './app/_workspace/campaigns/$campaignId/index'
+import { Route as WorkspaceCampaignsCampaignIdSettingsRouteImport } from './app/_workspace/campaigns/$campaignId/settings'
 import { Route as WorkspaceCampaignsCampaignIdRewardsRouteImport } from './app/_workspace/campaigns/$campaignId/rewards'
 import { Route as WorkspaceCampaignsCampaignIdGamesRouteImport } from './app/_workspace/campaigns/$campaignId/games'
 import { Route as WorkspaceCampaignsCampaignIdDistributionRouteImport } from './app/_workspace/campaigns/$campaignId/distribution'
@@ -152,6 +153,12 @@ const WorkspaceCampaignsCampaignIdIndexRoute =
     path: '/',
     getParentRoute: () => WorkspaceCampaignsCampaignIdRouteRoute,
   } as any)
+const WorkspaceCampaignsCampaignIdSettingsRoute =
+  WorkspaceCampaignsCampaignIdSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => WorkspaceCampaignsCampaignIdRouteRoute,
+  } as any)
 const WorkspaceCampaignsCampaignIdRewardsRoute =
   WorkspaceCampaignsCampaignIdRewardsRouteImport.update({
     id: '/rewards',
@@ -207,6 +214,7 @@ export interface FileRoutesByFullPath {
   '/campaigns/$campaignId/distribution': typeof WorkspaceCampaignsCampaignIdDistributionRoute
   '/campaigns/$campaignId/games': typeof WorkspaceCampaignsCampaignIdGamesRouteWithChildren
   '/campaigns/$campaignId/rewards': typeof WorkspaceCampaignsCampaignIdRewardsRoute
+  '/campaigns/$campaignId/settings': typeof WorkspaceCampaignsCampaignIdSettingsRoute
   '/campaigns/$campaignId/': typeof WorkspaceCampaignsCampaignIdIndexRoute
   '/campaigns/$campaignId/games/$campaignGameId': typeof WorkspaceCampaignsCampaignIdGamesCampaignGameIdRoute
   '/campaigns/$campaignId/games/': typeof WorkspaceCampaignsCampaignIdGamesIndexRoute
@@ -232,6 +240,7 @@ export interface FileRoutesByTo {
   '/campaigns': typeof WorkspaceCampaignsIndexRoute
   '/campaigns/$campaignId/distribution': typeof WorkspaceCampaignsCampaignIdDistributionRoute
   '/campaigns/$campaignId/rewards': typeof WorkspaceCampaignsCampaignIdRewardsRoute
+  '/campaigns/$campaignId/settings': typeof WorkspaceCampaignsCampaignIdSettingsRoute
   '/campaigns/$campaignId': typeof WorkspaceCampaignsCampaignIdIndexRoute
   '/campaigns/$campaignId/games/$campaignGameId': typeof WorkspaceCampaignsCampaignIdGamesCampaignGameIdRoute
   '/campaigns/$campaignId/games': typeof WorkspaceCampaignsCampaignIdGamesIndexRoute
@@ -262,6 +271,7 @@ export interface FileRoutesById {
   '/_workspace/campaigns/$campaignId/distribution': typeof WorkspaceCampaignsCampaignIdDistributionRoute
   '/_workspace/campaigns/$campaignId/games': typeof WorkspaceCampaignsCampaignIdGamesRouteWithChildren
   '/_workspace/campaigns/$campaignId/rewards': typeof WorkspaceCampaignsCampaignIdRewardsRoute
+  '/_workspace/campaigns/$campaignId/settings': typeof WorkspaceCampaignsCampaignIdSettingsRoute
   '/_workspace/campaigns/$campaignId/': typeof WorkspaceCampaignsCampaignIdIndexRoute
   '/_workspace/campaigns/$campaignId/games/$campaignGameId': typeof WorkspaceCampaignsCampaignIdGamesCampaignGameIdRoute
   '/_workspace/campaigns/$campaignId/games/': typeof WorkspaceCampaignsCampaignIdGamesIndexRoute
@@ -292,6 +302,7 @@ export interface FileRouteTypes {
     | '/campaigns/$campaignId/distribution'
     | '/campaigns/$campaignId/games'
     | '/campaigns/$campaignId/rewards'
+    | '/campaigns/$campaignId/settings'
     | '/campaigns/$campaignId/'
     | '/campaigns/$campaignId/games/$campaignGameId'
     | '/campaigns/$campaignId/games/'
@@ -317,6 +328,7 @@ export interface FileRouteTypes {
     | '/campaigns'
     | '/campaigns/$campaignId/distribution'
     | '/campaigns/$campaignId/rewards'
+    | '/campaigns/$campaignId/settings'
     | '/campaigns/$campaignId'
     | '/campaigns/$campaignId/games/$campaignGameId'
     | '/campaigns/$campaignId/games'
@@ -346,6 +358,7 @@ export interface FileRouteTypes {
     | '/_workspace/campaigns/$campaignId/distribution'
     | '/_workspace/campaigns/$campaignId/games'
     | '/_workspace/campaigns/$campaignId/rewards'
+    | '/_workspace/campaigns/$campaignId/settings'
     | '/_workspace/campaigns/$campaignId/'
     | '/_workspace/campaigns/$campaignId/games/$campaignGameId'
     | '/_workspace/campaigns/$campaignId/games/'
@@ -520,6 +533,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkspaceCampaignsCampaignIdIndexRouteImport
       parentRoute: typeof WorkspaceCampaignsCampaignIdRouteRoute
     }
+    '/_workspace/campaigns/$campaignId/settings': {
+      id: '/_workspace/campaigns/$campaignId/settings'
+      path: '/settings'
+      fullPath: '/campaigns/$campaignId/settings'
+      preLoaderRoute: typeof WorkspaceCampaignsCampaignIdSettingsRouteImport
+      parentRoute: typeof WorkspaceCampaignsCampaignIdRouteRoute
+    }
     '/_workspace/campaigns/$campaignId/rewards': {
       id: '/_workspace/campaigns/$campaignId/rewards'
       path: '/rewards'
@@ -580,6 +600,7 @@ interface WorkspaceCampaignsCampaignIdRouteRouteChildren {
   WorkspaceCampaignsCampaignIdDistributionRoute: typeof WorkspaceCampaignsCampaignIdDistributionRoute
   WorkspaceCampaignsCampaignIdGamesRoute: typeof WorkspaceCampaignsCampaignIdGamesRouteWithChildren
   WorkspaceCampaignsCampaignIdRewardsRoute: typeof WorkspaceCampaignsCampaignIdRewardsRoute
+  WorkspaceCampaignsCampaignIdSettingsRoute: typeof WorkspaceCampaignsCampaignIdSettingsRoute
   WorkspaceCampaignsCampaignIdIndexRoute: typeof WorkspaceCampaignsCampaignIdIndexRoute
 }
 
@@ -591,6 +612,8 @@ const WorkspaceCampaignsCampaignIdRouteRouteChildren: WorkspaceCampaignsCampaign
       WorkspaceCampaignsCampaignIdGamesRouteWithChildren,
     WorkspaceCampaignsCampaignIdRewardsRoute:
       WorkspaceCampaignsCampaignIdRewardsRoute,
+    WorkspaceCampaignsCampaignIdSettingsRoute:
+      WorkspaceCampaignsCampaignIdSettingsRoute,
     WorkspaceCampaignsCampaignIdIndexRoute:
       WorkspaceCampaignsCampaignIdIndexRoute,
   }

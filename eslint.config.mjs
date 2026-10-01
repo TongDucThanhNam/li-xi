@@ -9,6 +9,8 @@ export default defineConfig([
     "node_modules/**",
     // Locally ignored reviewer dispatch workspace (not product code/tests).
     ".zcode-dispatch/**",
+    // Local UX-audit probes and scratch evidence (not product code/tests).
+    ".tmp/**",
     // Playwright transient reports and traces (screenshots baselines under
     // tests/ui/*.snapshots/ stay linted as tracked references).
     "tests/ui/artifacts/**",

@@ -4,6 +4,7 @@ import {
   Outlet,
   Scripts,
 } from "@tanstack/react-router";
+import { StandaloneNotFound } from "./-auth/StandaloneNotFound";
 import { ConvexClientProvider } from "./ConvexClientProvider";
 
 export const Route = createRootRoute({
@@ -21,6 +22,7 @@ export const Route = createRootRoute({
     links: [],
   }),
   component: RootDocument,
+  notFoundComponent: StandaloneNotFound,
 });
 
 function RootDocument() {

@@ -67,8 +67,8 @@ export const DEFAULT_REWARD_POOL_TAG = "default";
 export const NO_REWARD_SEGMENT_KEY = "__no-reward__";
 
 export const REWARD_SOURCE_LABELS: Record<GameRewardSource, string> = {
-	"campaign-budget": "Ngân sách lì xì cổ điển (trạm / liên kết legacy)",
-	"campaign-inventory": "Kho phần thưởng tự phục vụ của chiến dịch",
+	"campaign-budget": "Ngân sách tiền mặt",
+	"campaign-inventory": "Kho phần thưởng dùng chung",
 };
 
 /**

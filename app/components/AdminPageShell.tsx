@@ -4,11 +4,12 @@ import { ProgressCircle } from "@heroui/react";
 import { Widget } from "@heroui-pro/react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { ChevronRight } from "lucide-react";
-import { createContext, type ReactNode, useContext, useEffect } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 type AdminWorkspaceValue = {
 	asideHost: HTMLDivElement | null;
+	breadcrumbHost: HTMLDivElement | null;
 	setHasAside: (hasAside: boolean) => void;
 };
 
@@ -58,13 +59,30 @@ function getBreadcrumbs(pathname: string, title: string, contextLabel?: string):
 	return [{ label: title }];
 }
 
-export function AdminPageShell({ actions, aside, breadcrumbContext, children, description, eyebrow = "Campaign Game Studio", title }: {
+function AdminBreadcrumbs({ breadcrumbs, inline }: { breadcrumbs: AdminBreadcrumb[]; inline?: boolean }) {
+	return (
+		<nav aria-label="Đường dẫn trang" className={inline ? "admin-breadcrumbs admin-breadcrumbs--inline" : "admin-breadcrumbs"}>
+			<ol>
+				{breadcrumbs.map((item, index) => (
+					<li key={`${item.label}-${index}`}>
+						{index > 0 ? <ChevronRight aria-hidden="true" size={14} /> : null}
+						{item.href ? <Link to={item.href}>{item.label}</Link> : <span aria-current="page">{item.label}</span>}
+					</li>
+				))}
+			</ol>
+		</nav>
+	);
+}
+
+export function AdminPageShell({ actions, aside, breadcrumbContext, children, description, stickyHeader, status, tabs, title }: {
 	actions?: ReactNode;
 	aside?: ReactNode;
 	breadcrumbContext?: string;
 	children: ReactNode;
 	description?: string;
-	eyebrow?: string;
+	stickyHeader?: boolean;
+	status?: ReactNode;
+	tabs?: ReactNode;
 	title: string;
 }) {
 	const { pathname } = useLocation();
@@ -72,6 +90,10 @@ export function AdminPageShell({ actions, aside, breadcrumbContext, children, de
 	const setHasWorkspaceAside = workspace?.setHasAside;
 	const breadcrumbs = getBreadcrumbs(pathname, title, breadcrumbContext);
 	const hasPageAside = Boolean(aside);
+	// Stuck-marker sentinel (§11.6.2/Q4): sits in front of a sticky header so
+	// an IntersectionObserver can flip data-stuck without a scroll listener.
+	const sentinelRef = useRef<HTMLDivElement | null>(null);
+	const [stuck, setStuck] = useState(false);
 
 	useEffect(() => {
 		document.title = `${title} | Campaign Game Studio`;
@@ -83,7 +105,58 @@ export function AdminPageShell({ actions, aside, breadcrumbContext, children, de
 		return () => setHasWorkspaceAside(false);
 	}, [hasPageAside, setHasWorkspaceAside]);
 
-	return <div className="admin-page"><div className="admin-page__inner"><header className="admin-page__header"><div className="admin-page__heading"><div className="min-w-0"><nav aria-label="Đường dẫn trang" className="admin-breadcrumbs"><ol>{breadcrumbs.map((item, index) => <li key={`${item.label}-${index}`}>{index > 0 ? <ChevronRight aria-hidden="true" size={14} /> : null}{item.href ? <Link to={item.href}>{item.label}</Link> : <span aria-current="page">{item.label}</span>}</li>)}</ol></nav><p className="admin-page__eyebrow">{eyebrow}</p><h1 className="admin-page__title">{title}</h1>{description ? <p className="admin-page__description">{description}</p> : null}</div></div>{actions ? <div className="admin-page__actions">{actions}</div> : null}</header><div className="min-w-0">{children}</div>{aside && workspace?.asideHost ? createPortal(<aside aria-label="Ngữ cảnh trang">{aside}</aside>, workspace.asideHost) : null}</div></div>;
+	useEffect(() => {
+		if (!stickyHeader) {
+			setStuck(false);
+			return;
+		}
+		const sentinel = sentinelRef.current;
+		if (!sentinel) return;
+		const observer = new IntersectionObserver(
+			(entries) => {
+				const entry = entries[0];
+				if (entry) setStuck(!entry.isIntersecting);
+			},
+		);
+		observer.observe(sentinel);
+		return () => observer.disconnect();
+	}, [stickyHeader]);
+
+	// One breadcrumb element: portal into the navbar host when the workspace
+	// layout is present, fall back inline without it, and render nothing while
+	// the host is not mounted yet (no inline flash).
+	const breadcrumb = <AdminBreadcrumbs breadcrumbs={breadcrumbs} />;
+
+	return (
+		<div className="admin-page">
+			<div className="admin-page__inner">
+				{workspace
+					? workspace.breadcrumbHost
+						? createPortal(breadcrumb, workspace.breadcrumbHost)
+						: null
+					: <AdminBreadcrumbs breadcrumbs={breadcrumbs} inline />}
+				{tabs ? <div className="admin-page__tabs">{tabs}</div> : null}
+				{stickyHeader ? <div aria-hidden="true" className="admin-page__sentinel" ref={sentinelRef} /> : null}
+				<header
+					className="admin-page__header"
+					data-sticky={stickyHeader ? "true" : undefined}
+					data-stuck={stuck ? "true" : undefined}
+				>
+					<div className="admin-page__heading-group">
+						<div className="admin-page__heading">
+							<h1 className="admin-page__title">{title}</h1>
+							{status}
+						</div>
+						{description && !stickyHeader ? <p className="admin-page__description">{description}</p> : null}
+					</div>
+					{actions ? <div className="admin-page__actions">{actions}</div> : null}
+				</header>
+				{description && stickyHeader ? <p className="admin-page__description">{description}</p> : null}
+				<div className="admin-page__body">{children}</div>
+				{aside && workspace?.asideHost ? createPortal(<aside aria-label="Ngữ cảnh trang">{aside}</aside>, workspace.asideHost) : null}
+			</div>
+		</div>
+	);
 }
 
 export function AdminRouteStatus({ contractText, description, icon, status = "Đang tải", statusDetail = "Đang đồng bộ dữ liệu không gian làm việc.", title }: {

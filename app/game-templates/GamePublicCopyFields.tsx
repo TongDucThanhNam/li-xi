@@ -55,6 +55,7 @@ export function GamePublicCopyFields({
 				)
 			: (
 					<Input
+						className={key === "startCtaLabel" || key === "collectCtaLabel" ? "admin-control--sm" : undefined}
 						fullWidth
 						id={`${idPrefix}-${key}`}
 						maxLength={max}
@@ -65,24 +66,34 @@ export function GamePublicCopyFields({
 				);
 		return (
 			<div className="admin-field">
-				<Label htmlFor={`${idPrefix}-${key}`}>{label}</Label>
+				<div className="admin-field__label-row">
+					<Label htmlFor={`${idPrefix}-${key}`}>{label}</Label>
+					<span className="admin-field__counter">{counter}</span>
+				</div>
 				{input}
-				<p className="mt-1 text-xs text-muted">{hint ? `${counter} — ${hint}` : counter}</p>
+				{hint ? <p className="admin-field__hint">{hint}</p> : null}
 			</div>
 		);
 	};
 
 	return (
-		<>
-			{field("headline")}
-			{field("subtitle")}
-			<div className="grid gap-4 md:grid-cols-2">
+		<div className="flex flex-col gap-6">
+			<div className="admin-stack">
+				<p className="admin-group-label">Màn mở đầu</p>
+				{field("headline")}
+				{field("subtitle")}
 				{field("startCtaLabel")}
-				{field("collectCtaLabel")}
 			</div>
-			{field("waitingMessage")}
-			{field("thankYouMessage")}
-			{field("claimInstructions")}
-		</>
+			<div className="admin-stack">
+				<p className="admin-group-label">Trong lúc chờ</p>
+				{field("waitingMessage")}
+			</div>
+			<div className="admin-stack">
+				<p className="admin-group-label">Kết quả</p>
+				{field("collectCtaLabel")}
+				{field("thankYouMessage")}
+				{field("claimInstructions")}
+			</div>
+		</div>
 	);
 }

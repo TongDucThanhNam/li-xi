@@ -19,160 +19,1173 @@
 		--app-layout-aside-width: 360px;
 	}
 
+	/* Page */
 	.admin-page {
-		@apply min-h-dvh bg-background text-foreground;
+		@apply min-h-full bg-background text-foreground;
 	}
 
 	.admin-page__inner {
-		@apply mx-auto flex w-full max-w-[1240px] flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8;
+		@apply mx-auto w-full max-w-[1240px] px-4 py-6 sm:px-6 lg:px-8;
+	}
+
+	.admin-page__tabs {
+		@apply mb-6;
 	}
 
 	.admin-page__header {
-		@apply flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between;
+		@apply flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between;
+	}
+
+	/* The title row matches the action button's height so title and button
+	   stay centred on each other (§11.6.2); the button is h-10 below md and
+	   h-9 from md. */
+	.admin-page__header:has(.admin-page__actions) .admin-page__heading {
+		@apply sm:min-h-10 md:min-h-9;
+	}
+
+	.admin-page__header[data-sticky="true"] {
+		@apply sticky top-0 z-20 -mx-4 bg-background px-4 pb-2 pt-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 sm:items-center;
+	}
+
+	.admin-page__header[data-sticky="true"] .admin-page__title {
+		@apply truncate;
+	}
+
+	.admin-page__header[data-sticky="true"] + .admin-page__description {
+		@apply mt-0;
+	}
+
+	/* Scroll sentinel in front of a sticky header: carries the header's old
+	   -mt-3 (net zero height), so the resting position is unchanged while the
+	   observer can tell when the header has stuck (§11.6.2/Q4). */
+	.admin-page__sentinel {
+		@apply -mb-px -mt-3 h-px;
+	}
+
+	/* Hairline under a stuck header; a shadow, so nothing moves when it
+	   appears. */
+	.admin-page__header[data-stuck="true"] {
+		@apply shadow-[0_1px_0_0_var(--color-border)];
 	}
 
 	.admin-page__heading {
-		@apply flex min-w-0 items-start gap-4;
+		@apply flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1;
 	}
 
+	.admin-page__heading-group {
+		@apply min-w-0 flex-1;
+	}
+
+	.admin-page__title {
+		@apply min-w-0 text-2xl font-semibold leading-8 tracking-tight text-foreground;
+	}
+
+	.admin-page__description {
+		@apply mt-1 max-w-2xl text-sm leading-5 text-muted;
+	}
+
+	.admin-page__actions {
+		@apply flex flex-wrap items-center gap-3 sm:shrink-0 sm:justify-end;
+	}
+
+	.admin-page__body {
+		@apply mt-6 flex min-w-0 flex-col gap-6;
+	}
+
+	.admin-page__body > * {
+		@apply min-w-0;
+	}
+
+	/* Breadcrumb (navbar host or inline fallback) */
 	.admin-breadcrumbs {
-		@apply mb-2 overflow-x-auto text-xs text-muted;
+		@apply min-w-0 text-sm text-muted;
 	}
 
 	.admin-breadcrumbs ol {
-		@apply flex min-w-max items-center gap-1;
+		@apply flex min-w-0 items-center gap-1;
 	}
 
 	.admin-breadcrumbs li {
-		@apply flex items-center gap-1;
+		@apply flex min-w-0 items-center gap-1;
+	}
+
+	.admin-breadcrumbs li > a,
+	.admin-breadcrumbs li > span {
+		@apply max-w-[16rem] truncate;
 	}
 
 	.admin-breadcrumbs a {
 		@apply rounded-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-focus;
 	}
 
-	.admin-page__heading-icon {
-		@apply mt-1 grid size-11 shrink-0 place-items-center rounded-xl bg-surface-secondary text-accent;
+	.admin-breadcrumbs [aria-current="page"] {
+		@apply font-medium text-foreground;
 	}
 
-	.admin-page__eyebrow {
-		@apply text-sm font-medium text-muted;
+	.admin-breadcrumbs li:nth-last-child(n + 3) {
+		@apply hidden md:flex;
 	}
 
-	.admin-page__title {
-		@apply text-2xl font-semibold tracking-normal text-foreground sm:text-3xl;
+	.admin-breadcrumbs--inline {
+		@apply mb-3;
 	}
 
-	.admin-page__description {
-		@apply mt-1 max-w-2xl text-sm leading-6 text-muted;
-	}
-
-	.admin-page__actions {
-		@apply flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end;
-	}
-
-	.admin-grid {
-		@apply grid gap-4;
-	}
-
-	.admin-grid--two {
-		@apply lg:grid-cols-2;
-	}
-
-	.admin-field {
-		@apply flex flex-col gap-2;
-	}
-
-	.admin-field-row {
-		@apply grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_auto];
-	}
-
-	.admin-muted {
-		@apply text-sm leading-6 text-muted;
-	}
-
-	.admin-section-heading {
-		@apply text-lg font-semibold text-foreground;
-	}
-
-	.admin-aside {
-		@apply grid content-start gap-4 p-4;
-	}
-
-	.admin-command-summary {
-		@apply grid content-start gap-4 rounded-xl bg-surface-secondary p-4;
-	}
-
-	.admin-command-summary__metric-list {
-		@apply grid gap-2 text-sm;
-	}
-
-	.admin-command-summary__metric-row {
-		@apply flex items-center justify-between gap-3;
-	}
-
-	.admin-command-summary__note {
-		@apply grid gap-1 rounded-lg bg-surface/60 p-3;
-	}
-
-	.admin-command-summary__note-header {
-		@apply flex min-w-0 items-start justify-between gap-3;
-	}
-
-	.admin-command-summary__note-title {
-		@apply min-w-0 text-sm font-medium leading-5 text-foreground;
-	}
-
-	.admin-command-summary__note-label,
-	.admin-command-summary__note-copy {
-		@apply text-xs leading-5 text-muted;
-	}
-
-	.admin-kpi-strip {
-		@apply grid overflow-hidden;
-		grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
-		gap: 1px;
-		background-color: var(--separator);
-	}
-
-	.admin-kpi-strip > [data-slot="kpi"]:last-child {
-		/* Span to the row end so a partial last row never exposes the
-		   separator background through empty grid tracks. */
-		grid-column: auto / -1;
-	}
-
-	.admin-kpi-strip > [data-slot="kpi"] {
-		@apply min-w-0;
-		background-color: var(--surface);
-	}
-
-	.admin-kpi-strip > [data-slot="kpi-group-separator"] {
-		@apply hidden;
-	}
-
-	.admin-navbar-actions {
-		@apply flex max-w-[48vw] shrink-0 items-center gap-2 overflow-x-auto md:hidden;
+	/* Context tabs (router links) */
+	.admin-tabs {
+		@apply flex gap-6 overflow-x-auto;
+		box-shadow: inset 0 -1px 0 var(--border);
 		scrollbar-width: none;
 	}
 
-	.admin-navbar-actions::-webkit-scrollbar {
+	.admin-tabs::-webkit-scrollbar {
+		display: none;
+	}
+
+	.admin-tabs__link {
+		@apply inline-flex h-10 shrink-0 items-center gap-1.5 border-b-2 border-transparent text-sm font-medium text-muted outline-none transition-colors hover:text-foreground;
+	}
+
+	.admin-tabs__link[aria-current="page"] {
+		@apply border-accent text-foreground;
+	}
+
+	.admin-tabs__link--away {
+		@apply ml-auto;
+	}
+
+	.admin-tabs__link:focus-visible {
+		@apply ring-2 ring-inset ring-focus;
+	}
+
+	/* HeroUI Tabs used as view tabs: must look identical to .admin-tabs */
+	.admin-view-tabs {
+		@apply min-w-0;
+	}
+
+	.admin-view-tabs > .tabs__list-container > .tabs__list {
+		@apply gap-6;
+	}
+
+	.admin-view-tabs > .tabs__list-container .tabs__tab {
+		@apply h-10 w-auto min-w-max rounded-none px-0 text-sm font-medium;
+	}
+
+	/* Editor section tabs (§11.3.2): the default segmented control hugging its
+	   tabs; the active panel is a plain stack so its sections look like any
+	   other page sections. */
+	.admin-section-tabs > .tabs__list-container > .tabs__list {
+		@apply w-auto;
+	}
+
+	.admin-section-tabs > .tabs__list-container .tabs__tab {
+		@apply w-auto whitespace-nowrap;
+	}
+
+	.admin-section-tabs > .tabs__panel {
+		@apply mt-6 flex flex-col gap-6 p-0;
+	}
+
+	/* Sections: flatten the HeroUI Pro Widget tray into one white card */
+	.admin-page .widget,
+	.admin-aside .widget {
+		@apply rounded-2xl bg-surface shadow-surface;
+	}
+
+	.admin-page .widget__header,
+	.admin-aside .widget__header {
+		@apply mt-0 h-auto min-h-0 flex-wrap items-start justify-between gap-x-3 gap-y-1 px-5 pb-0 pt-5 sm:px-6 sm:pt-6;
+	}
+
+	.admin-page .widget__title,
+	.admin-aside .widget__title {
+		@apply text-base font-semibold leading-6;
+	}
+
+	.admin-page .widget__description,
+	.admin-aside .widget__description {
+		@apply order-last mt-0 basis-full text-sm leading-5 text-muted;
+	}
+
+	.admin-page .widget__content,
+	.admin-aside .widget__content {
+		@apply m-0 rounded-none bg-transparent p-5 shadow-none sm:p-6;
+	}
+
+	.admin-page .widget__footer,
+	.admin-aside .widget__footer {
+		@apply px-5 pb-5 pt-0 sm:px-6 sm:pb-6;
+	}
+
+	/* Analytics DataGrid filling a section edge-to-edge (§10.4): the content
+	   drops the side/bottom inset and keeps a 1rem top gap after the
+	   description; the edge cells carry the section inset so the first column
+	   text lines up with the section title and the header background stays
+	   full width. */
+	.admin-grid-section.widget__content {
+		@apply px-0 pb-0 pt-4;
+	}
+
+	.admin-grid-section thead th:first-child,
+	.admin-grid-section tbody td:first-child {
+		@apply pl-5 sm:pl-6;
+	}
+
+	.admin-grid-section thead th:last-child,
+	.admin-grid-section tbody td:last-child {
+		@apply pr-5 sm:pr-6;
+	}
+
+	/* Forms */
+	.admin-stack {
+		@apply flex flex-col gap-5;
+	}
+
+	.admin-form {
+		@apply flex flex-col gap-5;
+	}
+
+	.admin-form > * {
+		@apply max-w-3xl;
+	}
+
+	.admin-field {
+		@apply flex min-w-0 flex-col gap-1.5;
+	}
+
+	.admin-field__label-row {
+		@apply flex items-baseline justify-between gap-3;
+	}
+
+	.admin-field__counter {
+		@apply shrink-0 text-xs tabular-nums text-muted;
+	}
+
+	.admin-field__hint {
+		@apply text-xs leading-4 text-muted;
+	}
+
+	.admin-field-pair {
+		@apply grid gap-5 sm:grid-cols-2;
+	}
+
+	.admin-control--xs {
+		@apply max-w-40;
+	}
+
+	.admin-control--sm {
+		@apply max-w-xs;
+	}
+
+	/* Campaign journey building blocks (workspace UX redesign, slice B1) */
+
+	/* Small muted caption that names a group of fields or a page region */
+	.admin-group-label {
+		@apply text-xs font-semibold uppercase tracking-wide text-muted;
+	}
+
+	/* 40px icon tile used in list rows, cards and choice cards */
+	.admin-icon-tile {
+		@apply grid size-10 shrink-0 place-items-center rounded-xl bg-surface-secondary text-foreground;
+	}
+
+	/* A whole card that is one link (campaign index, §11.2.1): brand-colour
+	   cover on top, logo overlapping its edge, metrics inside. */
+	.admin-campaign-card {
+		@apply flex h-full min-w-0 flex-col overflow-hidden rounded-2xl bg-surface shadow-surface outline-none transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-focus;
+	}
+
+	.admin-campaign-card__cover {
+		@apply block h-16 shrink-0 bg-surface-secondary;
+		background-image: linear-gradient(120deg, rgb(255 255 255 / 0.28) 0%, rgb(255 255 255 / 0) 60%);
+	}
+
+	.admin-campaign-card__body {
+		@apply flex flex-1 flex-col gap-3 px-5 pb-5;
+	}
+
+	.admin-campaign-card__head {
+		@apply -mt-7 flex items-end justify-between gap-3;
+	}
+
+	.admin-campaign-card__logo {
+		@apply size-14 shrink-0 rounded-2xl bg-surface object-cover ring-4 ring-surface;
+	}
+
+	.admin-campaign-card__logo--icon {
+		@apply grid place-items-center bg-surface-secondary text-muted;
+	}
+
+	.admin-campaign-card__title {
+		@apply truncate text-base font-semibold text-foreground;
+	}
+
+	.admin-campaign-card__meta {
+		@apply -mt-2 truncate text-sm text-muted;
+	}
+
+	.admin-campaign-card__metrics {
+		@apply grid grid-cols-3 gap-3 rounded-xl bg-surface-secondary px-3 py-2.5;
+	}
+
+	.admin-campaign-card__metrics > span > span:first-child {
+		@apply block text-xs text-muted;
+	}
+
+	.admin-campaign-card__metrics > span > span:last-child {
+		@apply block text-base font-semibold tabular-nums text-foreground;
+	}
+
+	/* Games tab preview cards (§11.3.1): the template preview fills the card
+	   cover edge to edge; the title is a stretched link and the footer sits
+	   above it so "Vận hành" stays clickable. */
+	.admin-game-grid {
+		@apply grid gap-4 sm:grid-cols-2 xl:grid-cols-3;
+	}
+
+	.admin-game-card {
+		@apply relative flex min-w-0 flex-col overflow-hidden rounded-2xl bg-surface shadow-surface transition-shadow hover:shadow-md;
+	}
+
+	.admin-game-card:has(.admin-game-card__title:focus-visible) {
+		@apply ring-2 ring-focus;
+	}
+
+	.admin-game-card__cover {
+		@apply block border-b border-border bg-surface-secondary;
+	}
+
+	.admin-game-card__cover .admin-preview-frame {
+		@apply rounded-none;
+	}
+
+	.admin-game-card__cover .admin-preview-frame__stage > * {
+		border-radius: 0;
+		box-shadow: none;
+		max-width: none;
+	}
+
+	.admin-game-card__body {
+		@apply flex flex-1 flex-col gap-3 p-4;
+	}
+
+	.admin-game-card__head {
+		@apply flex items-start justify-between gap-3;
+	}
+
+	.admin-game-card__title {
+		@apply min-w-0 truncate rounded-sm text-base font-semibold text-foreground outline-none;
+	}
+
+	.admin-game-card__title::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+	}
+
+	.admin-game-card__meta {
+		@apply -mt-2 min-h-5 truncate text-sm text-muted;
+	}
+
+	.admin-game-card__metrics {
+		@apply grid grid-cols-3 gap-3 rounded-xl bg-surface-secondary px-3 py-2.5;
+	}
+
+	.admin-game-card__metrics dt {
+		@apply block text-xs text-muted;
+	}
+
+	.admin-game-card__metrics dd {
+		@apply block text-base font-semibold tabular-nums text-foreground;
+	}
+
+	.admin-game-card__footer {
+		@apply relative z-10 flex items-center justify-end gap-2 border-t border-border px-4 py-3;
+	}
+
+	/* Rows inside a section card (games, checklist) */
+	.admin-rows {
+		@apply flex flex-col;
+	}
+
+	.admin-row {
+		@apply flex min-w-0 items-center gap-3 py-1;
+	}
+
+	.admin-row + .admin-row {
+		@apply border-t border-border;
+	}
+
+	.admin-row__main {
+		@apply -mx-2 flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 rounded-xl px-2 py-2.5 outline-none transition-colors hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-focus;
+	}
+
+	.admin-row__text {
+		@apply flex min-w-0 flex-[1_1_8rem] flex-col;
+	}
+
+	/* Below sm the title may wrap to two lines instead of truncating (§7.8.3) */
+	.admin-row__title {
+		@apply line-clamp-2 text-sm font-medium text-foreground sm:truncate;
+	}
+
+	.admin-row__meta {
+		@apply truncate text-xs text-muted;
+	}
+
+	.admin-row__chips {
+		@apply flex flex-wrap items-center gap-1.5;
+	}
+
+	/* Row with trailing buttons: below sm the buttons drop under the text,
+	   aligned with it (§10.4). 3.25rem = icon tile + gap. */
+	.admin-row--actions {
+		@apply flex-wrap;
+	}
+
+	.admin-row__actions {
+		@apply flex shrink-0 items-center gap-2;
+	}
+
+	.admin-row--actions .admin-row__main {
+		@apply max-sm:basis-full;
+	}
+
+	.admin-row--actions .admin-row__actions {
+		@apply max-sm:pb-2 max-sm:pl-[3.25rem];
+	}
+
+	/* Radio cards (template picker) */
+	.admin-choice-grid {
+		@apply grid gap-3 sm:grid-cols-2;
+	}
+
+	/* Single-column variant for dialogs (§7.8.2) */
+	.admin-choice-grid.admin-choice-grid--single {
+		grid-template-columns: 1fr;
+	}
+
+	/* HeroUI adds mt-4 to each radio of a vertical group; the grid owns the
+	   spacing here (§10.1). Same layer, later source, equal specificity. */
+	.admin-choice-grid[data-orientation] [data-slot="radio"] {
+		@apply mt-0;
+	}
+
+	.admin-choice-card {
+		@apply w-full cursor-pointer items-start gap-3 rounded-xl border border-border p-4 outline-none transition-colors;
+	}
+
+	/* Unselected radio controls need a visible edge on the white choice card
+	   (§7.8.1); the selected state keeps HeroUI's accent fill. */
+	.admin-choice-card .radio__control {
+		@apply rounded-full border border-border bg-surface;
+	}
+
+	/* Two-column page body: main column + side column from xl */
+	.admin-split {
+		@apply grid items-start gap-6 xl:gap-8;
+	}
+
+	.admin-split--rail {
+		@apply xl:grid-cols-[minmax(0,1fr)_18rem];
+	}
+
+	.admin-split--preview {
+		@apply xl:grid-cols-[minmax(0,1fr)_minmax(24rem,30rem)];
+	}
+
+	.admin-split__main {
+		@apply flex min-w-0 flex-col gap-6;
+	}
+
+	.admin-split__side {
+		@apply flex min-w-0 flex-col gap-4 xl:sticky xl:top-[4.5rem];
+	}
+
+	/* Side column holding several cards (overview, §11.2.2): below xl the
+	   cards sit in a two-column grid from sm; from xl it is the sticky
+	   single column again. Keeps the column's gap. */
+	.admin-split__side--cards {
+		@apply sm:grid sm:grid-cols-2 xl:flex;
+	}
+
+	/* Collapsible block inside a section */
+	.admin-disclosure {
+		@apply border-t border-border pt-4;
+	}
+
+	/* Whole-section variant (create form): no top rule (§7.3) */
+	.admin-disclosure--bare {
+		@apply border-t-0 pt-0;
+	}
+
+	.admin-disclosure__trigger {
+		@apply flex w-full items-center gap-2 rounded-lg text-left text-sm font-medium text-foreground;
+	}
+
+	.admin-disclosure__summary {
+		@apply min-w-0 truncate text-xs font-normal text-muted;
+	}
+
+	.admin-disclosure__body {
+		@apply flex flex-col gap-5 p-0 pt-4;
+	}
+
+	/* Zero the HeroUI body-slot padding so the body's left edge equals the
+	   trigger text's left edge (§7.8.6). */
+	.admin-disclosure [data-slot="disclosure-body"] {
+		@apply p-0;
+	}
+
+	/* Scaled game preview (§7.1): the child renders at a fixed 640px logical
+	   width and is scaled down from outside; height follows the scale. */
+	.admin-preview-frame {
+		@apply w-full overflow-hidden rounded-2xl;
+	}
+
+	.admin-preview-frame__stage {
+		transform-origin: top left;
+	}
+
+	/* Stat row (label above number, no boxes); left-packed (§10.4) */
+	.admin-stats {
+		@apply flex flex-wrap gap-x-10 gap-y-4;
+	}
+
+	.admin-stats > div {
+		@apply min-w-[8.5rem];
+	}
+
+	.admin-stats dt {
+		@apply text-xs text-muted;
+	}
+
+	.admin-stats dd {
+		@apply text-2xl font-semibold tabular-nums text-foreground;
+	}
+
+	.admin-stats dd.admin-stats__note {
+		@apply text-xs font-normal text-muted;
+	}
+
+	/* Editable table rows: li xi budget tiers (slice C1, §8.1). The desktop
+	 * five-track grid is declared after the two-column fallback inside the
+	 * same media query Tailwind emits for md: variants, so source order
+	 * cannot flip the winner. */
+	.admin-tier-head,
+	.admin-tier-row {
+		@apply grid grid-cols-2 gap-x-4 gap-y-3;
+	}
+
+	.admin-tier-head {
+		@apply pb-2 text-xs font-medium text-muted;
+		display: none;
+	}
+
+	.admin-tier-row {
+		@apply items-start py-3;
+	}
+
+	@media (min-width: 48rem) {
+		.admin-tier-head,
+		.admin-tier-row {
+			grid-template-columns: minmax(10rem, 14rem) 9rem 10rem minmax(6rem, 1fr) 2rem;
+		}
+
+		.admin-tier-head {
+			display: grid;
+		}
+	}
+
+	.admin-tier-row + .admin-tier-row {
+		@apply border-t border-border;
+	}
+
+	/* One reward in the shared inventory: a bordered card inside the section */
+	.admin-item-card {
+		@apply flex flex-col gap-4 rounded-xl border border-border p-4;
+	}
+
+	/* Card head (§11.6.6/Q6): icon tile, title/meta and the stock meter on
+	   one row with the meter pushed right; below 40rem the full-width meter
+	   wraps under the title. */
+	.admin-item-card__head {
+		@apply flex flex-wrap items-center gap-3 border-b border-border pb-4;
+	}
+
+	/* "Dùng cho: …" line under a section header */
+	.admin-usedby {
+		@apply flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted;
+	}
+
+	.admin-usedby a {
+		@apply font-medium text-foreground underline-offset-2 hover:underline;
+	}
+
+	/* Share-link object rows (slice H, §11.4.1): QR left, title/meta/URL/
+	   actions centre, per-link results right of the main column from 48rem. */
+	.admin-link-list {
+		@apply flex flex-col;
+	}
+
+	.admin-link-row {
+		@apply grid border-t border-border py-4;
+		grid-template-columns: auto minmax(0, 1fr);
+		grid-template-areas:
+			"qr main"
+			". stats";
+		gap: 0.75rem 1rem;
+	}
+
+	.admin-link-row:first-child {
+		@apply border-t-0 pt-0;
+	}
+
+	@media (min-width: 48rem) {
+		.admin-link-row {
+			@apply items-start;
+			grid-template-columns: auto minmax(0, 1fr) auto;
+			grid-template-areas: "qr main stats";
+			gap: 0 1.5rem;
+		}
+	}
+
+	.admin-link-row__qr {
+		grid-area: qr;
+		@apply self-start rounded-xl bg-white p-1.5 ring-1 ring-border;
+	}
+
+	.admin-link-row[data-status="revoked"] .admin-link-row__qr {
+		@apply opacity-40;
+	}
+
+	.admin-link-row__main {
+		grid-area: main;
+		@apply min-w-0;
+	}
+
+	.admin-link-row__title {
+		@apply flex flex-wrap items-center gap-2;
+	}
+
+	.admin-link-row__title h2 {
+		@apply text-sm font-semibold text-foreground;
+	}
+
+	.admin-link-row__meta {
+		@apply mt-1 text-xs text-muted;
+	}
+
+	.admin-link-row__url {
+		@apply mt-2 break-all text-sm text-foreground;
+	}
+
+	.admin-link-row__actions {
+		@apply mt-3 flex flex-wrap items-center gap-2;
+	}
+
+	.admin-link-row__stats {
+		grid-area: stats;
+		@apply flex flex-wrap gap-x-4 gap-y-1 text-xs;
+	}
+
+	.admin-link-row__stats > div {
+		@apply flex items-baseline gap-1;
+	}
+
+	.admin-link-row__stats dt {
+		@apply text-muted;
+	}
+
+	.admin-link-row__stats dd {
+		@apply font-medium tabular-nums text-foreground;
+	}
+
+	@media (min-width: 48rem) {
+		/* Three right-aligned columns of equal width so the numbers line up
+		   across every link row. */
+		.admin-link-row__stats {
+			@apply grid grid-cols-[repeat(3,5.5rem)] gap-x-2 self-center;
+		}
+
+		.admin-link-row__stats > div {
+			@apply flex-col items-end gap-0.5;
+		}
+
+		.admin-link-row__stats dt {
+			@apply text-xs text-muted;
+		}
+
+		.admin-link-row__stats dd {
+			@apply text-lg font-semibold tabular-nums;
+		}
+	}
+
+	/* Remaining-stock bar (§11.4.3): label + count over a ProgressBar; below
+	   sm it fills the row width so it wraps under the card title. */
+	.admin-stock {
+		@apply ml-auto grid w-full gap-1.5 text-xs text-muted sm:w-44;
+	}
+
+	.admin-stock__label {
+		@apply block;
+	}
+
+	.admin-stock__value {
+		@apply font-medium tabular-nums text-foreground;
+	}
+
+	/* Locked-budget stock list (§11.4.4): one read-only row per stored tier. */
+	.admin-stock-list {
+		@apply flex flex-col;
+	}
+
+	.admin-stock-list__row {
+		@apply flex flex-wrap items-center gap-3 border-t border-border py-3 first:border-t-0;
+	}
+
+	.admin-stock-list__name {
+		@apply text-sm font-medium text-foreground;
+	}
+
+	/* Budget meter (§11.4.4): one large remaining-over-total bar. */
+	.admin-budget {
+		@apply grid max-w-xl gap-2;
+	}
+
+	.admin-budget__label {
+		@apply text-xs text-muted;
+	}
+
+	.admin-budget__figures {
+		@apply flex flex-wrap items-baseline gap-x-2;
+	}
+
+	.admin-budget__value {
+		@apply text-3xl font-semibold tracking-tight tabular-nums text-foreground;
+	}
+
+	.admin-budget__total {
+		@apply text-sm tabular-nums text-muted;
+	}
+
+	.admin-budget__note {
+		@apply text-xs tabular-nums text-muted;
+	}
+
+	/* Funnel bars (slice F, §11.1): below 40rem the track drops under its
+	   label; from 40rem label, track, value and rate share one line. */
+	.admin-funnel {
+		@apply flex flex-col gap-3;
+	}
+
+	.admin-funnel__step {
+		@apply grid items-center gap-x-3 gap-y-1.5;
+		grid-template-columns: minmax(0, 1fr) auto 3rem;
+		grid-template-areas:
+			"label value rate"
+			"track track track";
+	}
+
+	@media (min-width: 40rem) {
+		.admin-funnel__step {
+			grid-template-columns: 7.5rem minmax(0, 1fr) 4.5rem 3rem;
+			grid-template-areas: "label track value rate";
+		}
+	}
+
+	.admin-funnel__label {
+		grid-area: label;
+		@apply min-w-0 truncate text-sm leading-5 text-foreground;
+	}
+
+	.admin-funnel__track {
+		grid-area: track;
+		@apply block h-2.5 overflow-hidden rounded-full bg-surface-secondary;
+	}
+
+	.admin-funnel__fill {
+		@apply block h-full rounded-full bg-accent;
+	}
+
+	.admin-funnel__value {
+		grid-area: value;
+		@apply text-right text-sm font-semibold tabular-nums;
+	}
+
+	.admin-funnel__rate {
+		grid-area: rate;
+		@apply text-right text-xs tabular-nums text-muted;
+	}
+
+	/* Performance card body (overview, §11.1): conversion KPI left, funnel
+	   right from 48rem. */
+	.admin-perf {
+		@apply grid items-center gap-6;
+	}
+
+	@media (min-width: 48rem) {
+		.admin-perf {
+			@apply grid-cols-[12rem_minmax(0,1fr)] gap-8;
+		}
+	}
+
+	.admin-perf__kpi {
+		@apply flex flex-col;
+	}
+
+	/* Share bars (§11.5.1): a ranked list where a soft bar behind each row
+	   shows its size relative to the largest row; the head cells line up
+	   with the value and rate columns. */
+	.admin-share {
+		@apply flex flex-col gap-1;
+	}
+
+	.admin-share__head,
+	.admin-share__row {
+		@apply grid gap-x-3 px-3;
+		grid-template-columns: minmax(0, 1fr) 4.5rem 4.5rem;
+	}
+
+	/* "Chuyển đổi" wraps onto two lines at 3.5rem; equal 4.5rem columns plus
+	   a no-wrap head keep every head label on one line (§11.6.6/Q10). */
+	.admin-share__head {
+		@apply whitespace-nowrap pb-1 text-xs font-medium text-muted;
+	}
+
+	.admin-share__head > *:not(:first-child) {
+		@apply text-right;
+	}
+
+	.admin-share__list {
+		@apply flex flex-col gap-1;
+	}
+
+	.admin-share__row {
+		@apply relative isolate min-h-11 items-center rounded-lg py-2;
+	}
+
+	.admin-share__bar {
+		@apply absolute inset-y-0 left-0 -z-10 rounded-lg bg-accent-soft;
+	}
+
+	.admin-share__name {
+		@apply flex min-w-0 flex-col;
+	}
+
+	.admin-share__title {
+		@apply truncate text-sm font-medium text-foreground;
+	}
+
+	.admin-share__meta {
+		@apply truncate text-xs text-muted;
+	}
+
+	.admin-share__value {
+		@apply text-right text-sm font-semibold tabular-nums text-foreground;
+	}
+
+	.admin-share__rate {
+		@apply text-right text-xs tabular-nums text-muted;
+	}
+
+	/* Inline table-cell rate bar (§11.5.1): short track with the percent
+	   right of it, so conversion columns align without repeated numbers. */
+	.admin-rate {
+		@apply inline-flex items-center justify-end gap-2;
+	}
+
+	.admin-rate__track {
+		@apply block h-1.5 w-12 overflow-hidden rounded-full bg-surface-secondary;
+	}
+
+	.admin-rate__fill {
+		@apply block h-full rounded-full bg-accent;
+	}
+
+	.admin-rate__value {
+		@apply w-10 text-right text-sm tabular-nums text-foreground;
+	}
+
+	/* Ranked overview cards (§11.5.2): two columns from 64rem; the
+	   all-campaign variant gives the campaigns card both columns until the
+	   third column unlocks at 90rem. */
+	.admin-rank-grid {
+		@apply grid gap-6;
+	}
+
+	.admin-rank-grid--3 > :first-child {
+		grid-column: span 1;
+	}
+
+	@media (min-width: 64rem) {
+		.admin-rank-grid {
+			@apply grid-cols-2;
+		}
+
+		.admin-rank-grid--3 > :first-child {
+			@apply col-span-2;
+		}
+	}
+
+	@media (min-width: 90rem) {
+		.admin-rank-grid--3 {
+			@apply grid-cols-3;
+		}
+
+		.admin-rank-grid--3 > :first-child {
+			grid-column: span 1;
+		}
+	}
+
+	/* Metric rows (§11.1): a list of linked objects with right-aligned
+	   numbers; the header row only renders from 48rem. */
+	.admin-metric-head {
+		@apply grid gap-x-4 pb-2 text-xs font-medium text-muted;
+		display: none;
+	}
+
+	.admin-metric-head > *:not(:first-child) {
+		@apply text-right;
+	}
+
+	@media (min-width: 48rem) {
+		.admin-metric-head {
+			@apply items-center;
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) repeat(3, 6rem);
+		}
+	}
+
+	.admin-metric-row + .admin-metric-row {
+		@apply border-t border-border;
+	}
+
+	.admin-metric-row__link {
+		@apply -mx-2 grid gap-x-4 gap-y-1 rounded-xl px-2 py-3 outline-none transition-colors hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-focus;
+	}
+
+	@media (min-width: 48rem) {
+		.admin-metric-row__link {
+			@apply items-center;
+			grid-template-columns: minmax(0, 1fr) repeat(3, 6rem);
+		}
+	}
+
+	.admin-metric-row__name {
+		@apply flex min-w-0 items-center gap-3;
+	}
+
+	.admin-metric-row__metrics {
+		@apply flex flex-wrap gap-x-4 gap-y-1 pl-[3.25rem] text-xs;
+	}
+
+	.admin-metric-row__metric {
+		@apply flex items-center gap-1;
+	}
+
+	.admin-metric-row__metric-label {
+		@apply text-muted;
+	}
+
+	.admin-metric-row__metric-value {
+		@apply font-medium tabular-nums;
+	}
+
+	@media (min-width: 48rem) {
+		/* Each metric becomes its own right-aligned grid cell; the visible
+		   label collapses to sr-only. */
+		.admin-metric-row__metrics {
+			display: contents;
+		}
+
+		.admin-metric-row__metric {
+			@apply justify-end text-right text-sm font-medium tabular-nums;
+		}
+
+		.admin-metric-row__metric-label {
+			@apply sr-only;
+		}
+	}
+
+	/* Key/value lines for narrow side cards (§11.1) */
+	.admin-kv {
+		@apply flex flex-col;
+	}
+
+	.admin-kv > div {
+		@apply flex items-baseline justify-between gap-3 py-1.5 text-sm;
+	}
+
+	.admin-kv > div + div {
+		@apply border-t border-border;
+	}
+
+	.admin-kv dt {
+		@apply text-muted;
+	}
+
+	.admin-kv dd {
+		@apply text-right font-medium tabular-nums text-foreground;
+	}
+
+	/* Segmented checklist meter (§11.1): one segment per step. */
+	.admin-meter {
+		@apply grid grid-cols-4 gap-1.5;
+	}
+
+	.admin-meter > span {
+		@apply h-1.5 rounded-full bg-surface-secondary;
+	}
+
+	.admin-meter > span[data-done] {
+		@apply bg-success;
+	}
+
+	/* Settings page sections (§11.1): intro column left, one form card right
+	   from 48rem. */
+	.admin-settings {
+		@apply flex flex-col gap-10;
+	}
+
+	.admin-settings-section {
+		@apply grid items-start gap-4;
+	}
+
+	@media (min-width: 48rem) {
+		.admin-settings-section {
+			@apply grid-cols-[15rem_minmax(0,1fr)] gap-8;
+		}
+	}
+
+	.admin-settings-section__intro h2 {
+		@apply text-base font-semibold text-foreground;
+	}
+
+	.admin-settings-section__intro p {
+		@apply mt-1 text-sm leading-5 text-muted;
+	}
+
+	/* Save status */
+	.admin-save-status {
+		@apply inline-flex min-w-0 items-center text-sm;
+	}
+
+	.admin-save-status__item {
+		@apply inline-flex min-w-0 items-center gap-1.5;
+	}
+
+	.admin-save-status__dot {
+		@apply size-2 shrink-0 rounded-full bg-warning;
+	}
+
+	/* Usage rows (billing, §9.1) */
+	.admin-usage {
+		@apply grid gap-x-8 gap-y-5 sm:grid-cols-2;
+	}
+
+	.admin-usage__row {
+		@apply flex min-w-0 flex-col gap-1.5;
+	}
+
+	.admin-usage__head {
+		@apply flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-sm;
+	}
+
+	.admin-usage__label {
+		@apply whitespace-nowrap font-medium text-foreground;
+	}
+
+	.admin-usage__value {
+		@apply ml-auto whitespace-nowrap tabular-nums text-muted;
+	}
+
+	.admin-usage__value strong {
+		@apply font-semibold text-foreground;
+	}
+
+	/* Plan comparison (billing, §9.1) */
+	.admin-plan-grid {
+		@apply grid gap-4 md:grid-cols-3;
+	}
+
+	.admin-plan-card {
+		@apply flex min-w-0 flex-col gap-4 rounded-2xl border border-transparent bg-surface p-5 shadow-surface;
+	}
+
+	.admin-plan-card[data-current="true"] {
+		@apply border-accent;
+	}
+
+	.admin-plan-card__price {
+		@apply text-2xl font-semibold tabular-nums text-foreground;
+	}
+
+	.admin-plan-card__limits {
+		@apply flex flex-col gap-1.5 text-sm text-foreground;
+	}
+
+	.admin-plan-card__action {
+		@apply mt-auto flex flex-col gap-1.5;
+	}
+
+	/* Sidebar plan card (§9.5): the sidebar sits on bg-background, so one step
+	   up (bg-surface-secondary) reads as a card. */
+	.admin-sidebar-plan {
+		@apply mx-3 mb-1 flex flex-col gap-1.5 rounded-xl bg-surface-secondary px-3 py-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-focus;
+	}
+
+	.sidebar[data-state="collapsed"] .admin-sidebar-plan {
 		@apply hidden;
 	}
 
-	.admin-navbar-actions > * {
-		@apply shrink-0;
+	/* Numbered steps (onboarding, §9.1) */
+	.admin-steps {
+		@apply flex flex-col gap-5;
 	}
 
-	.admin-context-accordion {
-		@apply rounded-none bg-transparent shadow-none;
+	.admin-step {
+		@apply flex min-w-0 items-start gap-3;
 	}
 
-	.admin-context-accordion .accordion__trigger {
-		@apply min-h-11 gap-2 px-4 text-sm font-medium;
+	.admin-step__index {
+		@apply grid size-7 shrink-0 place-items-center rounded-full bg-surface-secondary text-sm font-semibold tabular-nums text-foreground;
 	}
 
-	.admin-context-accordion .accordion__panel {
-		@apply bg-transparent;
+	.admin-step__index[data-done="true"] {
+		@apply bg-success/15 text-success;
+	}
+
+	.admin-step__title {
+		@apply text-sm font-medium text-foreground;
+	}
+
+	.admin-step__text {
+		@apply text-sm text-muted;
+	}
+
+	/* Pages outside the workspace layout (sign-in, not found, §9.1) */
+	.admin-standalone {
+		@apply grid min-h-dvh place-items-center bg-background px-4 py-10 text-foreground;
+	}
+
+	.admin-standalone__inner {
+		@apply flex w-full max-w-sm flex-col gap-6;
+	}
+
+	.admin-standalone__brand {
+		@apply flex items-center gap-3;
+	}
+
+	.admin-standalone__card {
+		@apply flex flex-col gap-5 rounded-2xl bg-surface p-6 shadow-surface sm:p-8;
+	}
+
+	.admin-standalone__points {
+		@apply flex flex-col gap-2.5 px-1 text-sm text-muted;
+	}
+
+	.admin-standalone__points li {
+		@apply flex items-center gap-2.5;
 	}
 
 	.widget__title,
@@ -204,18 +1217,10 @@
 		grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
 	}
 
-	.admin-card-grid--feature.item-card-group--grid {
-		grid-template-columns: 1fr;
-	}
-
-	@media (min-width: 768px) {
-		.admin-card-grid--feature.item-card-group--grid {
-			grid-template-columns: repeat(3, minmax(0, 1fr));
-		}
-	}
-
+	/* Mark's left edge sits on the menu group label's left edge (§10.6):
+	   header 16px + 4px = the content(12px) + group-label(8px) origin. */
 	.admin-sidebar-brand {
-		@apply flex min-w-0 items-center gap-3 px-3 py-2;
+		@apply flex min-w-0 items-center gap-2.5 px-1 py-2;
 	}
 
 	.admin-sidebar-brand__mark {
@@ -261,10 +1266,6 @@
 	.sidebar[data-state="collapsed"] .admin-sidebar-user__copy,
 	.sidebar[data-state="collapsed"] .admin-sidebar-user__chevron {
 		@apply hidden;
-	}
-
-	.admin-image-frame {
-		@apply rounded-2xl border border-black/10 object-cover dark:border-white/10;
 	}
 
 	.admin-draw-preview {

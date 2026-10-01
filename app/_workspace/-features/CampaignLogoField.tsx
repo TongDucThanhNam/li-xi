@@ -123,7 +123,7 @@ export function CampaignLogoField({
 		<div className="admin-field">
 			<Label htmlFor="campaign-logo-upload">Logo thương hiệu (tuỳ chọn)</Label>
 			{error || feedback ? (
-				<Alert className="mb-3" status={error ? "danger" : "success"}>
+				<Alert status={error ? "danger" : "success"}>
 					<Alert.Indicator />
 					<Alert.Content>
 						<Alert.Title>{error || feedback}</Alert.Title>
@@ -170,7 +170,7 @@ export function CampaignLogoField({
 							</ProgressBar.Track>
 						</ProgressBar>
 					) : null}
-					<p className="text-xs text-muted">Vuông, tối đa 2 MB. JPG, PNG, WebP, GIF hoặc AVIF.</p>
+					<p className="admin-field__hint">Vuông, tối đa 2 MB. JPG, PNG, WebP, GIF hoặc AVIF.</p>
 				</div>
 			</div>
 			<input

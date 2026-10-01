@@ -1,15 +1,17 @@
 "use client";
 
-import { Description, Input, Label, NumberField } from "@heroui/react";
+import { Input, Label, NumberField } from "@heroui/react";
 import { GamePublicCopyFields, type GamePublicCopyFieldKey } from "../GamePublicCopyFields";
 import { NativeSelect, Widget } from "@heroui-pro/react";
+import { AdminDisclosure } from "@/app/components/AdminDisclosure";
+import type { GameConfigEditorProps } from "../types";
 import {
 	buildScratchCardGameConfig,
 	isScratchCardGameConfig,
+	DEFAULT_REWARD_POOL_TAG,
 	REWARD_MODE_LABELS,
 	scratchCardDefaultGameConfig,
 	scratchCoverStyles,
-	type CampaignGameConfig,
 	type GameRewardMode,
 	type ScratchCoverStyle,
 } from "@/lib/gameTemplates";
@@ -24,10 +26,8 @@ const COVER_STYLE_LABELS: Record<ScratchCoverStyle, string> = {
 export function ScratchCardConfigEditor({
 	config,
 	onChange,
-}: {
-	config: CampaignGameConfig;
-	onChange: (config: CampaignGameConfig) => void;
-}) {
+	section,
+}: GameConfigEditorProps) {
 	const scratchConfig = isScratchCardGameConfig(config)
 		? buildScratchCardGameConfig({
 				rewardMode: config.rewardMode,
@@ -41,6 +41,23 @@ export function ScratchCardConfigEditor({
 		: { ...scratchCardDefaultGameConfig, publicCopy: config.publicCopy };
 	const updateCopy = (key: GamePublicCopyFieldKey, value: string) =>
 		onChange({ ...scratchConfig, publicCopy: { ...scratchConfig.publicCopy, [key]: value } });
+	if (section === "content") {
+		return (
+			<Widget>
+				<Widget.Header>
+					<Widget.Title>Nội dung trải nghiệm</Widget.Title>
+					<Widget.Description>Nội dung này xuất hiện trên liên kết chơi công khai.</Widget.Description>
+				</Widget.Header>
+				<Widget.Content className="admin-form">
+					<GamePublicCopyFields
+						copy={scratchConfig.publicCopy}
+						idPrefix="scratch"
+						onChange={updateCopy}
+					/>
+				</Widget.Content>
+			</Widget>
+		);
+	}
 	return (
 		<div className="grid gap-6">
 			<Widget>
@@ -51,10 +68,10 @@ export function ScratchCardConfigEditor({
 						bố một lần duy nhất ở lượt chà đầu tiên.
 					</Widget.Description>
 				</Widget.Header>
-				<Widget.Content className="gap-4">
+				<Widget.Content className="admin-form">
 					<div className="admin-field">
 						<Label htmlFor="scratch-reward-mode">Chế độ thưởng</Label>
-						<NativeSelect fullWidth variant="secondary">
+						<NativeSelect className="admin-control--sm" fullWidth variant="secondary">
 							<NativeSelect.Trigger
 								aria-label="Chế độ thưởng"
 								id="scratch-reward-mode"
@@ -78,7 +95,7 @@ export function ScratchCardConfigEditor({
 					</div>
 					<div className="admin-field">
 						<Label htmlFor="scratch-cover-style">Kiểu lớp phủ</Label>
-						<NativeSelect fullWidth variant="secondary">
+						<NativeSelect className="admin-control--sm" fullWidth variant="secondary">
 							<NativeSelect.Trigger
 								aria-label="Kiểu lớp phủ"
 								id="scratch-cover-style"
@@ -124,49 +141,42 @@ export function ScratchCardConfigEditor({
 								<NumberField.IncrementButton aria-label="Tăng ngưỡng hiển thị" />
 							</NumberField.Group>
 						</NumberField>
-						<Description>
+						<p className="admin-field__hint">
 							Chỉ là gợi ý hiển thị cho lớp phủ — phần thưởng vẫn do máy chủ công
 							bố ở lượt chà đầu tiên.
-						</Description>
+						</p>
 					</div>
-					<div className="admin-field">
-						<Label htmlFor="scratch-no-reward-label">Nhãn lượt không trúng</Label>
-						<Input
-							fullWidth
-							id="scratch-no-reward-label"
-							value={scratchConfig.noRewardLabel}
-							variant="secondary"
-							onChange={(event) =>
-								onChange({ ...scratchConfig, noRewardLabel: event.currentTarget.value })
-							}
-						/>
-					</div>
-					<div className="admin-field">
-						<Label htmlFor="scratch-pool-tag">Nhóm kho phần thưởng</Label>
-						<Input
-							fullWidth
-							id="scratch-pool-tag"
-							value={scratchConfig.rewardPoolTag}
-							variant="secondary"
-							onChange={(event) =>
-								onChange({ ...scratchConfig, rewardPoolTag: event.currentTarget.value })
-							}
-						/>
-						<Description>Khớp "Nhóm kho" của các phần thưởng trong kho dùng chung.</Description>
-					</div>
-				</Widget.Content>
-			</Widget>
-			<Widget>
-				<Widget.Header>
-					<Widget.Title>Nội dung trải nghiệm</Widget.Title>
-					<Widget.Description>Nội dung này xuất hiện trên liên kết chơi công khai.</Widget.Description>
-				</Widget.Header>
-				<Widget.Content className="gap-4">
-					<GamePublicCopyFields
-						copy={scratchConfig.publicCopy}
-						idPrefix="scratch"
-						onChange={updateCopy}
-					/>
+					<AdminDisclosure
+						defaultExpanded={scratchConfig.rewardPoolTag !== DEFAULT_REWARD_POOL_TAG}
+						summary={`Nhóm kho: ${scratchConfig.rewardPoolTag}`}
+						title="Tuỳ chọn nâng cao"
+					>
+						<div className="admin-field">
+							<Label htmlFor="scratch-no-reward-label">Nhãn lượt không trúng</Label>
+							<Input
+								fullWidth
+								id="scratch-no-reward-label"
+								value={scratchConfig.noRewardLabel}
+								variant="secondary"
+								onChange={(event) =>
+									onChange({ ...scratchConfig, noRewardLabel: event.currentTarget.value })
+								}
+							/>
+						</div>
+						<div className="admin-field">
+							<Label htmlFor="scratch-pool-tag">Nhóm kho phần thưởng</Label>
+							<Input
+								fullWidth
+								id="scratch-pool-tag"
+								value={scratchConfig.rewardPoolTag}
+								variant="secondary"
+								onChange={(event) =>
+									onChange({ ...scratchConfig, rewardPoolTag: event.currentTarget.value })
+								}
+							/>
+							<p className="admin-field__hint">Khớp "Nhóm kho" của các phần thưởng trong kho dùng chung.</p>
+						</div>
+					</AdminDisclosure>
 				</Widget.Content>
 			</Widget>
 		</div>

@@ -1,20 +1,26 @@
 "use client";
 
 import { Alert, Button, Chip, Spinner, buttonVariants } from "@heroui/react";
-import { EmptyState, ItemCard, ItemCardGroup, Widget } from "@heroui-pro/react";
+import { EmptyState, Widget } from "@heroui-pro/react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { Clipboard, ExternalLink, CalendarClock, Link2, MonitorPlay, QrCode } from "lucide-react";
+import { Clipboard, ExternalLink, QrCode } from "lucide-react";
 import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { CampaignContextNav } from "@/app/_workspace/-components/CampaignContextNav";
-import { ScheduleStatusChip, scheduleRangeText } from "@/app/_workspace/-components/ScheduleStatusChip";
+import { GameStatusChip } from "@/app/_workspace/-components/GameStatusChip";
+import { GameTemplateIcon } from "@/app/_workspace/-components/GameTemplateIcon";
 import { ShareLinksPanel } from "@/app/_workspace/-features/ShareLinksPanel";
 import { AdminPageShell } from "@/app/components/AdminPageShell";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { buildPublicPlayUrl } from "@/lib/publicAppUrl";
-import { configRewardSource, supportsSelfServeStationGame } from "@/lib/gameTemplates";
+import { resolveEffectiveGameStatus } from "@/lib/gameStatus";
+import {
+	configRewardSource,
+	supportsSelfServeStationGame,
+	type GameTemplateId,
+} from "@/lib/gameTemplates";
 
 export function DistributionFeature({ campaignId }: { campaignId: string }) {
 	const campaign = useQuery(api.campaigns.getCampaignRouteContext, {
@@ -30,7 +36,7 @@ export function DistributionFeature({ campaignId }: { campaignId: string }) {
 	const [feedback, setFeedback] = useState("");
 	const [error, setError] = useState("");
 
-	if (campaign === undefined || (campaign && station === undefined)) {
+	if (campaign === undefined) {
 		return <div className="grid min-h-[50vh] place-items-center" role="status"><Spinner aria-label="Đang tải kênh phân phối" /></div>;
 	}
 	if (!campaign) {
@@ -47,19 +53,11 @@ export function DistributionFeature({ campaignId }: { campaignId: string }) {
 			</AdminPageShell>
 		);
 	}
+	if (station === undefined) {
+		return <div className="grid min-h-[50vh] place-items-center" role="status"><Spinner aria-label="Đang tải kênh phân phối" /></div>;
+	}
 
-	const campaignGameId = campaign.campaignGame.id;
-	const campaignGameIsLegacyLiXiStation =
-		campaign.campaignGame.templateId === "li-xi" &&
-		configRewardSource(campaign.campaignGame.config) === "campaign-budget";
-	// Station launch appears for the li xi legacy flow and for
-	// self-serve-station templates; quiz/slot campaigns get no station link.
-	const stationLaunchAvailable =
-		campaignGameIsLegacyLiXiStation ||
-		supportsSelfServeStationGame(campaign.campaignGame.templateId, campaign.campaignGame.config);
-	const pendingLinks = station?.pendingLinkSessions ?? [];
-	const primaryGameSchedule =
-		gamesContext?.campaignGames.find((game) => game.id === campaignGameId)?.schedule ?? null;
+	const campaignGames = gamesContext?.campaignGames ?? [];
 	const copyLink = async (url: string, guestName: string) => {
 		setError("");
 		setFeedback("");
@@ -72,17 +70,58 @@ export function DistributionFeature({ campaignId }: { campaignId: string }) {
 		}
 	};
 
+	const pendingLinks = station.pendingLinkSessions;
+	const liXiBudgetGame =
+		campaignGames.find(
+			(game) =>
+				game.templateId === "li-xi" &&
+				configRewardSource(game.config) === "campaign-budget",
+		) ?? null;
+	const showSessionLinks = liXiBudgetGame !== null || pendingLinks.length > 0;
+	// Station rows are the games that can run at a counter: the budget li xi
+	// draw or a self-serve-station template backed by campaign inventory.
+	const stationGames = campaignGames.filter(
+		(game) =>
+			(game.templateId === "li-xi" &&
+				configRewardSource(game.config) === "campaign-budget") ||
+			supportsSelfServeStationGame(game.templateId, game.config),
+	);
+	const linkOnlyGameNames = campaignGames
+		.filter((game) => !stationGames.some((stationGame) => stationGame.id === game.id))
+		.map((game) => game.name);
+
 	return (
 		<AdminPageShell
 			breadcrumbContext={campaign.name}
-			description="Theo dõi kênh trạm, liên kết chơi công khai và mã QR của các lượt đang chờ."
-			eyebrow={campaign.name}
+			description="Tạo liên kết chơi và mã QR cho từng kênh, hoặc mở trò chơi tại quầy."
+			tabs={<CampaignContextNav campaignId={campaignId} />}
 			title="Phân phối"
 		>
-			<CampaignContextNav campaignId={campaignId} />
+			{liXiBudgetGame && !station.hasSetup ? (
+				<Alert status="warning">
+					<Alert.Indicator />
+					<Alert.Content>
+						<Alert.Title>Chưa cấu hình ngân sách phần thưởng</Alert.Title>
+						<Alert.Description>Trò chơi dùng ngân sách chưa thể tạo lượt chơi.</Alert.Description>
+					</Alert.Content>
+					<Link
+						className={buttonVariants({ size: "sm", variant: "secondary" })}
+						params={{ campaignId: campaign.id }}
+						to="/campaigns/$campaignId/rewards"
+					>
+						Mở kho phần thưởng
+					</Link>
+				</Alert>
+			) : null}
+			{error || feedback ? (
+				<Alert status={error ? "danger" : "success"}>
+					<Alert.Indicator />
+					<Alert.Content><Alert.Title>{error || feedback}</Alert.Title></Alert.Content>
+				</Alert>
+			) : null}
 			<ShareLinksPanel
 				campaignId={campaignId}
-				games={(gamesContext?.campaignGames ?? []).map((game) => ({
+				games={campaignGames.map((game) => ({
 					id: game.id,
 					name: game.name,
 					templateId: game.templateId,
@@ -90,66 +129,138 @@ export function DistributionFeature({ campaignId }: { campaignId: string }) {
 					schedule: game.schedule,
 				}))}
 			/>
-			{error || feedback ? (
-				<Alert status={error ? "danger" : "success"}>
-					<Alert.Indicator />
-					<Alert.Content><Alert.Title>{error || feedback}</Alert.Title></Alert.Content>
-				</Alert>
-			) : null}
-			<div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+			{stationGames.length > 0 ? (
 				<Widget>
 					<Widget.Header>
-						<Widget.Title>Liên kết chơi công khai</Widget.Title>
-						<Widget.Description>Mỗi liên kết thuộc một lượt chơi và hết hạn theo chính sách chiến dịch.</Widget.Description>
+						<Widget.Title>Mở trạm và vận hành</Widget.Title>
+						<Widget.Description>
+							Trò chơi chạy tại quầy: host vận hành bằng Host PIN hoặc khách tự chơi trên màn
+							hình trạm.
+						</Widget.Description>
 					</Widget.Header>
-					<Widget.Content className="gap-4">
+					<Widget.Content>
+						<ul aria-label="Mở trạm và vận hành" className="admin-rows">
+							{stationGames.map((game) => {
+								const budgetLiXi =
+									game.templateId === "li-xi" &&
+									configRewardSource(game.config) === "campaign-budget";
+								const modeText = budgetLiXi
+									? "Host tạo lượt chơi bằng Host PIN"
+									: "Trạm tự phục vụ";
+								const status = resolveEffectiveGameStatus(game, Date.now());
+								return (
+									<li className="admin-row admin-row--actions" key={game.id}>
+										<div className="admin-row__main">
+											<span className="admin-icon-tile">
+												<GameTemplateIcon templateId={game.templateId as GameTemplateId} />
+											</span>
+											<span className="admin-row__text">
+												<span className="admin-row__title">{game.name}</span>
+												<span className="admin-row__meta">{modeText}</span>
+											</span>
+											{status.state !== "live" ? (
+												<span className="admin-row__chips">
+													<GameStatusChip status={status} />
+												</span>
+											) : null}
+										</div>
+										<div className="admin-row__actions">
+											<Link
+												className={buttonVariants({ size: "sm", variant: "secondary" })}
+												params={{ campaignGameId: game.id }}
+												to="/operate/$campaignGameId"
+											>
+												Vận hành
+											</Link>
+											<Link
+												className={buttonVariants({ size: "sm", variant: "secondary" })}
+												params={{ campaignGameId: game.id }}
+												to="/station/$campaignGameId"
+											>
+												Mở trạm
+											</Link>
+										</div>
+									</li>
+								);
+							})}
+						</ul>
+						{linkOnlyGameNames.length > 0 ? (
+							<p className="admin-field__hint">
+								{`${linkOnlyGameNames.join(", ")} chỉ chơi qua liên kết công khai.`}
+							</p>
+						) : null}
+					</Widget.Content>
+				</Widget>
+			) : null}
+			{showSessionLinks ? (
+				<Widget>
+					<Widget.Header>
+						<Widget.Title>Liên kết theo lượt chơi</Widget.Title>
+						<Widget.Description>
+							Mỗi liên kết thuộc một lượt chơi do host tạo ở bảng vận hành và tự hết hạn.
+						</Widget.Description>
+					</Widget.Header>
+					<Widget.Content>
 						{pendingLinks.length === 0 ? (
-							<EmptyState size="sm">
-								<EmptyState.Header>
-									<EmptyState.Media variant="icon"><Link2 aria-hidden="true" /></EmptyState.Media>
-									<EmptyState.Title>Chưa có liên kết đang chờ</EmptyState.Title>
-									<EmptyState.Description>Tạo một lượt chơi ở bảng vận hành để nhận liên kết `/play` và mã QR.</EmptyState.Description>
-								</EmptyState.Header>
-								<EmptyState.Content>
-									{campaignGameId ? <Link className={buttonVariants({ variant: "primary" })} params={{ campaignGameId }} to="/operate/$campaignGameId">Mở bảng vận hành</Link> : null}
-								</EmptyState.Content>
-							</EmptyState>
+							<div className="flex flex-wrap items-center gap-3">
+								<p className="text-sm text-muted">Chưa có liên kết đang chờ.</p>
+								{liXiBudgetGame ? (
+									<Link
+										className="text-sm font-medium text-accent outline-none focus-visible:ring-2 focus-visible:ring-focus"
+										params={{ campaignGameId: liXiBudgetGame.id }}
+										to="/operate/$campaignGameId"
+									>
+										Mở bảng vận hành
+									</Link>
+								) : null}
+							</div>
 						) : (
-							<div className="grid gap-4">
+							<div className="flex flex-col">
 								{pendingLinks.map((session) => {
 									const publicUrl = buildPublicPlayUrl(session.publicPlayPath ?? session.sharePath);
 									return (
-										<article className="grid gap-4 rounded-xl border border-border bg-surface-secondary p-4 sm:grid-cols-[128px_minmax(0,1fr)]" key={session.id}>
+										<article
+											className="grid gap-4 border-t border-border py-4 first:border-t-0 first:pt-0 sm:grid-cols-[auto_minmax(0,1fr)]"
+											key={session.id}
+										>
 											<div className="grid place-items-center rounded-xl bg-white p-2">
 												<QRCodeSVG
 													bgColor="#ffffff"
 													fgColor="#111111"
 													level="M"
 													marginSize={2}
-													size={112}
+													size={96}
 													title={`Mã QR liên kết chơi của ${session.guestNameDisplay}`}
 													value={publicUrl}
 												/>
 											</div>
 											<div className="min-w-0">
-												<div className="flex flex-wrap items-start justify-between gap-2">
-													<div className="min-w-0">
-														<h2 className="truncate font-medium text-foreground">{session.guestNameDisplay}</h2>
-														<p className="truncate text-sm text-muted">{session.campaignName ?? campaign.name}</p>
-													</div>
+												<div className="flex flex-wrap items-center gap-2">
+													<h2 className="min-w-0 truncate text-sm font-medium text-foreground">
+														{session.guestNameDisplay}
+													</h2>
 													<Chip color="success" size="sm" variant="soft">Đang chờ</Chip>
 												</div>
-												<p className="mt-2 break-all text-xs text-muted">{publicUrl}</p>
+												<p className="mt-2 break-all text-sm text-foreground">{publicUrl}</p>
 												<p className="mt-1 text-xs text-muted">
 													Hết hạn {new Date(session.expiresAt).toLocaleString("vi-VN")}
 												</p>
-												<div className="mt-4 flex flex-wrap gap-2">
-													<Button size="sm" variant="outline" onPress={() => void copyLink(publicUrl, session.guestNameDisplay)}>
-														<Clipboard aria-hidden="true" size={15} />
+												<div className="mt-3 flex flex-wrap gap-2">
+													<Button
+														size="sm"
+														variant="secondary"
+														onPress={() => void copyLink(publicUrl, session.guestNameDisplay)}
+													>
+														<Clipboard aria-hidden="true" size={14} />
 														Sao chép
 													</Button>
-													<a className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-foreground" href={publicUrl} rel="noreferrer" target="_blank">
-														<ExternalLink aria-hidden="true" size={15} />
+													<a
+														className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-foreground"
+														href={publicUrl}
+														rel="noreferrer"
+														target="_blank"
+													>
+														<ExternalLink aria-hidden="true" size={14} />
 														Mở liên kết
 													</a>
 												</div>
@@ -161,59 +272,7 @@ export function DistributionFeature({ campaignId }: { campaignId: string }) {
 						)}
 					</Widget.Content>
 				</Widget>
-				<div className="grid content-start gap-6">
-					<Widget>
-						<Widget.Header>
-							<Widget.Title>Trạng thái kênh</Widget.Title>
-							<Widget.Description>Điểm vào hiện có của trò chơi chiến dịch.</Widget.Description>
-						</Widget.Header>
-						<Widget.Content>
-							<ItemCardGroup aria-label="Trạng thái kênh phân phối" variant="secondary">
-								<ItemCard variant="secondary">
-									<ItemCard.Icon><MonitorPlay aria-hidden="true" /></ItemCard.Icon>
-									<ItemCard.Content>
-										<ItemCard.Title>Trạm chơi</ItemCard.Title>
-										<ItemCard.Description>{station?.hasSetup ? "Kho phần thưởng đã sẵn sàng." : "Cần cấu hình phần thưởng trước khi chơi."}</ItemCard.Description>
-									</ItemCard.Content>
-									<ItemCard.Action><Chip color={station?.hasSetup ? "success" : "warning"} size="sm" variant="soft">{station?.hasSetup ? "Sẵn sàng" : "Cần thiết lập"}</Chip></ItemCard.Action>
-								</ItemCard>
-								<ItemCard variant="secondary">
-									<ItemCard.Icon><Link2 aria-hidden="true" /></ItemCard.Icon>
-									<ItemCard.Content>
-										<ItemCard.Title>Liên kết công khai</ItemCard.Title>
-										<ItemCard.Description>{pendingLinks.length} liên kết đang chờ.</ItemCard.Description>
-									</ItemCard.Content>
-								</ItemCard>
-								{primaryGameSchedule ? (
-									<ItemCard variant="secondary">
-										<ItemCard.Icon><CalendarClock aria-hidden="true" /></ItemCard.Icon>
-										<ItemCard.Content>
-											<ItemCard.Title>Cửa sổ chơi</ItemCard.Title>
-											<ItemCard.Description>
-												{scheduleRangeText(primaryGameSchedule) || "Không giới hạn thời gian."}
-											</ItemCard.Description>
-										</ItemCard.Content>
-										<ItemCard.Action>
-											<ScheduleStatusChip schedule={primaryGameSchedule} size="sm" />
-										</ItemCard.Action>
-									</ItemCard>
-								) : null}
-							</ItemCardGroup>
-						</Widget.Content>
-					</Widget>
-					{campaignGameId ? (
-						<Widget>
-							<Widget.Header><Widget.Title>Khởi chạy</Widget.Title></Widget.Header>
-							<Widget.Content className="gap-3">
-								<Link className={buttonVariants({ variant: "primary" })} params={{ campaignGameId }} to="/operate/$campaignGameId">Mở bảng vận hành</Link>
-								{stationLaunchAvailable ? (
-									<Link className={buttonVariants({ variant: "secondary" })} params={{ campaignGameId }} to="/station/$campaignGameId">Mở trạm chơi</Link>
-								) : null}
-							</Widget.Content>
-						</Widget>
-					) : null}
-				</div>
-			</div>
+			) : null}
 		</AdminPageShell>
 	);
 }

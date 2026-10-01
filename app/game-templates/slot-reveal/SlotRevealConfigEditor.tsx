@@ -1,18 +1,20 @@
 "use client";
 
-import { Description, Input, Label, NumberField } from "@heroui/react";
+import { Input, Label, NumberField } from "@heroui/react";
 import { GamePublicCopyFields, type GamePublicCopyFieldKey } from "../GamePublicCopyFields";
 import { NativeSelect, Widget } from "@heroui-pro/react";
+import { AdminDisclosure } from "@/app/components/AdminDisclosure";
+import type { GameConfigEditorProps } from "../types";
 import {
 	buildSlotRevealGameConfig,
 	isSlotRevealGameConfig,
+	DEFAULT_REWARD_POOL_TAG,
 	REWARD_MODE_LABELS,
 	slotRevealDefaultGameConfig,
 	slotReelThemes,
 	SLOT_MISS_COMBINATION,
 	SLOT_SYMBOL_LABELS,
 	slotSymbolKeys,
-	type CampaignGameConfig,
 	type GameRewardMode,
 	type SlotReelTheme,
 } from "@/lib/gameTemplates";
@@ -34,10 +36,8 @@ const REEL_THEME_LABELS: Record<SlotReelTheme, string> = {
 export function SlotRevealConfigEditor({
 	config,
 	onChange,
-}: {
-	config: CampaignGameConfig;
-	onChange: (config: CampaignGameConfig) => void;
-}) {
+	section,
+}: GameConfigEditorProps) {
 	const slotConfig = isSlotRevealGameConfig(config)
 		? buildSlotRevealGameConfig({
 				rewardMode: config.rewardMode,
@@ -50,6 +50,23 @@ export function SlotRevealConfigEditor({
 		: { ...slotRevealDefaultGameConfig, publicCopy: config.publicCopy };
 	const updateCopy = (key: GamePublicCopyFieldKey, value: string) =>
 		onChange({ ...slotConfig, publicCopy: { ...slotConfig.publicCopy, [key]: value } });
+	if (section === "content") {
+		return (
+			<Widget>
+				<Widget.Header>
+					<Widget.Title>Nội dung trải nghiệm</Widget.Title>
+					<Widget.Description>Nội dung này xuất hiện trên liên kết chơi công khai.</Widget.Description>
+				</Widget.Header>
+				<Widget.Content className="admin-form">
+					<GamePublicCopyFields
+						copy={slotConfig.publicCopy}
+						idPrefix="slot-reveal"
+						onChange={updateCopy}
+					/>
+				</Widget.Content>
+			</Widget>
+		);
+	}
 	return (
 		<div className="grid gap-6">
 			<Widget>
@@ -61,10 +78,10 @@ export function SlotRevealConfigEditor({
 						hiển thị.
 					</Widget.Description>
 				</Widget.Header>
-				<Widget.Content className="gap-4">
+				<Widget.Content className="admin-form">
 					<div className="admin-field">
 						<Label htmlFor="slot-reward-mode">Chế độ thưởng</Label>
-						<NativeSelect fullWidth variant="secondary">
+						<NativeSelect className="admin-control--sm" fullWidth variant="secondary">
 							<NativeSelect.Trigger
 								aria-label="Chế độ thưởng"
 								id="slot-reward-mode"
@@ -88,7 +105,7 @@ export function SlotRevealConfigEditor({
 					</div>
 					<div className="admin-field">
 						<Label htmlFor="slot-reel-theme">Phong cách máy quay</Label>
-						<NativeSelect fullWidth variant="secondary">
+						<NativeSelect className="admin-control--sm" fullWidth variant="secondary">
 							<NativeSelect.Trigger
 								aria-label="Phong cách máy quay"
 								id="slot-reel-theme"
@@ -136,34 +153,6 @@ export function SlotRevealConfigEditor({
 						</NumberField>
 					</div>
 					<div className="admin-field">
-						<Label htmlFor="slot-no-reward-label">Nhãn lượt không trúng</Label>
-						<Input
-							fullWidth
-							id="slot-no-reward-label"
-							value={slotConfig.noRewardLabel}
-							variant="secondary"
-							onChange={(event) =>
-								onChange({ ...slotConfig, noRewardLabel: event.currentTarget.value })
-							}
-						/>
-					</div>
-					<div className="admin-field">
-						<Label htmlFor="slot-pool-tag">Nhóm kho phần thưởng</Label>
-						<Input
-							fullWidth
-							id="slot-pool-tag"
-							value={slotConfig.rewardPoolTag}
-							variant="secondary"
-							onChange={(event) =>
-								onChange({ ...slotConfig, rewardPoolTag: event.currentTarget.value })
-							}
-						/>
-						<Description>
-							Tối đa 8 phần thưởng đầu tiên của nhóm kho nhận tổ hợp riêng;
-							phần thưởng thứ 9 trở đi không thể trúng ở mẫu này.
-						</Description>
-					</div>
-					<div className="admin-field">
 						<Label>Biểu tượng và tổ hợp cố định</Label>
 						<div className="flex flex-wrap gap-2">
 							{slotSymbolKeys.map((key) => {
@@ -179,28 +168,49 @@ export function SlotRevealConfigEditor({
 								);
 							})}
 						</div>
-						<Description>
+						<p className="admin-field__hint">
 							Trúng thưởng: ba biểu tượng giống nhau theo phần thưởng. Lượt
 							không trúng: tổ hợp{" "}
 							{SLOT_MISS_COMBINATION.map((key) => SLOT_SYMBOL_LABELS[key]).join(
 								" – ",
 							)}
 							.
-						</Description>
+						</p>
 					</div>
-				</Widget.Content>
-			</Widget>
-			<Widget>
-				<Widget.Header>
-					<Widget.Title>Nội dung trải nghiệm</Widget.Title>
-					<Widget.Description>Nội dung này xuất hiện trên liên kết chơi công khai.</Widget.Description>
-				</Widget.Header>
-				<Widget.Content className="gap-4">
-					<GamePublicCopyFields
-						copy={slotConfig.publicCopy}
-						idPrefix="slot-reveal"
-						onChange={updateCopy}
-					/>
+					<AdminDisclosure
+						defaultExpanded={slotConfig.rewardPoolTag !== DEFAULT_REWARD_POOL_TAG}
+						summary={`Nhóm kho: ${slotConfig.rewardPoolTag}`}
+						title="Tuỳ chọn nâng cao"
+					>
+						<div className="admin-field">
+							<Label htmlFor="slot-no-reward-label">Nhãn lượt không trúng</Label>
+							<Input
+								fullWidth
+								id="slot-no-reward-label"
+								value={slotConfig.noRewardLabel}
+								variant="secondary"
+								onChange={(event) =>
+									onChange({ ...slotConfig, noRewardLabel: event.currentTarget.value })
+								}
+							/>
+						</div>
+						<div className="admin-field">
+							<Label htmlFor="slot-pool-tag">Nhóm kho phần thưởng</Label>
+							<Input
+								fullWidth
+								id="slot-pool-tag"
+								value={slotConfig.rewardPoolTag}
+								variant="secondary"
+								onChange={(event) =>
+									onChange({ ...slotConfig, rewardPoolTag: event.currentTarget.value })
+								}
+							/>
+							<p className="admin-field__hint">
+								Tối đa 8 phần thưởng đầu tiên của nhóm kho nhận tổ hợp riêng;
+								phần thưởng thứ 9 trở đi không thể trúng ở mẫu này.
+							</p>
+						</div>
+					</AdminDisclosure>
 				</Widget.Content>
 			</Widget>
 		</div>

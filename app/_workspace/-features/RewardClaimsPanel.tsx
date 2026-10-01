@@ -3,7 +3,7 @@
 import type { DataGridColumn } from "@heroui-pro/react";
 
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Alert, Button, Chip, Description, Input, Label } from "@heroui/react";
+import { Alert, Button, Chip, Input, Label } from "@heroui/react";
 import { DataGrid, EmptyState, NativeSelect, NumberValue, Widget } from "@heroui-pro/react";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { BadgeCheck, Eye, EyeOff, MoveHorizontal, RotateCcw, Search, Ticket } from "lucide-react";
@@ -262,21 +262,18 @@ export function RewardClaimsPanel({ campaignId }: { campaignId: Id<"campaigns"> 
 
 	return (
 		<Widget>
-			<Widget.Header className="items-start gap-4 sm:flex-row sm:justify-between">
+			<Widget.Header>
 				<div>
-					<Widget.Title>Hàng đợi trao thưởng</Widget.Title>
+					<Widget.Title>Yêu cầu nhận thưởng</Widget.Title>
 					<Widget.Description>
 						Mã thưởng được che mặc định — dùng “Hiện mã” khi trao trực tiếp cho khách.
 					</Widget.Description>
 				</div>
-				<Chip variant="soft">
-					<Chip.Label>{rows.length.toLocaleString("vi-VN")} yêu cầu đã hiện</Chip.Label>
-				</Chip>
 			</Widget.Header>
 			<ClaimsErrorBoundary>
-				<Widget.Content className="gap-5">
-					<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-						<div className="admin-field">
+				<Widget.Content className="admin-stack">
+					<div className="flex flex-wrap items-end gap-3">
+						<div className="admin-field w-full sm:w-44">
 							<Label htmlFor="claims-status-filter">Trạng thái</Label>
 							<NativeSelect fullWidth variant="secondary">
 								<NativeSelect.Trigger
@@ -297,7 +294,7 @@ export function RewardClaimsPanel({ campaignId }: { campaignId: Id<"campaigns"> 
 								</NativeSelect.Trigger>
 							</NativeSelect>
 						</div>
-						<div className="admin-field">
+						<div className="admin-field w-full sm:w-44">
 							<Label htmlFor="claims-channel-filter">Kênh chơi</Label>
 							<NativeSelect fullWidth variant="secondary">
 								<NativeSelect.Trigger
@@ -318,7 +315,7 @@ export function RewardClaimsPanel({ campaignId }: { campaignId: Id<"campaigns"> 
 								</NativeSelect.Trigger>
 							</NativeSelect>
 						</div>
-						<div className="admin-field">
+						<div className="admin-field w-full sm:w-44">
 							<Label htmlFor="claims-reward-filter">Loại thưởng</Label>
 							<NativeSelect fullWidth variant="secondary">
 								<NativeSelect.Trigger
@@ -347,7 +344,7 @@ export function RewardClaimsPanel({ campaignId }: { campaignId: Id<"campaigns"> 
 							</NativeSelect>
 						</div>
 						<form
-							className="admin-field"
+							className="admin-field min-w-[16rem] flex-1"
 							onSubmit={(event) => {
 								event.preventDefault();
 								const normalized = normalizeRewardCodeSearch(codeDraft);
@@ -356,12 +353,12 @@ export function RewardClaimsPanel({ campaignId }: { campaignId: Id<"campaigns"> 
 							}}
 						>
 							<Label htmlFor="claims-code-search">Tìm đúng mã thưởng</Label>
-							<div className="flex flex-wrap gap-2">
+							<div className="flex gap-2">
 								<Input
-									fullWidth
+									className="min-w-0 flex-1"
 									id="claims-code-search"
 									inputMode="text"
-									placeholder="Nhập mã đầy đủ"
+									placeholder="Nhập đầy đủ mã thưởng"
 									variant="secondary"
 									value={codeDraft}
 									onChange={(event) => setCodeDraft(event.currentTarget.value)}
@@ -384,9 +381,6 @@ export function RewardClaimsPanel({ campaignId }: { campaignId: Id<"campaigns"> 
 									</Button>
 								) : null}
 							</div>
-							<Description>
-								Tìm kiếm khớp toàn phần mã thưởng, không tìm theo một phần.
-							</Description>
 						</form>
 					</div>
 					{actionError ? (
