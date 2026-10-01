@@ -10,17 +10,13 @@ import {
   resolvePolarTier,
   type PlanTier,
 } from "../lib/entitlementPolicy";
+import {
+  PLAN_LIMITS,
+  type PlanLimitKey as LimitKey,
+  type PlanLimitValue as LimitValue,
+} from "../lib/planLimits";
 
 type ConvexCtx = QueryCtx | MutationCtx;
-type LimitKey =
-  | "campaigns"
-  | "assets"
-  | "openSessions"
-  | "budgetItems"
-  | "redemptions"
-  | "games";
-type LimitValue = number | null;
-type EntitlementLimits = Record<LimitKey, LimitValue>;
 type EntitlementUsage = Record<LimitKey, number>;
 type CountedAssetStatus = "reserved" | "uploaded" | "attached";
 type CountedCampaignStatus = "draft" | "active";
@@ -33,33 +29,6 @@ const PLAN_LABELS: Record<PlanTier, string> = {
   free: "Free",
   pro: "Pro",
   business: "Business",
-};
-
-const PLAN_LIMITS: Record<PlanTier, EntitlementLimits> = {
-  free: {
-    campaigns: 1,
-    assets: 5,
-    openSessions: 1,
-    budgetItems: 50,
-    redemptions: 100,
-    games: 5,
-  },
-  pro: {
-    campaigns: 10,
-    assets: 100,
-    openSessions: 10,
-    budgetItems: 200,
-    redemptions: 5000,
-    games: 25,
-  },
-  business: {
-    campaigns: null,
-    assets: null,
-    openSessions: null,
-    budgetItems: 500,
-    redemptions: null,
-    games: null,
-  },
 };
 
 function resolveOwnerTier(): PlanTier {
