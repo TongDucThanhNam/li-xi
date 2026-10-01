@@ -310,6 +310,7 @@ test.describe("workspace editor assets panel slots", () => {
 		await expect(page.locator("h1.admin-page__title").first()).toHaveText(
 			"Vòng quay may mắn",
 		);
+		await page.getByRole("tab", { name: "Hình ảnh" }).click();
 		await expect(page.getByText("Ảnh chủ đạo", { exact: true })).toBeVisible();
 		await expect(page.getByText("Ảnh tâm vòng quay", { exact: true })).toBeVisible();
 		await expect(page.getByAltText("Ảnh tâm vòng quay hiện tại")).toHaveAttribute(
@@ -323,6 +324,7 @@ test.describe("workspace editor assets panel slots", () => {
 		await expect(page.locator("h1.admin-page__title").first()).toHaveText(
 			"Trắc nghiệm tri ân",
 		);
+		await page.getByRole("tab", { name: "Hình ảnh" }).click();
 		await expect(page.getByText("Ảnh nền trắc nghiệm", { exact: true })).toBeVisible();
 		await expect(page.getByAltText("Ảnh nền trắc nghiệm hiện tại")).toBeVisible();
 
@@ -333,6 +335,7 @@ test.describe("workspace editor assets panel slots", () => {
 		] as const) {
 			await page.goto(`${WORKSPACE_URL}?route=editor&game=${game}`);
 			await expect(page.locator("h1.admin-page__title").first()).toHaveText(heading);
+			await page.getByRole("tab", { name: "Hình ảnh" }).click();
 			await expect(page.getByText("Ảnh chủ đạo", { exact: true })).toBeVisible();
 			await expect(page.getByText("Ảnh tâm vòng quay")).toHaveCount(0);
 			await expect(page.getByText("Ảnh nền trắc nghiệm")).toHaveCount(0);
@@ -351,6 +354,7 @@ test.describe("workspace editor assets panel slots", () => {
 		await expect(page.locator("h1.admin-page__title").first()).toHaveText(
 			"Trắc nghiệm tri ân",
 		);
+		await page.getByRole("tab", { name: "Hình ảnh" }).click();
 
 		// Remove the seeded backdrop first: the card falls back cleanly.
 		await page.getByRole("button", { name: "Gỡ ảnh" }).click();
@@ -400,6 +404,10 @@ test.describe("workspace campaign brand identity", () => {
 		await page.goto(`${WORKSPACE_URL}?route=campaigns-new`);
 		await expect(page.locator("h1.admin-page__title").first()).toHaveText("Tạo chiến dịch");
 		await expect(page.getByText("Nhận diện thương hiệu (tuỳ chọn)")).toBeVisible();
+
+		// Slice B1: the optional brand section is collapsed on load. Expand it
+		// before asserting the hex hint and filling the brand fields.
+		await page.getByRole("button", { name: "Nhận diện thương hiệu (tuỳ chọn)" }).click();
 		await expect(
 			page.getByText(
 				"Chỉ hiển thị trong không gian làm việc, không áp dụng lên màn chơi của khách.",
@@ -432,7 +440,7 @@ test.describe("workspace campaign brand identity", () => {
 		await saveEvidence(page, "create-brand-fields-persisted");
 	});
 
-	test("overview: metadata chips, prefilled fields, save round-trip and logo remove", async ({
+	test("overview card and settings: metadata, prefilled fields, save round-trip and logo remove", async ({
 		page,
 	}) => {
 		await page.setViewportSize(DESKTOP);
@@ -441,7 +449,7 @@ test.describe("workspace campaign brand identity", () => {
 			"Chiến dịch tri ân A",
 		);
 
-		// Metadata chips: logo, color, audience tags.
+		// Metadata card on the overview: logo, color, audience tags.
 		const metadata = page.getByTestId("campaign-brand-metadata");
 		await expect(metadata).toBeVisible();
 		await expect(metadata.locator("img[alt='Logo chiến dịch']")).toHaveAttribute(
@@ -452,19 +460,22 @@ test.describe("workspace campaign brand identity", () => {
 		await expect(metadata.getByText("Khách hàng mới")).toBeVisible();
 		await expect(metadata.getByText("Khách mời sự kiện")).toBeVisible();
 
-		// Fields come back prefilled from the campaign record.
-		await expect(page.locator("#campaign-overview-brand-color")).toHaveValue("#7c3aed");
-		await expect(page.locator("#campaign-overview-audience-note")).toHaveValue(
+		// Fields live on the settings route and come back prefilled.
+		await page.getByRole("link", { name: "Cài đặt" }).click();
+		await expect(page.locator("h1.admin-page__title").first()).toHaveText(
+			"Cài đặt chiến dịch",
+		);
+		await expect(page.locator("#campaign-settings-brand-color")).toHaveValue("#7c3aed");
+		await expect(page.locator("#campaign-settings-audience-note")).toHaveValue(
 			"Ưu tiên khách vãng lai tại sự kiện mở hàng.",
 		);
 		await saveEvidence(page, "overview-brand-identity");
 
 		// Editing marks dirty; saving round-trips brand + logo through saveCampaign.
-		await page.fill("#campaign-overview-brand-color", "#00ccff");
+		await page.fill("#campaign-settings-brand-color", "#00ccff");
 		await expect(page.getByText("Có thay đổi chưa lưu.")).toBeVisible();
 		await page.getByRole("button", { name: "Lưu thay đổi" }).click();
 		await expect(page.getByText("Đã lưu thông tin chiến dịch")).toBeVisible();
-		await expect(metadata.getByText("Màu #00CCFF")).toBeVisible();
 		const calls = await workspaceCalls(page, "campaigns:saveCampaign");
 		expect(calls.at(-1)).toMatchObject({
 			brandColor: "#00ccff",
@@ -472,7 +483,12 @@ test.describe("workspace campaign brand identity", () => {
 			logoAssetId: "wf-asset-logo",
 		});
 
-		// Removing the logo clears it from the metadata row too.
+		// The overview card reflects the saved colour.
+		await page.getByRole("link", { name: "Tổng quan" }).click();
+		await expect(page.getByTestId("campaign-brand-metadata").getByText("Màu #00CCFF")).toBeVisible();
+
+		// Removing the logo happens on settings and clears the logo field.
+		await page.getByRole("link", { name: "Cài đặt" }).click();
 		await page.getByRole("button", { name: "Gỡ logo" }).click();
 		await expect(page.getByText("Đã gỡ logo thương hiệu.")).toBeVisible();
 		await expect(page.getByText("Chưa có", { exact: true })).toBeVisible();

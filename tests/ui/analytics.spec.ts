@@ -186,10 +186,13 @@ test.describe("games and channels breakdown views", () => {
 		// Widget titles are plain text; the page H1 carries the view copy.
 		await expect(page.getByText("Phân tích theo trò chơi")).toBeVisible();
 		const grid = page.getByRole("grid", { name: "Bảng phân tích theo trò chơi" });
-		await expect(grid.getByText("Vòng quay tri ân")).toBeVisible();
-		await expect(grid.getByText("Vòng quay may mắn")).toBeVisible();
-		await expect(grid.getByText("Thẻ cào tri ân")).toBeVisible();
-		await expect(grid.getByText("Thẻ cào may mắn")).toBeVisible();
+		await expect(grid.getByText("Bánh bao lì xì (chính)")).toBeVisible();
+		// The li xì row keeps its template label cell.
+		await expect(grid.getByText("Lunar Fortune")).toBeVisible();
+		// Wheel and scratch keep their template default names, so the row
+		// name and badge agree.
+		await expect(grid.getByRole("row", { name: /Vòng quay may mắn/ })).toBeVisible();
+		await expect(grid.getByRole("row", { name: /Thẻ cào may mắn/ })).toBeVisible();
 		await expect(page.getByRole("heading", { name: "Hiệu quả trò chơi" })).toBeVisible();
 	});
 
@@ -200,12 +203,54 @@ test.describe("games and channels breakdown views", () => {
 		const channelGrid = page.getByRole("grid", { name: "Bảng phân tích theo kênh" });
 		await expect(channelGrid.getByText("Liên kết công khai")).toBeVisible();
 		await expect(channelGrid.getByText("Trạm chơi")).toBeVisible();
-		await expect(channelGrid.getByText("li xi (legacy)")).toBeVisible();
+		await expect(channelGrid.getByText("Li xì chưa gắn kênh")).toBeVisible();
 
 		await expect(page.getByText("Liên kết chia sẻ")).toBeVisible();
 		const linkGrid = page.getByRole("grid", { name: "Bảng liên kết chia sẻ" });
 		await expect(linkGrid.getByText("Link QR")).toBeVisible();
 		await expect(linkGrid.getByText("Facebook", { exact: true })).toBeVisible();
+	});
+});
+
+test.describe("overview funnel and rewards share bars", () => {
+	test("overview leads with the funnel and ranked share bars", async ({ page }) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+
+		// All-campaign scope: the funnel card comes first, then three ranked
+		// cards (campaigns, games, channels).
+		await page.goto(`${ANALYTICS_URL}?view=overview`);
+		const funnel = page.getByRole("list", { name: "Phễu chuyển đổi" });
+		await expect(funnel).toHaveCount(1);
+		await expect(funnel.getByRole("listitem")).toHaveCount(4);
+		await expect(page.locator(".admin-perf__kpi").getByText("64%")).toBeVisible();
+		const campaignList = page.getByRole("list", { name: "Chiến dịch theo lượt mở" });
+		await expect(campaignList.getByRole("listitem").first()).toContainText("Chiến dịch tri ân A");
+		await expect(campaignList.getByRole("listitem").first()).toContainText("120");
+		await expect(
+			page.getByRole("list", { name: "Kênh theo lượt mở" }).getByRole("listitem").first(),
+		).toContainText("Liên kết công khai");
+
+		// Campaign scope: the KPI reads campaign A and the campaigns card is
+		// gone; the games card leads with the wheel.
+		await page.goto(`${ANALYTICS_URL}?view=overview&campaign=campaign-a`);
+		await expect(page.locator(".admin-perf__kpi").getByText("65%")).toBeVisible();
+		await expect(page.getByRole("list", { name: "Chiến dịch theo lượt mở" })).toHaveCount(0);
+		await expect(
+			page.getByRole("list", { name: "Trò chơi theo lượt mở" }).getByRole("listitem").first(),
+		).toContainText("Vòng quay may mắn");
+	});
+
+	test("rewards view: claim rate and rarity share bars", async ({ page }) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto(`${ANALYTICS_URL}?view=rewards&campaign=campaign-a`);
+		// The claim rate is claims / reward outcomes (78 / 84), no longer
+		// claims / opens.
+		await expect(page.getByText("93%")).toBeVisible();
+		await expect(
+			page.getByRole("list", { name: "Cơ cấu phần thưởng theo độ hiếm" }).getByRole("listitem"),
+		).toHaveCount(3);
+		// Rarity distribution draws share bars, not an axis chart.
+		await expect(page.locator(".recharts-wrapper")).toHaveCount(0);
 	});
 });
 

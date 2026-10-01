@@ -22,6 +22,7 @@ import { CampaignGameEditorFeature } from "../../../app/_workspace/-features/Cam
 import { CampaignIndexFeature } from "../../../app/_workspace/-features/CampaignIndexFeature";
 import { CampaignOverviewFeature } from "../../../app/_workspace/-features/CampaignOverviewFeature";
 import { CampaignSectionFeature } from "../../../app/_workspace/-features/CampaignSectionFeature";
+import { CampaignSettingsFeature } from "../../../app/_workspace/-features/CampaignSettingsFeature";
 import { DistributionFeature } from "../../../app/_workspace/-features/DistributionFeature";
 import { IntegrationsSettingsFeature } from "../../../app/_workspace/-features/IntegrationsSettingsFeature";
 import { OnboardingFeature } from "../../../app/_workspace/-features/OnboardingFeature";
@@ -134,6 +135,14 @@ const campaignDistributionRoute = createRoute({
 		return <DistributionFeature key={campaignId} campaignId={campaignId} />;
 	},
 });
+const campaignSettingsRoute = createRoute({
+	getParentRoute: () => workspaceLayoutRoute,
+	path: "/campaigns/$campaignId/settings",
+	component: function SettingsFrame() {
+		const { campaignId } = campaignSettingsRoute.useParams();
+		return <CampaignSettingsFeature key={campaignId} campaignId={campaignId} />;
+	},
+});
 const analyticsRoute = createRoute({
 	validateSearch: validateAnalyticsSearch,
 	getParentRoute: () => workspaceLayoutRoute,
@@ -192,6 +201,7 @@ const router = createRouter({
 			campaignGameEditorRoute,
 			campaignRewardsRoute,
 			campaignDistributionRoute,
+			campaignSettingsRoute,
 			analyticsRoute,
 			settingsBillingRoute,
 			settingsIntegrationsRoute,
@@ -220,6 +230,7 @@ function initialEntry(): string {
 		games: "/campaigns/campaign-a/games",
 		rewards: "/campaigns/campaign-a/rewards",
 		distribution: "/campaigns/campaign-a/distribution",
+		"campaign-settings": "/campaigns/campaign-a/settings",
 		analytics: "/analytics",
 		"settings-billing": "/settings/billing",
 		"settings-integrations": "/settings/integrations",

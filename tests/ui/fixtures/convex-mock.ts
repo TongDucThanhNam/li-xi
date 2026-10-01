@@ -32,6 +32,40 @@ let campaignsMode: "default" | "empty" =
 		? "empty"
 		: "default";
 
+/** Campaign-overview checklist fixture switch (slice B1): `setup` renders the
+ *  campaign/games as drafts with no budget, inventory, links or metrics so the
+ *  overview shows the 0/4 launch checklist. Seeded from the fixture URL like
+ *  campaignsMode. */
+const overviewMode: "default" | "setup" =
+	typeof window !== "undefined" &&
+	new URLSearchParams(window.location.search).get("overviewMode") === "setup"
+		? "setup"
+		: "default";
+
+/** Operator-console checklist fixture switch (slice C1): `blocked` renders the
+ *  station state with no budget setup and zero available units so the console
+ *  shows the "Chưa thể tạo lượt chơi" warning. Seeded from the fixture URL
+ *  like overviewMode. */
+const operateMode: "default" | "blocked" =
+	typeof window !== "undefined" &&
+	new URLSearchParams(window.location.search).get("operateMode") === "blocked"
+		? "blocked"
+		: "default";
+
+/** Rewards checklist fixture switch (slice C1): `plain` serves the campaign
+ *  inventory with default pool tags so the "Chia theo nhóm kho" fields start
+ *  hidden and the switch can reveal them; `locked` keeps the seeded budget but
+ *  closes configuration so the rewards page renders the locked-budget state.
+ *  Seeded from the fixture URL. */
+const rewardsMode: "default" | "plain" | "locked" =
+	typeof window !== "undefined"
+		? new URLSearchParams(window.location.search).get("rewardsMode") === "plain"
+			? "plain"
+			: new URLSearchParams(window.location.search).get("rewardsMode") === "locked"
+				? "locked"
+				: "default"
+		: "default";
+
 /** Shared store access for the participant backend (same module instance). */
 export function subscribeVersion(listener: () => void) {
 	return subscribe(listener);
@@ -216,7 +250,10 @@ const legacyHistoryRows = [
 	},
 ];
 
-const ownerAnalytics = {
+// Campaign A analytics: the sums of campaign A's breakdown rows below
+// (120 / 96 / 84 / 84 / 78), so the workspace tells one story across the
+// index, the overview and analytics.
+const campaignAAnalytics = {
 	gameMetrics: {
 		opens: 120,
 		starts: 96,
@@ -228,30 +265,94 @@ const ownerAnalytics = {
 	},
 };
 
+/** Funnel sums over breakdown rows, mirroring the backend aggregates. */
+function sumBreakdownGameMetrics(rows: Array<Record<string, any>>) {
+	const totals = { opens: 0, starts: 0, completions: 0, rewardOutcomes: 0, claims: 0 };
+	for (const row of rows) {
+		totals.opens += row.opens;
+		totals.starts += row.starts;
+		totals.completions += row.completions;
+		totals.rewardOutcomes += row.rewardOutcomes;
+		totals.claims += row.claims;
+	}
+	return totals;
+}
+
+// Campaign/game breakdown rows: five campaign-A games plus one campaign-B
+// game. The A rows sum exactly to campaignAAnalytics.gameMetrics, and every game
+// id matches the workspace games so the overview joins numbers by game id.
 const campaignGameBreakdownRows = [
 	{
 		campaignId: CAMPAIGN_A,
-		campaignGameId: "op-game-wheel",
-		gameName: "Vòng quay tri ân",
-		gameTemplateId: "lucky-wheel",
-		opens: 120,
-		starts: 96,
-		completions: 84,
-		rewardOutcomes: 84,
-		claims: 78,
-		conversion: 0.65,
+		campaignGameId: "wf-game-lunar",
+		gameName: "Bánh bao lì xì (chính)",
+		gameTemplateId: "li-xi",
+		opens: 26,
+		starts: 26,
+		completions: 22,
+		rewardOutcomes: 22,
+		claims: 20,
+		conversion: 0.769,
 	},
 	{
 		campaignId: CAMPAIGN_A,
-		campaignGameId: "op-game-scratch",
-		gameName: "Thẻ cào tri ân",
+		campaignGameId: "wf-game-wheel",
+		gameName: "Vòng quay may mắn",
+		gameTemplateId: "lucky-wheel",
+		opens: 52,
+		starts: 40,
+		completions: 36,
+		rewardOutcomes: 36,
+		claims: 34,
+		conversion: 0.654,
+	},
+	{
+		campaignId: CAMPAIGN_A,
+		campaignGameId: "wf-game-scratch",
+		gameName: "Thẻ cào may mắn",
 		gameTemplateId: "scratch-card",
-		opens: 40,
-		starts: 30,
-		completions: 26,
-		rewardOutcomes: 26,
-		claims: 24,
+		opens: 30,
+		starts: 22,
+		completions: 20,
+		rewardOutcomes: 20,
+		claims: 18,
 		conversion: 0.6,
+	},
+	{
+		campaignId: CAMPAIGN_A,
+		campaignGameId: "wf-game-slot",
+		gameName: "Máy quay tri ân",
+		gameTemplateId: "slot-reveal",
+		opens: 12,
+		starts: 8,
+		completions: 6,
+		rewardOutcomes: 6,
+		claims: 6,
+		conversion: 0.5,
+	},
+	{
+		campaignId: CAMPAIGN_A,
+		campaignGameId: "wf-game-quiz",
+		gameName: "Trắc nghiệm tri ân",
+		gameTemplateId: "quiz",
+		opens: 0,
+		starts: 0,
+		completions: 0,
+		rewardOutcomes: 0,
+		claims: 0,
+		conversion: null,
+	},
+	{
+		campaignId: CAMPAIGN_B,
+		campaignGameId: "op-game-b",
+		gameName: "Vòng quay chiến dịch B",
+		gameTemplateId: "lucky-wheel",
+		opens: 8,
+		starts: 6,
+		completions: 5,
+		rewardOutcomes: 5,
+		claims: 4,
+		conversion: 0.5,
 	},
 ];
 
@@ -292,7 +393,7 @@ const campaignShareLinkBreakdownRows = [
 	{
 		shareLinkId: "sharelink-a-qr",
 		campaignId: CAMPAIGN_A,
-		campaignGameId: "op-game-wheel",
+		campaignGameId: "wf-game-wheel",
 		label: "Link QR",
 		channel: "qr",
 		linkOpens: 52,
@@ -306,7 +407,7 @@ const campaignShareLinkBreakdownRows = [
 	{
 		shareLinkId: "sharelink-a-fb",
 		campaignId: CAMPAIGN_A,
-		campaignGameId: "op-game-wheel",
+		campaignGameId: "wf-game-wheel",
 		label: "Facebook",
 		channel: "facebook",
 		linkOpens: 36,
@@ -316,6 +417,48 @@ const campaignShareLinkBreakdownRows = [
 		rewardOutcomes: 24,
 		claims: 22,
 		conversion: 0.579,
+	},
+];
+
+// Workspace share links (real listShareLinks shape) backing the distribution
+// share panel and the overview distribution card. Fixed +07:00 timestamps
+// keep "Tạo …" texts deterministic under the pinned test clock.
+const workspaceShareLinks = [
+	{
+		id: "sharelink-a-qr",
+		shareCode: "sharelinkaqr0000000000",
+		campaignGameId: "wf-game-wheel",
+		campaignGameName: "Vòng quay may mắn",
+		templateId: "lucky-wheel",
+		channel: "qr",
+		label: "Link QR",
+		status: "active",
+		createdAt: Date.parse("2026-09-10T09:00:00+07:00"),
+		revokedAt: null,
+	},
+	{
+		id: "sharelink-a-fb",
+		shareCode: "sharelinkafb0000000000",
+		campaignGameId: "wf-game-wheel",
+		campaignGameName: "Vòng quay may mắn",
+		templateId: "lucky-wheel",
+		channel: "facebook",
+		label: "Facebook",
+		status: "active",
+		createdAt: Date.parse("2026-09-10T10:00:00+07:00"),
+		revokedAt: null,
+	},
+	{
+		id: "sharelink-a-zalo",
+		shareCode: "sharelinkazalo00000000",
+		campaignGameId: "wf-game-scratch",
+		campaignGameName: "Thẻ cào may mắn",
+		templateId: "scratch-card",
+		channel: "zalo",
+		label: "Zalo",
+		status: "revoked",
+		createdAt: Date.parse("2026-09-10T11:00:00+07:00"),
+		revokedAt: Date.parse("2026-09-11T08:00:00+07:00"),
 	},
 ];
 
@@ -442,8 +585,8 @@ const workspaceSetupState = {
 	hasHostPin: true,
 	campaigns: [{ id: CAMPAIGN_A }],
 	items: [
-		{ amount: 50000, initialQuantity: 15, rarity: "common" },
-		{ amount: 120000, initialQuantity: 10, rarity: "legend" },
+		{ amount: 50000, initialQuantity: 15, remainingQuantity: 9, rarity: "common" },
+		{ amount: 120000, initialQuantity: 10, remainingQuantity: 10, rarity: "legend" },
 	],
 	budget: { totalBudget: 1950000, remainingBudget: 1650000 },
 };
@@ -458,8 +601,9 @@ const workspacePlanState = {
 		assets: { used: 1, limit: 10, isFull: false, isExceeded: false },
 		budgetItems: { used: 2, limit: 50, isFull: false, isExceeded: false },
 		campaigns: { used: 2, limit: 5, isFull: false, isExceeded: false },
+		games: { used: 5, limit: 10, isFull: false, isExceeded: false },
 		openSessions: { used: 1, limit: 20, isFull: false, isExceeded: false },
-		redemptions: { used: 170, limit: null, isFull: false, isExceeded: false },
+		redemptions: { used: 170, limit: 1000, isFull: false, isExceeded: false },
 	},
 };
 
@@ -514,14 +658,28 @@ const workspaceReadiness = {
 };
 
 /** Campaign/game contexts for the workspace fixture's own ids; undefined falls through. */
+function overviewCampaignRecord(): Record<string, any> {
+	const record = structuredClone(workspaceCampaignRecord);
+	if (overviewMode === "setup") record.status = "draft";
+	return record;
+}
+
+function overviewCampaignGames(): Array<Record<string, any>> {
+	const games = structuredClone(workspaceGames);
+	if (overviewMode === "setup") {
+		for (const game of games) game.status = "draft";
+	}
+	return games;
+}
+
 export function workspaceQueryValue(name: string, args: any): unknown {
 	if (name === "campaigns:getCampaignRouteContext" && args?.campaignId === CAMPAIGN_A) {
-		return structuredClone(workspaceCampaignRecord);
+		return overviewCampaignRecord();
 	}
 	if (name === "campaigns:getCampaignGamesRouteContext" && args?.campaignId === CAMPAIGN_A) {
 		return {
-			campaign: structuredClone(workspaceCampaignRecord),
-			campaignGames: structuredClone(workspaceGames),
+			campaign: overviewCampaignRecord(),
+			campaignGames: overviewCampaignGames(),
 		};
 	}
 	if (name === "campaigns:getCampaignGameRouteContext" && isWorkspaceGameId(args?.campaignGameId)) {
@@ -561,10 +719,56 @@ export function workspaceQueryValue(name: string, args: any): unknown {
 		};
 	}
 	if (name === "draw:getStationState" && args?.campaignId === CAMPAIGN_A) {
-		return { hasSetup: true, pendingLinkSessions: structuredClone(workspacePendingLinks) };
+		if (operateMode === "blocked") {
+			return { hasSetup: false, availableUnits: 0, pendingLinkSessions: [] };
+		}
+		// Mirrors convex/draw.ts getStationState: budget + per-tier stock view
+		// derived from the setup state (9 + 10 = 19 remaining units).
+		return {
+			hasSetup: true,
+			availableUnits: 19,
+			budget: { totalBudget: 1950000, remainingBudget: 1650000 },
+			budgetItems: workspaceSetupState.items.map((item, index) => ({
+				id: `tier-${index}`,
+				amount: item.amount,
+				rarity: item.rarity,
+				remainingQuantity: item.remainingQuantity,
+				totalQuantity: item.initialQuantity,
+				isActive: true,
+			})),
+			pendingLinkSessions: structuredClone(workspacePendingLinks),
+		};
 	}
 	if (name === "setup:getSetupState") {
+		if (overviewMode === "setup") {
+			return { ...structuredClone(workspaceSetupState), hasSetup: false, items: [] };
+		}
+		if (rewardsMode === "locked") {
+			return { ...structuredClone(workspaceSetupState), canConfigure: false };
+		}
 		return structuredClone(workspaceSetupState);
+	}
+	if (name === "rewardInventory:getRewardInventory" && args?.campaignId === CAMPAIGN_A && overviewMode === "setup") {
+		return { items: [] };
+	}
+	if (name === "shareLinks:listShareLinks" && args?.campaignId === CAMPAIGN_A && overviewMode === "setup") {
+		return { links: [] };
+	}
+	if (name === "shareLinks:listShareLinks" && args?.campaignId === CAMPAIGN_A) {
+		return { links: structuredClone(workspaceShareLinks) };
+	}
+	if (name === "analytics:getCampaignAnalytics" && overviewMode === "setup") {
+		return {
+			gameMetrics: {
+				opens: 0,
+				starts: 0,
+				completions: 0,
+				rewardOutcomes: 0,
+				claims: 0,
+				conversion: 0,
+				channelSharePerformance: { publicPlayLinkOpens: 0 },
+			},
+		};
 	}
 	if (name === "entitlements:getPlanState") {
 		return structuredClone(workspacePlanState);
@@ -737,15 +941,43 @@ function analyticsQueryValue(name: string, args: any): unknown {
 	if (name === "leaderboard:getOwnerHistory" || name === "leaderboard:getCampaignHistory") {
 		return structuredClone(legacyHistoryRows);
 	}
-	if (name === "analytics:getOwnerAnalytics" || name === "analytics:getCampaignAnalytics") {
-		return structuredClone(ownerAnalytics);
+	if (name === "analytics:getOwnerAnalytics") {
+		// The owner view sums every breakdown row (128 / 102 / 89 / 89 / 82).
+		const totals = sumBreakdownGameMetrics(campaignGameBreakdownRows);
+		return {
+			gameMetrics: {
+				...totals,
+				conversion:
+					totals.opens === 0 ? null : Math.round((totals.claims / totals.opens) * 1000) / 1000,
+				channelSharePerformance: { publicPlayLinkOpens: 88 },
+			},
+		};
+	}
+	if (name === "analytics:getCampaignAnalytics") {
+		if (!args?.campaignId || args.campaignId === CAMPAIGN_A) {
+			return structuredClone(campaignAAnalytics);
+		}
+		const totals = sumBreakdownGameMetrics(
+			campaignGameBreakdownRows.filter((row) => row.campaignId === args.campaignId),
+		);
+		return {
+			gameMetrics: {
+				...totals,
+				conversion:
+					totals.opens === 0 ? null : Math.round((totals.claims / totals.opens) * 1000) / 1000,
+				channelSharePerformance: { publicPlayLinkOpens: 0 },
+			},
+		};
 	}
 	if (name === "analytics:getCampaignGameBreakdown") {
+		if (overviewMode === "setup") {
+			return { rows: [] };
+		}
 		return {
 			rows: structuredClone(
-				args?.campaignId && args.campaignId !== CAMPAIGN_A
-					? []
-					: campaignGameBreakdownRows,
+				campaignGameBreakdownRows.filter(
+					(row) => !args?.campaignId || row.campaignId === args.campaignId,
+				),
 			),
 		};
 	}
@@ -761,9 +993,9 @@ function analyticsQueryValue(name: string, args: any): unknown {
 	if (name === "analytics:getCampaignShareLinkBreakdown") {
 		return {
 			rows: structuredClone(
-				args?.campaignId && args.campaignId !== CAMPAIGN_A
-					? []
-					: campaignShareLinkBreakdownRows,
+				campaignShareLinkBreakdownRows.filter(
+					(row) => !args?.campaignId || row.campaignId === args.campaignId,
+				),
 			),
 		};
 	}
@@ -829,7 +1061,11 @@ export function useQuery(ref: any, args: any) {
 		if (workspaceValue !== undefined) {
 			value = workspaceValue;
 		} else if (name === "rewardInventory:getRewardInventory") {
-			value = { items: structuredClone(inventories[args.campaignId] ?? []) };
+			const items = structuredClone(inventories[args.campaignId] ?? []);
+			if (rewardsMode === "plain") {
+				for (const item of items) item.poolTag = "default";
+			}
+			value = { items };
 		} else if (name.startsWith("stationPlay:")) {
 			// Station kiosk ids belong to the station backend; operator ids hit
 			// the operator backend's launch-card state synthesis.

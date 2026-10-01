@@ -27,7 +27,10 @@ import "./analytics-styles.css";
  */
 function WorkspaceFrame() {
 	const [asideHost, setAsideHost] = useState<HTMLDivElement | null>(null);
-	const workspaceContext = useMemo(() => ({ asideHost, setHasAside: () => {} }), [asideHost]);
+	const workspaceContext = useMemo(
+		() => ({ asideHost, breadcrumbHost: null, setHasAside: () => {} }),
+		[asideHost],
+	);
 
 	return (
 		<AdminWorkspaceContext.Provider value={workspaceContext}>

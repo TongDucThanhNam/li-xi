@@ -31,9 +31,15 @@ const ROUTE_STATES: Array<{ heading: string; key: string; query: string }> = [
 	},
 	{ heading: "Tạo chiến dịch", key: "campaigns-new", query: "route=campaigns-new" },
 	{ heading: "Chiến dịch tri ân A", key: "campaign-overview", query: "route=overview" },
+	{
+		heading: "Chiến dịch tri ân A",
+		key: "campaign-overview-setup",
+		query: "route=overview&overviewMode=setup",
+	},
 	{ heading: "Trò chơi chiến dịch", key: "campaign-games", query: "route=games" },
 	{ heading: "Kho phần thưởng", key: "campaign-rewards", query: "route=rewards" },
 	{ heading: "Phân phối", key: "campaign-distribution", query: "route=distribution" },
+	{ heading: "Cài đặt chiến dịch", key: "campaign-settings", query: "route=campaign-settings" },
 	{ heading: "Bánh bao lì xì (chính)", key: "editor-li-xi", query: "route=editor&game=wf-game-lunar" },
 	{ heading: "Vòng quay may mắn", key: "editor-wheel", query: "route=editor&game=wf-game-wheel" },
 	{ heading: "Thẻ cào may mắn", key: "editor-scratch", query: "route=editor&game=wf-game-scratch" },
@@ -120,14 +126,6 @@ async function saveEvidence(
 	await testInfo.attach(name, { contentType: "image/png", body: shot });
 }
 
-async function openAside(page: Page) {
-	const toggle = page.getByRole("button", { name: "Mở ngữ cảnh trang" });
-	if (await toggle.count()) {
-		await toggle.click();
-		await page.waitForTimeout(400);
-	}
-}
-
 test.describe("workspace routes render in the real chrome at both acceptance viewports", () => {
 	// Fixed clock: displayed dates come from mock data; the pin is insurance
 	// for anything Date-driven in the admin chrome.
@@ -169,39 +167,36 @@ test.describe("workspace analytics UX contract (real chrome)", () => {
 		await page.clock.setFixedTime(new Date("2026-09-12T00:29:30+07:00"));
 	});
 
-	test("aside scope picker is view-aware: legacy rarity chart only on overview/rewards", async ({
+	test("scope picker is in the header on every view; li xi redemption block only on rewards", async ({
 		page,
 	}) => {
 		await page.setViewportSize({ width: 1440, height: 900 });
-		await page.goto(`${WORKSPACE_URL}?route=analytics&view=overview`);
-		await page.waitForSelector(".admin-page__inner");
-		await openAside(page);
-		const aside = page.locator("aside[aria-label='Ngữ cảnh trang']");
-		await expect(aside.getByText("Phạm vi chiến dịch")).toBeVisible();
-		await expect(aside.getByText("Cơ cấu phần thưởng")).toBeVisible();
 
-		for (const view of ["games", "channels", "claims"]) {
+		for (const view of ["overview", "games", "rewards", "channels", "claims"]) {
 			await page.goto(`${WORKSPACE_URL}?route=analytics&view=${view}`);
 			await page.waitForSelector(".admin-page__inner");
-			await openAside(page);
-			await expect(aside.getByText("Phạm vi chiến dịch")).toBeVisible();
-			await expect(aside.getByText("Cơ cấu phần thưởng")).toHaveCount(0);
+			// The scope select lives in the page header actions on every view.
+			await expect(page.getByLabel("Phạm vi phân tích chiến dịch")).toBeVisible();
+			// The legacy redemption block (rarity chart) renders on rewards only.
+			await expect(page.getByText("Cơ cấu phần thưởng")).toHaveCount(
+				view === "rewards" ? 1 : 0,
+			);
 		}
 
-		// The claims empty state still routes the operator to the aside picker.
+		// Claims without a campaign: pick one from the empty state.
 		await page.goto(`${WORKSPACE_URL}?route=analytics&view=claims`);
 		await page.waitForSelector(".admin-page__inner");
-		await openAside(page);
 		await expect(page.getByText("Chọn một chiến dịch để xem hàng đợi")).toBeVisible();
+		await page.getByRole("button", { name: "Chiến dịch tri ân A" }).click();
+		await expect(page.getByRole("grid", { name: "Bảng yêu cầu nhận thưởng" })).toBeVisible();
 	});
 
-	test("claims queue fits 1440 with the aside open: no grid scroll, action visible", async ({
+	test("claims queue fits 1440: no grid scroll, action visible", async ({
 		page,
 	}) => {
 		await page.setViewportSize({ width: 1440, height: 900 });
 		await page.goto(`${WORKSPACE_URL}?route=analytics&view=claims&campaign=campaign-a`);
 		await page.waitForSelector(".admin-page__inner");
-		await openAside(page);
 
 		const grid = page.getByRole("grid", { name: "Bảng yêu cầu nhận thưởng" });
 		await expect(grid).toBeVisible();
@@ -301,8 +296,8 @@ test.afterEach(async ({ page }) => {
 
 // ---------------------------------------------------------------------------
 // Slice 4d-2: the shared 7-field guest-copy section in a template editor,
-// the play-window (schedule) editor inputs, and the advisory window status
-// on the games list and distribution page. Evidence screenshots land in
+// the play-window (schedule) editor inputs, and the game status on the
+// games grid and distribution page. Evidence screenshots land in
 // .tmp/slice4d2-evidence.
 // ---------------------------------------------------------------------------
 
@@ -322,7 +317,21 @@ test.describe("campaign game editor guest copy and play window (real chrome)", (
 			"Vòng quay may mắn",
 		);
 
-		// The full 7-field guest copy section with Vietnamese labels.
+		// The bounded wheel game loads its window into the datetime inputs;
+		// they sit on the default "Thiết lập" tab.
+		const startsAt = page.locator("#campaign-game-starts-at");
+		const endsAt = page.locator("#campaign-game-ends-at");
+		await expect(startsAt).toBeVisible();
+		await expect(endsAt).toBeVisible();
+		await expect(startsAt).not.toHaveValue("");
+		await expect(endsAt).not.toHaveValue("");
+		await expect(
+			page.getByText("Giờ Việt Nam (UTC+7). Để trống nếu trò chơi mở ngay khi kích hoạt."),
+		).toBeVisible();
+
+		// The 7-field guest copy section lives on its own "Nội dung" tab; all
+		// draft state survives the switch.
+		await page.getByRole("tab", { name: "Nội dung" }).click();
 		for (const label of [
 			"Tiêu đề",
 			"Mô tả ngắn",
@@ -334,17 +343,6 @@ test.describe("campaign game editor guest copy and play window (real chrome)", (
 		]) {
 			await expect(page.getByText(label, { exact: true })).toBeVisible();
 		}
-
-		// The bounded wheel game loads its window into the datetime inputs.
-		const startsAt = page.locator("#campaign-game-starts-at");
-		const endsAt = page.locator("#campaign-game-ends-at");
-		await expect(startsAt).toBeVisible();
-		await expect(endsAt).toBeVisible();
-		await expect(startsAt).not.toHaveValue("");
-		await expect(endsAt).not.toHaveValue("");
-		await expect(
-			page.getByText("Giờ Việt Nam (UTC+7). Để trống nếu trò chơi mở ngay khi kích hoạt."),
-		).toBeVisible();
 
 		// Editing the thank-you copy marks the draft dirty (the baseline
 		// serialization includes copy + window).
@@ -366,7 +364,7 @@ test.describe("campaign game editor guest copy and play window (real chrome)", (
 		});
 	});
 
-	test("games list and distribution show advisory window status chips", async ({
+	test("games grid and distribution show the computed game status", async ({
 		page,
 	}) => {
 		test.setTimeout(120_000);
@@ -374,32 +372,33 @@ test.describe("campaign game editor guest copy and play window (real chrome)", (
 		await page.goto(`${WORKSPACE_URL}?route=games`);
 		await page.waitForSelector(".admin-page__inner");
 
-		// wheel: bounded window open now → advisory "đang mở" chip.
-		const wheelCard = page
-			.locator("a", { hasText: "Vòng quay may mắn" })
-			.first();
-		await expect(wheelCard.getByText("Cửa sổ đang mở")).toBeVisible();
-		// quiz: future window → "chưa mở" chip even though the game is active.
-		const quizCard = page.locator("a", { hasText: "Trắc nghiệm tri ân" }).first();
-		await expect(quizCard.getByText("Chưa mở cửa sổ")).toBeVisible();
-		// lunar: unbounded → no window chip at all.
-		const lunarCard = page.locator("a", { hasText: "Bánh bao lì xì (chính)" }).first();
-		await expect(lunarCard.getByText("Cửa sổ đang mở")).toHaveCount(0);
-		await expect(lunarCard.getByText("Chưa mở cửa sổ")).toHaveCount(0);
+		const grid = page.getByRole("list", { name: "Danh sách trò chơi chiến dịch" });
+		const card = (name: string) =>
+			grid.getByRole("listitem").filter({ has: page.getByRole("link", { name, exact: true }) });
+		await expect(card("Vòng quay may mắn").getByText("Đang chạy", { exact: true })).toBeVisible();
+		await expect(card("Vòng quay may mắn").getByText(/Đến /)).toBeVisible();
+		await expect(card("Trắc nghiệm tri ân").getByText("Sắp mở", { exact: true })).toBeVisible();
+		await expect(card("Trắc nghiệm tri ân").getByText(/Mở lúc /)).toBeVisible();
+		await expect(card("Bánh bao lì xì (chính)").getByText("Đang chạy", { exact: true })).toBeVisible();
+		await expect(card("Bánh bao lì xì (chính)").getByText(/Đến |Mở lúc |Đã đóng lúc /)).toHaveCount(0);
+		await expect(grid.getByRole("link", { name: "Vận hành Vòng quay may mắn" })).toBeVisible();
 
-		// Distribution: the primary game (lì xì) is unbounded → its window
-		// row reads "no limit" with no state chip, and the share panel gains
-		// the status line for the selected game.
+		// Distribution: the create form lives in a dialog (§11.4.1); the
+		// default selected game (lì xì) is unbounded → its schedule line reads
+		// "no limit" with no state chip anywhere on the page.
 		await page.goto(`${WORKSPACE_URL}?route=distribution`);
 		await page.waitForSelector(".admin-page__inner");
-		await expect(page.getByText("Không giới hạn thời gian.")).toBeVisible();
+		await expect(page.locator("h1.admin-page__title").first()).toHaveText("Phân phối");
+		await page.getByRole("button", { name: "Tạo liên kết" }).click();
+		const dialog = page.getByRole("dialog");
+		await expect(dialog.getByText("Không giới hạn thời gian.")).toBeVisible();
 		await expect(page.getByText("Cửa sổ đang mở")).toHaveCount(0);
 
 		// Selecting the bounded wheel game surfaces its window state.
-		const gameSelect = page.locator("#share-link-game");
+		const gameSelect = dialog.locator("#share-link-game");
 		await expect(gameSelect).toBeVisible();
 		await gameSelect.selectOption({ label: "Vòng quay may mắn" });
-		await expect(page.getByText("Cửa sổ đang mở")).toBeVisible();
-		await expect(page.getByText(/Cửa sổ chơi từ/).first()).toBeVisible();
+		await expect(dialog.getByText("Cửa sổ đang mở")).toBeVisible();
+		await expect(dialog.getByText(/Cửa sổ chơi từ/).first()).toBeVisible();
 	});
 });

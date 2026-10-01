@@ -196,7 +196,15 @@ export function operatorQuery(name: string, args: any) {
 		return { ...campaign };
 	}
 	if (name === "draw:getStationState") {
-		return { hasSetup: station.hasSetup, pendingLinkSessions: station.pendingLinkSessions };
+		// This fixture owns no cash budget, so the console renders without the
+		// "Kho lì xì" widget (budget: null) — the either-shape branch.
+		return {
+			hasSetup: station.hasSetup,
+			availableUnits: 20,
+			budget: null,
+			budgetItems: [],
+			pendingLinkSessions: station.pendingLinkSessions,
+		};
 	}
 	if (name === "shareLinks:listShareLinks") {
 		return { links: structuredClone(shareLinks) };

@@ -160,10 +160,17 @@ assert(
   "Workspace sidebar menu must have an accessible name",
 );
 assert(
-  authFeature.includes('<ol aria-label="Tiến độ đăng nhập" className="sr-only">') &&
-    authFeature.includes('aria-current={index === currentStep ? "step" : undefined}') &&
-    authFeature.includes('<Stepper aria-hidden="true"'),
-  "Display-only auth progress must expose list semantics without false interactive Stepper buttons",
+  !authFeature.includes("Stepper") &&
+    !authFeature.includes("ProgressCircle") &&
+    !authFeature.includes("ItemCardGroup") &&
+    authFeature.includes('aria-live="polite"') &&
+    authFeature.includes("Tiếp tục với Google"),
+  "Sign-in must stay one focused action with a polite status line and no display-only progress widgets",
+);
+assert(
+  workspace.includes("WorkspacePlanCard") &&
+    read("app/__root.tsx").includes("notFoundComponent: StandaloneNotFound"),
+  "The sidebar must surface the plan card and unknown URLs must render the standalone not-found page",
 );
 assert(workspace.includes("Outlet"), "Workspace must render nested routes through Outlet");
 assert(
@@ -181,6 +188,33 @@ assert(
     adminPageShell.includes("createPortal"),
   "Shared workspace pages must expose breadcrumbs and route-derived document titles",
 );
+assert(
+  !adminPageShell.includes("eyebrow") &&
+    adminPageShell.includes("breadcrumbHost") &&
+    adminPageShell.includes('data-sticky={stickyHeader ? "true" : undefined}'),
+  "The shared page shell must not render an eyebrow row, must host the breadcrumb in the navbar, and must support the sticky save header",
+);
+const campaignContextNav = read("app/_workspace/-components/CampaignContextNav.tsx");
+const settingsContextNav = read("app/_workspace/-components/SettingsContextNav.tsx");
+assert(
+  campaignContextNav.includes('className="admin-tabs"') &&
+    campaignContextNav.includes("admin-tabs__link--away") &&
+    settingsContextNav.includes('className="admin-tabs"') &&
+    workspace.includes("breadcrumbHost"),
+  "Context navigation must use the shared underline-tab classes and the navbar must expose the breadcrumb host",
+);
+for (const stickySaveFeature of [
+  "app/_workspace/-features/CampaignSettingsFeature.tsx",
+  "app/_workspace/-features/CampaignGameEditorFeature.tsx",
+]) {
+  const source = read(stickySaveFeature);
+  assert(
+    source.includes("AdminSaveStatus") &&
+      source.includes("stickyHeader") &&
+      !source.includes('className="mb-4 text-sm text-warning"'),
+    "Header-save forms must keep one save status in the sticky header: " + stickySaveFeature,
+  );
+}
 for (const source of [
   "app/index.tsx",
   "app/auth.tsx",
@@ -254,6 +288,7 @@ const campaignGamesIndex = read("app/_workspace/campaigns/$campaignId/games/inde
 const gameEditorRoute = read("app/_workspace/campaigns/$campaignId/games/$campaignGameId.tsx");
 const gameEditorFeature = read("app/_workspace/-features/CampaignGameEditorFeature.tsx");
 const campaignOverviewFeature = read("app/_workspace/-features/CampaignOverviewFeature.tsx");
+const campaignSettingsFeature = read("app/_workspace/-features/CampaignSettingsFeature.tsx");
 const campaignCreateFeature = read("app/_workspace/-features/CampaignCreateFeature.tsx");
 const campaignSectionFeature = read("app/_workspace/-features/CampaignSectionFeature.tsx");
 const distributionFeature = read("app/_workspace/-features/DistributionFeature.tsx");
@@ -302,6 +337,39 @@ assert(
     !gameEditorFeature.includes("JSON.stringify(context.campaignGame.config, null, 2)"),
   "Campaign-game routes must delegate editing, normalization, initial config, and legacy projection to a real two-template registry with a generic play-stage contract",
 );
+const configEditors = [
+  "app/game-templates/li-xi/LiXiGameConfigEditor.tsx",
+  "app/game-templates/lucky-wheel/LuckyWheelConfigEditor.tsx",
+  "app/game-templates/scratch-card/ScratchCardConfigEditor.tsx",
+  "app/game-templates/slot-reveal/SlotRevealConfigEditor.tsx",
+  "app/game-templates/quiz/QuizConfigEditor.tsx",
+].map(read);
+assert(
+  gameEditorFeature.includes("GamePreviewFrame") &&
+    gameEditorFeature.includes("admin-split admin-split--preview") &&
+    gameEditorFeature.includes("admin-split__side") &&
+    configEditors.every((editor) => editor.includes("AdminDisclosure")),
+  "The game editor must keep the live preview in its own split side column via GamePreviewFrame (never the AppLayout aside), and every config editor must fold its rarely changed fields behind AdminDisclosure",
+);
+assert(
+  configEditors.every((editor) => editor.includes('section === "content"')),
+  "Every config editor must split its rule widgets from its guest-copy widget behind the section contract",
+);
+assert(
+  campaignSectionFeature.includes("admin-game-card") &&
+    campaignSectionFeature.includes("GamePreviewFrame") &&
+    campaignSectionFeature.includes("resolveEffectiveGameStatus") &&
+    campaignSectionFeature.includes("getCampaignGameBreakdown") &&
+    !campaignSectionFeature.includes("CampaignGameRow"),
+  "Games tab must show each game as a preview card with computed status and metrics",
+);
+assert(
+  gameEditorFeature.includes('section="rules"') &&
+    gameEditorFeature.includes('section="content"') &&
+    gameEditorFeature.includes("Tabs.Panel") &&
+    gameEditorFeature.includes("GameStatusChip"),
+  "Game editor must split setup, content and media into tabs and show the computed status",
+);
 assert(
   campaignSectionFeature.includes("api.campaignGames.createCampaignGame") &&
     campaignSectionFeature.includes("gameTemplateCatalog") &&
@@ -310,7 +378,7 @@ assert(
 );
 assert(
   gameEditorFeature.includes("UnsavedChangesGuard") &&
-    campaignOverviewFeature.includes("UnsavedChangesGuard") &&
+    campaignSettingsFeature.includes("UnsavedChangesGuard") &&
     unsavedChangesGuard.includes("useBlocker") &&
     unsavedChangesGuard.includes("enableBeforeUnload") &&
     unsavedChangesGuard.includes("<AlertDialog.Backdrop isOpen") &&
@@ -332,7 +400,7 @@ assert(
   "Route identity queries must normalize malformed strings and fail closed before owner authorization",
 );
 assert(
-  campaignOverviewFeature.includes("loadedCampaignId") &&
+  campaignSettingsFeature.includes("loadedCampaignId") &&
     gameEditorFeature.includes("loadedCampaignGameId"),
   "Route-addressed editors must reset their draft state when browser history changes route identity",
 );
@@ -347,6 +415,25 @@ assert(
     read("convex/campaigns.ts").includes("getCampaignGamesRouteContext") &&
     read("convex/campaigns.ts").includes("ensureCampaignGameForRoute"),
   "Campaign games must render an authorized collection, materialize legacy defaults, and expose future template expansion",
+);
+assert(
+  campaignOverviewFeature.includes("<CampaignOverviewSummary") &&
+    read("app/_workspace/-features/CampaignOverviewSummary.tsx").includes("LaunchChecklist") &&
+    read("app/_workspace/-features/CampaignOverviewSummary.tsx").includes("PerformanceSummary") &&
+    !campaignOverviewFeature.includes("saveCampaign"),
+  "Campaign overview must be a dashboard (launch checklist, funnel, game performance) with settings on their own route",
+);
+assert(
+  campaignSectionFeature.includes("<GameTemplatePicker") &&
+    campaignSectionFeature.includes("Modal.Backdrop") &&
+    !campaignSectionFeature.includes("add-game-template"),
+  "Campaign games list must add games through the template-picker dialog instead of an always-open form",
+);
+assert(
+  campaignCreateFeature.includes("<AdminDisclosure") &&
+    campaignCreateFeature.includes("<GameTemplatePicker") &&
+    read("app/components/AdminDisclosure.tsx").includes("Disclosure.Heading"),
+  "Campaign create must pick the first template through the shared picker and keep optional brand identity behind the shared disclosure",
 );
 assert(
   read("app/_workspace/campaigns/$campaignId/distribution.tsx").includes("DistributionFeature") &&
@@ -366,6 +453,12 @@ assert(
     shareLinksPanel.includes("buildShareEntryUrlForCode") &&
     distributionFeature.includes("ShareLinksPanel"),
   "Distribution must manage reusable public entry links with create, copy, QR, revoke, and restore actions",
+);
+assert(
+  shareLinksPanel.includes("<Modal") &&
+    shareLinksPanel.includes("api.analytics.getCampaignShareLinkBreakdown") &&
+    shareLinksPanel.includes("admin-link-row"),
+  "Distribution must list share links as objects with per-link results and create links from a dialog",
 );
 const publicShareEntry = read("app/play/-features/PublicShareEntryFeature.tsx");
 const shareEntryRoute = read("app/p/$shareCode.tsx");
@@ -446,11 +539,21 @@ assert(
     !analyticsFeature.includes("Rank #"),
   "Analytics must avoid duplicated page context and English KPI trend labels",
 );
+// "<BarChart " (trailing space) matches the removed recharts axis chart's JSX
+// opening tag while keeping the BarChart3 lucide icon of the rarity empty
+// state, which the redesign explicitly keeps.
 assert(
-  read("app/styles/admin.css").includes(
-    "grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));",
-  ),
-  "Shared KPI groups must reflow instead of forcing horizontal scrolling",
+  analyticsFeature.includes("<PerformanceSummary") &&
+    analyticsFeature.includes("<ShareBars") &&
+    analyticsFeature.includes("<RateBar") &&
+    !analyticsFeature.includes("<BarChart ") &&
+    read("app/_workspace/-features/CampaignOverviewSummary.tsx").includes("<PerformanceSummary"),
+  "Analytics must lead with the conversion funnel and draw ratios as bars (share bars, rate bars), not axis charts or repeated stat rows",
+);
+assert(
+  !read("app/styles/admin.css").includes("admin-kpi-strip") &&
+    !read("app/styles/admin.css").includes("admin-command-summary"),
+  "Workspace analytics must report through stats rows instead of the removed KPI strip and summary widgets",
 );
 assert(
   stationFeature.includes("Không thể mở trạm chơi") &&
@@ -533,6 +636,10 @@ assert(
   "Operator console must keep station-dependent actions pending until authorized station state resolves",
 );
 assert(
+  operatorFeature.includes("<AlertDialog"),
+  "Operator console must confirm link cancellation through the shared alert dialog instead of an instant destructive action",
+);
+assert(
   stationFeature.includes("Trạm chơi chưa hoạt động") &&
     stationFeature.includes('context.campaign.status !== "active"') &&
     stationFeature.includes('context.campaignGame.status !== "active"'),
@@ -581,6 +688,7 @@ assert(
     publicAppUrlSource.includes('return buildPublicAppUrl("/settings/billing")'),
   "Billing settings must preserve plan actions and return Polar flows to the canonical billing route",
 );
+const rewardInventoryPanel = read("app/_workspace/-features/RewardInventoryPanel.tsx");
 const workspaceCopySources = [
   adminPageShell,
   read("app/index.tsx"),
@@ -591,7 +699,12 @@ const workspaceCopySources = [
   billingFeature,
   read("app/_workspace/-features/IntegrationsSettingsFeature.tsx"),
   read("app/_workspace/-features/CampaignOverviewFeature.tsx"),
+  read("app/_workspace/-features/CampaignSettingsFeature.tsx"),
+  read("app/_workspace/-features/CampaignOverviewSummary.tsx"),
   read("app/_workspace/-features/CampaignGameAssetsPanel.tsx"),
+  distributionFeature,
+  shareLinksPanel,
+  rewardInventoryPanel,
 ];
 assert(
   !rewardsFeature.includes("selectedCampaignId") &&
@@ -620,10 +733,10 @@ assert(
   "Onboarding mutations must expose pending and recoverable error states",
 );
 assert(
-  analyticsFeature.includes("rarityAsideViews") &&
-    analyticsFeature.includes('const rarityAsideViews = ["overview", "rewards"];') &&
-    analyticsFeature.includes("rarityAsideViews.includes(search.view"),
-  "Analytics aside must gate the legacy rarity breakdown to the overview/rewards views",
+  !analyticsFeature.includes("aside=") &&
+    analyticsFeature.includes('aria-label="Phạm vi phân tích chiến dịch"') &&
+    analyticsFeature.includes('search.view === "rewards"'),
+  "Analytics must keep the campaign scope picker in the page header and render the li xi redemption block only on the rewards view",
 );
 assert(
   rewardsFeature.includes('aria-label={`Giảm giá trị mức thưởng ${index + 1}`}') &&
@@ -631,6 +744,33 @@ assert(
     rewardsFeature.includes('aria-label={`Giảm số lượng mức thưởng ${index + 1}`}') &&
     rewardsFeature.includes('aria-label={`Tăng số lượng mức thưởng ${index + 1}`}'),
   "Reward steppers must expose localized accessible names for every increment and decrement control",
+);
+assert(
+  rewardsFeature.includes("rewardReadiness") &&
+    !rewardsFeature.includes("admin-kpi-strip"),
+  "Rewards page must derive its header status chip from rewardReadiness and keep the page free of the KPI strip",
+);
+assert(
+  rewardInventoryPanel.includes("quantityRemaining") &&
+    rewardInventoryPanel.includes("saveLoud") &&
+    // Slice J moved the budget meter into the shared BudgetMeter component
+    // (§11.6.1); the rewards page must use it and the component must own the
+    // admin-budget markup.
+    rewardsFeature.includes("BudgetMeter") &&
+    read("app/_workspace/-components/StockMeter.tsx").includes("admin-budget") &&
+    rewardsFeature.includes("remainingQuantity") &&
+    rewardsFeature.includes("budgetDirty"),
+  "Rewards must show remaining stock and budget as bars and keep saves quiet until there are changes",
+);
+assert(
+  operatorFeature.includes("GameStatusChip") &&
+    operatorFeature.includes("GamePerformanceCard") &&
+    operatorFeature.includes("GameTemplatePreview") &&
+    operatorFeature.includes("admin-stock-list") &&
+    campaignCreateFeature.includes("GameTemplatePreview") &&
+    adminPageShell.includes("admin-page__heading-group") &&
+    adminPageShell.includes("data-stuck"),
+  "Create and operate must show the product, the computed status and remaining stock; page headers keep the description with the title and mark a stuck header",
 );
 for (const prohibitedLabel of [
   "Campaign Leaderboard", "Redemption records", "Reward Inventory",

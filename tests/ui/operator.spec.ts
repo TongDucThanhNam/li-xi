@@ -113,6 +113,27 @@ async function fillNumberField(page: Page, label: string, value: string) {
 	await input.press("Enter");
 }
 
+/** Creates a reusable share link through the section-header dialog (§11.4.1):
+ *  React Aria hides content outside an open modal, so every field locator is
+ *  scoped to the dialog. */
+async function createShareLink(
+	page: Page,
+	game: string,
+	fields: { channel?: string; label?: string } = {},
+) {
+	await page.getByRole("button", { name: "Tạo liên kết" }).click();
+	const dialog = page.getByRole("dialog");
+	await dialog.getByLabel("Trò chơi của liên kết").selectOption(game);
+	if (fields.channel !== undefined) {
+		await dialog.getByRole("textbox", { name: "Kênh" }).fill(fields.channel);
+	}
+	if (fields.label !== undefined) {
+		await dialog.getByLabel("Ghi chú (tuỳ chọn)").fill(fields.label);
+	}
+	await dialog.getByRole("button", { name: "Tạo liên kết" }).click();
+	await expect(dialog).toBeHidden();
+}
+
 test("status-only save submits the selected wheel row and becomes clean", async ({
 	page,
 }) => {
@@ -486,10 +507,7 @@ test("distribution: reusable link creation, QR, copy and legacy /play entry", as
 	expect(await hasHorizontalOverflow(page)).toBe(false);
 
 	// Create a reusable /p link for the wheel with channel/label.
-	await page.getByLabel("Trò chơi của liên kết").selectOption(GAME_WHEEL);
-	await page.getByRole("textbox", { name: "Kênh" }).fill("qr-fixture");
-	await page.getByLabel("Ghi chú (tuỳ chọn)").fill("Label A");
-	await page.getByRole("button", { name: "Tạo liên kết" }).click();
+	await createShareLink(page, GAME_WHEEL, { channel: "qr-fixture", label: "Label A" });
 
 	const creationCalls = await operator.calls(page, "shareLinks:createShareLink");
 	expect(creationCalls).toHaveLength(1);
@@ -548,8 +566,7 @@ test("closed games: creation disappears; revoke/restore/copy of existing links r
 	await page.clock.setFixedTime(new Date("2026-09-12T00:29:30+07:00"));
 	// Seed one existing link before closing all games.
 	await page.goto(DISTRIBUTION_URL);
-	await page.getByLabel("Trò chơi của liên kết").selectOption(GAME_WHEEL);
-	await page.getByRole("button", { name: "Tạo liên kết" }).click();
+	await createShareLink(page, GAME_WHEEL);
 	await expect(
 		page.getByText("Đã tạo liên kết chơi công khai mới."),
 	).toBeVisible();
@@ -674,9 +691,7 @@ test.describe("distribution visual checkpoints (desktop + 390px)", () => {
 	}, testInfo) => {
 		await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
 		await page.goto(DISTRIBUTION_URL);
-		await page.getByLabel("Trò chơi của liên kết").selectOption(GAME_WHEEL);
-		await page.getByRole("textbox", { name: "Kênh" }).fill("qr-fixture");
-		await page.getByRole("button", { name: "Tạo liên kết" }).click();
+		await createShareLink(page, GAME_WHEEL, { channel: "qr-fixture" });
 		await awaitFonts(page);
 		expect(await hasHorizontalOverflow(page)).toBe(false);
 		await assertLinkGeometry(page, "/p/opsharelink10000000000", "Thu hồi");
@@ -692,8 +707,7 @@ test.describe("distribution visual checkpoints (desktop + 390px)", () => {
 	}, testInfo) => {
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.goto(DISTRIBUTION_URL);
-		await page.getByLabel("Trò chơi của liên kết").selectOption(GAME_WHEEL);
-		await page.getByRole("button", { name: "Tạo liên kết" }).click();
+		await createShareLink(page, GAME_WHEEL);
 		await awaitFonts(page);
 		expect(await hasHorizontalOverflow(page)).toBe(false);
 		// With faithful CSS the URL/action overlap is resolved: geometry
