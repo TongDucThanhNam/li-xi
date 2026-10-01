@@ -45,3 +45,14 @@
 7. The game records a play session and, when applicable, a reward outcome/claim with campaign-specific collect copy.
 8. Station mode returns to a waiting/play-start state for the next participant; public play mode exits the completed game/claim flow.
 9. Campaign dashboard reports performance by campaign and game: opens, starts, completions, reward outcomes, claims, conversion, and channel/share performance.
+
+## Browser Use (ZCode In-App Browser)
+- To view or verify the current UX/UI, drive the ZCode in-app browser through the `browser-use:control-browser` skill and the `mcp__node_repl__js` tool (backend type `iab`). Do not substitute curl dumps, static HTML reading, or an external browser for visual review; curl is only for a cheap "is the server up" check.
+- Before browser work, confirm the dev server responds (e.g. `curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:3000` returning `200`). If it is down, start the project's dev command in the background and wait for a 200 instead of assuming the app is broken.
+- Every `mcp__node_repl__js` call runs in a fresh JavaScript kernel: re-run the skill bootstrap (`setupBrowserRuntime`) and re-select the browser with `agent.browsers.getForUrl("http://localhost:3000/")` in every call. Bindings, tabs objects, and variables do not persist across calls.
+- Follow the tab protocol: return the full `browser.tabs.list()` in its own call, match the target tab by verified id/URL, then `browser.tabs.get(id)` in the next call before acting. Navigate with `tab.goto(url)` plus `tab.playwright.waitForLoadState({ state: "domcontentloaded" })`.
+- Read pages with `tab.playwright.domSnapshot()` first and build Playwright locators only from snapshot facts. This SPA fetches data from Convex after load, so allow roughly 1–2s (waitForTimeout, then re-snapshot) before judging a page empty or broken.
+- Take `tab.screenshot()` only when visual judgment is required (UX/UI review, layout, styling, branding) and always emit it in the same JS cell via `nodeRepl.emitImage(await tab.screenshot())`; never return raw bytes as the result. When a screen is fine to judge from the snapshot, do not screenshot it.
+- Leave a browser tab open for the user to inspect by calling `tab.markHandoff()` at the end of the task. Do not close tabs the user may still be looking at.
+- Known limits: locator/URL waits cap at 3000ms, `networkidle` is rejected, file uploads are unsupported, and guessed URLs or locators must never be probed — after a failed locator, take a fresh snapshot and rebuild; do not retry the same one.
+- Useful surfaces for UX review: `/campaigns`, `/campaigns/<campaignId>` with tabs `/games`, `/rewards`, `/distribution`; `/campaigns/<campaignId>/games/<gameId>` (config + live preview); `/operate/<gameId>` (operations board, Host PIN guarded); `/station/<gameId>` (guest station mode); `/play/...` and `/claim/<publicCode>` (transitional participant surfaces); `/analytics`.
